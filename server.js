@@ -1,19 +1,34 @@
-require('dotenv').config({ path: '.env.local' });
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const { rateLimit } = require('express-rate-limit');
-const NodeCache = require('node-cache');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const crypto = require('crypto');
-const path = require('path');
-const Sentry = require('@sentry/node');
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
+import NodeCache from 'node-cache';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import crypto from 'crypto';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import * as Sentry from '@sentry/node';
+
+// --- ESM __dirname equivalent ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// --- Load environment variables in development ---
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    const dotenv = await import('dotenv');
+    dotenv.config({ path: '.env.local' });
+  } catch (err) {
+    console.warn('.env.local not found, skipping...');
+  }
+}
 
 // --- Configuration ---
 const PORT = process.env.PORT || 3001;
 const BUDGET_CAP = parseFloat(process.env.DAILY_BUDGET_USD || '5.0');
-const GEMINI_API_KEY = process.env.VITE_GEMINI_API_KEY;
-const SENTRY_DSN = process.env.SENTRY_DSN;
+const GEMINI_API_KEY = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+const SENTRY_DSN = process.env.VITE_SENTRY_DSN || process.env.SENTRY_DSN;
 
 if (SENTRY_DSN) {
   Sentry.init({ dsn: SENTRY_DSN });
@@ -35,7 +50,7 @@ app.use(helmet({
   },
 }));
 app.use(cors());
-app.use(express.json({ limit: '1kb' })); // Body limit for sanitization
+app.use(express.json({ limit: '1kb' }));
 
 // --- Cost Counter Reset ---
 const checkBudgetReset = () => {
@@ -48,12 +63,12 @@ const checkBudgetReset = () => {
 
 // --- Rate Limiting ---
 const limiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000, // 24 hours
-  max: 3, // Limit to 3 requests per IP
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 3,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.ip,
-  handler: (req, res, next, options) => {
+  handler: (req, res) => {
     const lang = req.headers['accept-language-app'] || 'en';
     const messages = {
       de: 'Tägliches Limit erreicht. Bitte versuchen Sie es morgen erneut oder registrieren Sie sich.',
@@ -70,7 +85,6 @@ app.post('/api/analyze', limiter, async (req, res) => {
 
   const { topic, lang } = req.body;
 
-  // 1. Input Validation
   if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
     return res.status(400).json({ error: 'Invalid topic' });
   }
@@ -78,12 +92,10 @@ app.post('/api/analyze', limiter, async (req, res) => {
     return res.status(400).json({ error: 'Topic too long' });
   }
 
-  // 2. Budget Cap Check
   if (dailyCost >= BUDGET_CAP) {
     return res.status(503).json({ error: 'Service temporarily unavailable, please try again tomorrow.' });
   }
 
-  // 3. Cache Check
   const cacheKey = crypto.createHash('md5').update(`${topic}:${lang}`).digest('hex');
   const cachedResponse = cache.get(cacheKey);
   if (cachedResponse) {
@@ -91,28 +103,26 @@ app.post('/api/analyze', limiter, async (req, res) => {
     return res.json(cachedResponse);
   }
 
-  // 4. API Request
   try {
     if (!GEMINI_API_KEY) throw new Error('Backend API Key Missing');
     
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    const systemPrompt = `You are a non-partisan political news analyst. Provide a balanced analysis of German media on the topic. Return JSON.`;
-    const prompt = `Topic: "${topic}". Lang: ${lang}. Return JSON analysis.`;
+    const systemPrompt = `You are an objective, non-partisan AI Political Analyst specialized in the German Media Landscape (DACH region). Your goal is to de-polarize news by comparing how different media outlets report on the same topic. You expose bias, identify factual discrepancies, and highlight "Blindspots".
+    Return ONLY a valid JSON object following the established structure.`;
+    
+    const prompt = `Analyse the topic: "${topic}". Perform a search for German news articles. Respond in ${lang}.`;
 
     const result = await model.generateContent([systemPrompt, prompt]);
     const response = await result.response;
     const text = response.text();
 
-    // Clean and parse
     const cleanJson = text.replace(/```json\n?|\n?```/g, "").trim();
     const data = JSON.parse(cleanJson);
 
-    // Update cost (estimate)
     dailyCost += 0.035;
 
-    // Cache and return
     cache.set(cacheKey, data);
     res.setHeader('X-Cache', 'MISS');
     res.json(data);
@@ -124,14 +134,18 @@ app.post('/api/analyze', limiter, async (req, res) => {
   }
 });
 
-// --- Static Frontend Serving (Railway/Production) ---
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'dist')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-  });
-}
+// --- Static Frontend Serving ---
+app.use(express.static(path.join(__dirname, 'dist')));
 
-app.listen(PORT, () => {
+app.get('*', (req, res) => {
+  // If request is not for API, serve index.html
+  if (!req.path.startsWith('/api/')) {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  } else {
+    res.status(404).json({ error: 'API route not found' });
+  }
+});
+
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
