@@ -84,7 +84,6 @@ app.post('/api/analyze', limiter, async (req, res) => {
   checkBudgetReset();
 
   const { topic, lang } = req.body;
-  console.log(`[Analysis Request] Topic: ${topic}, Lang: ${lang}`);
 
   if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
     return res.status(400).json({ error: 'Invalid topic' });
@@ -114,15 +113,13 @@ app.post('/api/analyze', limiter, async (req, res) => {
     });
 
     const systemPrompt = `You are an objective, non-partisan AI Political Analyst specialized in the German Media Landscape (DACH region). Your goal is to de-polarize news by comparing how different media outlets report on the same topic. You expose bias, identify factual discrepancies, and highlight "Blindspots".
-    Return ONLY a valid JSON object following the established structure.`;
+    Return ONLY a valid JSON object.`;
     
     const prompt = `Analyse the topic: "${topic}". Perform a google search for current German news articles from different political spectrums. Respond in ${lang}.`;
 
-    console.log(`[Gemini API Call] Starting with Grounding...`);
     const result = await model.generateContent([systemPrompt, prompt]);
     const response = await result.response;
     const text = response.text();
-    console.log(`[Gemini API Response] Success.`);
 
     const cleanJson = text.replace(/```json\n?|\n?```/g, "").trim();
     const data = JSON.parse(cleanJson);
@@ -135,29 +132,22 @@ app.post('/api/analyze', limiter, async (req, res) => {
   } catch (error) {
     console.error('[Backend Error]:', error);
     Sentry.captureException(error);
-    res.status(500).json({ 
-      error: 'Analysis failed on server side.',
-      details: process.env.NODE_ENV === 'production' ? undefined : error.message
-    });
+    res.status(500).json({ error: 'Analysis failed' });
   }
 });
 
 // --- Static Frontend Serving ---
-// Order is critical: Assets first, then Fallback
-app.use('/assets', express.static(path.join(__dirname, 'dist/assets'), {
-  maxAge: '1y',
-  immutable: true
-}));
+const distPath = path.join(__dirname, 'dist');
 
-app.use(express.static(path.join(__dirname, 'dist'), {
-  index: false
-}));
+// Serve actual static files (JS, CSS, images)
+app.use(express.static(distPath, { index: false }));
 
+// Catch-all: serve index.html for any request that isn't an API call
 app.get('/*splat', (req, res) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'API route not found' });
   }
-  res.sendFile(path.join(__dirname, 'dist/index.html'));
+  res.sendFile(path.join(distPath, 'index.html'));
 });
 
 app.listen(PORT, '0.0.0.0', () => {
