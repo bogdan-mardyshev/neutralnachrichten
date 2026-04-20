@@ -8,6 +8,7 @@
     "dev:server": "node server.js",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "build": "vite build",
+    "postinstall": "npm run build",
     "start": "node server.js"
   },
   "dependencies": {
@@ -29,8 +30,12 @@
     "react-router-dom": "^7.14.1"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.3",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.10",
+    "tailwindcss": "^4.2.3",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

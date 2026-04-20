@@ -27,8 +27,9 @@ if (process.env.NODE_ENV !== 'production') {
 // --- Configuration ---
 const PORT = process.env.PORT || 3001;
 const BUDGET_CAP = parseFloat(process.env.DAILY_BUDGET_USD || '5.0');
-const GEMINI_API_KEY = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-const SENTRY_DSN = process.env.VITE_SENTRY_DSN || process.env.SENTRY_DSN;
+// Use GEMINI_API_KEY primarily for backend, VITE_ as fallback
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+const SENTRY_DSN = process.env.SENTRY_DSN || process.env.VITE_SENTRY_DSN;
 
 if (SENTRY_DSN) {
   Sentry.init({ dsn: SENTRY_DSN });
@@ -84,6 +85,7 @@ app.post('/api/analyze', limiter, async (req, res) => {
   checkBudgetReset();
 
   const { topic, lang } = req.body;
+  console.log(`[Analysis Request] Topic: ${topic}, Lang: ${lang}`);
 
   if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
     return res.status(400).json({ error: 'Invalid topic' });
@@ -93,20 +95,26 @@ app.post('/api/analyze', limiter, async (req, res) => {
   }
 
   if (dailyCost >= BUDGET_CAP) {
+    console.warn(`[Budget Cap] Daily cost ${dailyCost} exceeded cap ${BUDGET_CAP}`);
     return res.status(503).json({ error: 'Service temporarily unavailable, please try again tomorrow.' });
   }
 
   const cacheKey = crypto.createHash('md5').update(`${topic}:${lang}`).digest('hex');
   const cachedResponse = cache.get(cacheKey);
   if (cachedResponse) {
+    console.log(`[Cache Hit] Key: ${cacheKey}`);
     res.setHeader('X-Cache', 'HIT');
     return res.json(cachedResponse);
   }
 
   try {
-    if (!GEMINI_API_KEY) throw new Error('Backend API Key Missing');
+    if (!GEMINI_API_KEY) {
+      console.error('[Configuration Error] GEMINI_API_KEY is missing');
+      throw new Error('Backend API Key Missing');
+    }
     
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    // Ensure we use the verified available model
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const systemPrompt = `You are an objective, non-partisan AI Political Analyst specialized in the German Media Landscape (DACH region). Your goal is to de-polarize news by comparing how different media outlets report on the same topic. You expose bias, identify factual discrepancies, and highlight "Blindspots".
@@ -114,9 +122,11 @@ app.post('/api/analyze', limiter, async (req, res) => {
     
     const prompt = `Analyse the topic: "${topic}". Perform a search for German news articles. Respond in ${lang}.`;
 
+    console.log(`[Gemini API Call] Starting...`);
     const result = await model.generateContent([systemPrompt, prompt]);
     const response = await result.response;
     const text = response.text();
+    console.log(`[Gemini API Response] Received text length: ${text.length}`);
 
     const cleanJson = text.replace(/```json\n?|\n?```/g, "").trim();
     const data = JSON.parse(cleanJson);
@@ -129,21 +139,32 @@ app.post('/api/analyze', limiter, async (req, res) => {
 
   } catch (error) {
     console.error('[Backend Error]:', error);
+    if (error.stack) console.error(error.stack);
     Sentry.captureException(error);
-    res.status(500).json({ error: 'Analysis failed on server side.' });
+    res.status(500).json({ 
+      error: 'Analysis failed on server side.',
+      details: process.env.NODE_ENV === 'production' ? undefined : error.message
+    });
   }
 });
 
 // --- Static Frontend Serving ---
-app.use(express.static(path.join(__dirname, 'dist')));
+// Serve static assets first
+app.use(express.static(path.join(__dirname, 'dist'), {
+  maxAge: '1y',
+  etag: true,
+  index: false // Don't serve index.html from static, let the wildcard handle it
+}));
 
+// SPA fallback for all other routes
 app.get('/*splat', (req, res) => {
-  // If request is not for API, serve index.html
-  if (!req.path.startsWith('/api/')) {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-  } else {
-    res.status(404).json({ error: 'API route not found' });
+  // If request is for API, return 404
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API route not found' });
   }
+  
+  // For everything else, serve index.html
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, '0.0.0.0', () => {
