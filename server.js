@@ -27,7 +27,6 @@ if (process.env.NODE_ENV !== 'production') {
 // --- Configuration ---
 const PORT = process.env.PORT || 3001;
 const BUDGET_CAP = parseFloat(process.env.DAILY_BUDGET_USD || '5.0');
-// In production on Railway, env vars are often just GEMINI_API_KEY
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
 const SENTRY_DSN = process.env.SENTRY_DSN || process.env.VITE_SENTRY_DSN;
 
@@ -95,51 +94,46 @@ app.post('/api/analyze', limiter, async (req, res) => {
   }
 
   if (dailyCost >= BUDGET_CAP) {
-    console.warn(`[Budget Cap] Daily cost ${dailyCost} exceeded cap ${BUDGET_CAP}`);
     return res.status(503).json({ error: 'Service temporarily unavailable, please try again tomorrow.' });
   }
 
   const cacheKey = crypto.createHash('md5').update(`${topic}:${lang}`).digest('hex');
   const cachedResponse = cache.get(cacheKey);
   if (cachedResponse) {
-    console.log(`[Cache Hit] Key: ${cacheKey}`);
     res.setHeader('X-Cache', 'HIT');
     return res.json(cachedResponse);
   }
 
   try {
-    if (!GEMINI_API_KEY) {
-      console.error('[Configuration Error] GEMINI_API_KEY is missing');
-      throw new Error('Backend API Key Missing');
-    }
+    if (!GEMINI_API_KEY) throw new Error('Backend API Key Missing');
     
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    // Ensure we use the verified available model
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.5-flash",
+      tools: [{ googleSearch: {} }] 
+    });
 
     const systemPrompt = `You are an objective, non-partisan AI Political Analyst specialized in the German Media Landscape (DACH region). Your goal is to de-polarize news by comparing how different media outlets report on the same topic. You expose bias, identify factual discrepancies, and highlight "Blindspots".
     Return ONLY a valid JSON object following the established structure.`;
     
-    const prompt = `Analyse the topic: "${topic}". Perform a search for German news articles. Respond in ${lang}.`;
+    const prompt = `Analyse the topic: "${topic}". Perform a google search for current German news articles from different political spectrums. Respond in ${lang}.`;
 
-    console.log(`[Gemini API Call] Starting...`);
+    console.log(`[Gemini API Call] Starting with Grounding...`);
     const result = await model.generateContent([systemPrompt, prompt]);
     const response = await result.response;
     const text = response.text();
-    console.log(`[Gemini API Response] Received text length: ${text.length}`);
+    console.log(`[Gemini API Response] Success.`);
 
     const cleanJson = text.replace(/```json\n?|\n?```/g, "").trim();
     const data = JSON.parse(cleanJson);
 
     dailyCost += 0.035;
-
     cache.set(cacheKey, data);
     res.setHeader('X-Cache', 'MISS');
     res.json(data);
 
   } catch (error) {
     console.error('[Backend Error]:', error);
-    if (error.stack) console.error(error.stack);
     Sentry.captureException(error);
     res.status(500).json({ 
       error: 'Analysis failed on server side.',
@@ -149,22 +143,21 @@ app.post('/api/analyze', limiter, async (req, res) => {
 });
 
 // --- Static Frontend Serving ---
-// 1. Serve static files from dist directly
-app.use(express.static(path.join(__dirname, 'dist'), {
+// Order is critical: Assets first, then Fallback
+app.use('/assets', express.static(path.join(__dirname, 'dist/assets'), {
   maxAge: '1y',
-  etag: true,
-  index: ['index.html']
+  immutable: true
 }));
 
-// 2. SPA fallback for all other routes
+app.use(express.static(path.join(__dirname, 'dist'), {
+  index: false
+}));
+
 app.get('/*splat', (req, res) => {
-  // If request is for API, return 404
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'API route not found' });
   }
-  
-  // For everything else, serve index.html
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  res.sendFile(path.join(__dirname, 'dist/index.html'));
 });
 
 app.listen(PORT, '0.0.0.0', () => {
