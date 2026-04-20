@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import NodeCache from 'node-cache';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import crypto from 'crypto';
@@ -64,10 +64,10 @@ const checkBudgetReset = () => {
 // --- Rate Limiting ---
 const limiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
-  max: 3,
+  limit: 3,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip,
+  keyGenerator: (req, res) => ipKeyGenerator(req, res),
   handler: (req, res) => {
     const lang = req.headers['accept-language-app'] || 'en';
     const messages = {
@@ -137,7 +137,7 @@ app.post('/api/analyze', limiter, async (req, res) => {
 // --- Static Frontend Serving ---
 app.use(express.static(path.join(__dirname, 'dist')));
 
-app.get('*', (req, res) => {
+app.get('/*splat', (req, res) => {
   // If request is not for API, serve index.html
   if (!req.path.startsWith('/api/')) {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
