@@ -31,6 +31,8 @@ const BUDGET_CAP = parseFloat(process.env.DAILY_BUDGET_USD || '5.0');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
 const SENTRY_DSN = process.env.SENTRY_DSN || process.env.VITE_SENTRY_DSN;
 
+console.log('[Server] Available env vars:', Object.keys(process.env).filter(k => k.includes('API') || k.includes('KEY') || k.includes('GEMINI')));
+
 if (SENTRY_DSN) {
   Sentry.init({ dsn: SENTRY_DSN });
 }
