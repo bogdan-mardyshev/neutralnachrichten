@@ -9,6 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import * as Sentry from '@sentry/node';
+import fs from 'fs';
 
 // --- ESM __dirname equivalent ---
 const __filename = fileURLToPath(import.meta.url);
@@ -52,6 +53,21 @@ app.use(helmet({
 app.use(cors());
 app.use(express.json({ limit: '1kb' }));
 
+// --- Debug: Verify Build Output ---
+const distPath = path.join(__dirname, 'dist');
+console.log(`[Server] Checking dist path: ${distPath}`);
+if (fs.existsSync(distPath)) {
+  console.log(`[Server] dist/ exists. Files: ${fs.readdirSync(distPath)}`);
+  const indexPath = path.join(distPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    console.log(`[Server] index.html exists at ${indexPath}`);
+  } else {
+    console.error(`[Server] index.html MISSING at ${indexPath}`);
+  }
+} else {
+  console.error(`[Server] dist/ folder MISSING!`);
+}
+
 // --- Cost Counter Reset ---
 const checkBudgetReset = () => {
   const now = new Date();
@@ -82,19 +98,10 @@ const limiter = rateLimit({
 // --- Gemini Proxy Endpoint ---
 app.post('/api/analyze', limiter, async (req, res) => {
   checkBudgetReset();
-
   const { topic, lang } = req.body;
-
-  if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
-    return res.status(400).json({ error: 'Invalid topic' });
-  }
-  if (topic.length > 200) {
-    return res.status(400).json({ error: 'Topic too long' });
-  }
-
-  if (dailyCost >= BUDGET_CAP) {
-    return res.status(503).json({ error: 'Service temporarily unavailable, please try again tomorrow.' });
-  }
+  if (!topic || typeof topic !== 'string' || topic.trim().length === 0) return res.status(400).json({ error: 'Invalid topic' });
+  if (topic.length > 200) return res.status(400).json({ error: 'Topic too long' });
+  if (dailyCost >= BUDGET_CAP) return res.status(503).json({ error: 'Service temporarily unavailable, please try again tomorrow.' });
 
   const cacheKey = crypto.createHash('md5').update(`${topic}:${lang}`).digest('hex');
   const cachedResponse = cache.get(cacheKey);
@@ -105,30 +112,19 @@ app.post('/api/analyze', limiter, async (req, res) => {
 
   try {
     if (!GEMINI_API_KEY) throw new Error('Backend API Key Missing');
-    
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash",
-      tools: [{ googleSearch: {} }] 
-    });
-
-    const systemPrompt = `You are an objective, non-partisan AI Political Analyst specialized in the German Media Landscape (DACH region). Your goal is to de-polarize news by comparing how different media outlets report on the same topic. You expose bias, identify factual discrepancies, and highlight "Blindspots".
-    Return ONLY a valid JSON object.`;
-    
-    const prompt = `Analyse the topic: "${topic}". Perform a google search for current German news articles from different political spectrums. Respond in ${lang}.`;
-
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash", tools: [{ googleSearch: {} }] });
+    const systemPrompt = `You are an objective, non-partisan AI Political Analyst specialized in the German Media Landscape (DACH region). Return ONLY a valid JSON object.`;
+    const prompt = `Analyse the topic: "${topic}". Respond in ${lang}.`;
     const result = await model.generateContent([systemPrompt, prompt]);
     const response = await result.response;
     const text = response.text();
-
     const cleanJson = text.replace(/```json\n?|\n?```/g, "").trim();
     const data = JSON.parse(cleanJson);
-
     dailyCost += 0.035;
     cache.set(cacheKey, data);
     res.setHeader('X-Cache', 'MISS');
     res.json(data);
-
   } catch (error) {
     console.error('[Backend Error]:', error);
     Sentry.captureException(error);
@@ -137,12 +133,13 @@ app.post('/api/analyze', limiter, async (req, res) => {
 });
 
 // --- Static Frontend Serving ---
-const distPath = path.join(__dirname, 'dist');
+// 1. Serve JS/CSS/Assets with 404 fallback (don't fall through to index.html for missing assets)
+app.use('/assets', express.static(path.join(distPath, 'assets'), { fallthrough: false }));
 
-// Serve actual static files (JS, CSS, images)
+// 2. Serve other static files
 app.use(express.static(distPath, { index: false }));
 
-// Catch-all: serve index.html for any request that isn't an API call
+// 3. Catch-all: serve index.html for any request that isn't an API call
 app.get('/*splat', (req, res) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'API route not found' });

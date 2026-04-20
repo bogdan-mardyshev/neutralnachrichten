@@ -17,6 +17,9 @@
     "@sentry/node": "^10.49.0",
     "@sentry/react": "^10.49.0",
     "@sentry/tracing": "^7.120.4",
+    "@tailwindcss/postcss": "^4.2.3",
+    "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.5.0",
     "concurrently": "^9.2.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -24,19 +27,16 @@
     "express-rate-limit": "^8.3.2",
     "helmet": "^8.1.0",
     "node-cache": "^5.1.2",
+    "postcss": "^8.5.10",
     "posthog-js": "^1.369.3",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "react-router-dom": "^7.14.1"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4.2.3",
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "autoprefixer": "^10.5.0",
-    "postcss": "^8.5.10",
+    "react-router-dom": "^7.14.1",
     "tailwindcss": "^4.2.3",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0"
   }
 }
