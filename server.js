@@ -53,21 +53,6 @@ app.use(helmet({
 app.use(cors());
 app.use(express.json({ limit: '1kb' }));
 
-// --- Debug: Verify Build Output ---
-const distPath = path.join(__dirname, 'dist');
-console.log(`[Server] Checking dist path: ${distPath}`);
-if (fs.existsSync(distPath)) {
-  console.log(`[Server] dist/ exists. Files: ${fs.readdirSync(distPath)}`);
-  const indexPath = path.join(distPath, 'index.html');
-  if (fs.existsSync(indexPath)) {
-    console.log(`[Server] index.html exists at ${indexPath}`);
-  } else {
-    console.error(`[Server] index.html MISSING at ${indexPath}`);
-  }
-} else {
-  console.error(`[Server] dist/ folder MISSING!`);
-}
-
 // --- Cost Counter Reset ---
 const checkBudgetReset = () => {
   const now = new Date();
@@ -133,17 +118,14 @@ app.post('/api/analyze', limiter, async (req, res) => {
 });
 
 // --- Static Frontend Serving ---
-// 1. Serve JS/CSS/Assets with 404 fallback (don't fall through to index.html for missing assets)
-app.use('/assets', express.static(path.join(distPath, 'assets'), { fallthrough: false }));
+const distPath = path.join(__dirname, 'dist');
 
-// 2. Serve other static files
-app.use(express.static(distPath, { index: false }));
+// 1. Serve static files with default index.html support
+app.use(express.static(distPath));
 
-// 3. Catch-all: serve index.html for any request that isn't an API call
-app.get('/*splat', (req, res) => {
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'API route not found' });
-  }
+// 2. Catch-all for SPA: serve index.html for any non-API request
+// Using regex to ensure compatibility with Express 5
+app.get(/^(?!\/api\/).*$/, (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
