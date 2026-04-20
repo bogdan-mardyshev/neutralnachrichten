@@ -27,7 +27,7 @@ if (process.env.NODE_ENV !== 'production') {
 // --- Configuration ---
 const PORT = process.env.PORT || 3001;
 const BUDGET_CAP = parseFloat(process.env.DAILY_BUDGET_USD || '5.0');
-// Use GEMINI_API_KEY primarily for backend, VITE_ as fallback
+// In production on Railway, env vars are often just GEMINI_API_KEY
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
 const SENTRY_DSN = process.env.SENTRY_DSN || process.env.VITE_SENTRY_DSN;
 
@@ -149,14 +149,14 @@ app.post('/api/analyze', limiter, async (req, res) => {
 });
 
 // --- Static Frontend Serving ---
-// Serve static assets first
+// 1. Serve static files from dist directly
 app.use(express.static(path.join(__dirname, 'dist'), {
   maxAge: '1y',
   etag: true,
-  index: false // Don't serve index.html from static, let the wildcard handle it
+  index: ['index.html']
 }));
 
-// SPA fallback for all other routes
+// 2. SPA fallback for all other routes
 app.get('/*splat', (req, res) => {
   // If request is for API, return 404
   if (req.path.startsWith('/api/')) {
