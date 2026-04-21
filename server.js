@@ -25,31 +25,26 @@ if (process.env.NODE_ENV !== 'production') {
 
 const PORT = process.env.PORT || 3001;
 const BUDGET_CAP = parseFloat(process.env.DAILY_BUDGET_USD || '5.0');
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+
+// Очищаем ключ от возможных кавычек или пробелов
+const rawKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
+const GEMINI_API_KEY = rawKey.replace(/["']/g, '').trim();
+
+// --- API Key Verification on Startup ---
+if (GEMINI_API_KEY) {
+  console.log(`[Server] API Key loaded: ${GEMINI_API_KEY.substring(0, 4)}...${GEMINI_API_KEY.substring(GEMINI_API_KEY.length - 4)} (Length: ${GEMINI_API_KEY.length})`);
+} else {
+  console.error('[Server] CRITICAL: GEMINI_API_KEY is empty!');
+}
 
 const app = express();
 
-// --- 3. Обновление Content Security Policy (CSP) ---
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      "script-src": [
-        "'self'", 
-        "'unsafe-inline'", 
-        "https://app.posthog.com", 
-        "https://eu-assets.i.posthog.com", 
-        "https://browser.sentry-cdn.com"
-      ],
-      "connect-src": [
-        "'self'", 
-        "https://app.posthog.com", 
-        "https://eu.i.posthog.com", 
-        "https://eu-assets.i.posthog.com", 
-        "https://generativelanguage.googleapis.com", 
-        "https://*.sentry.io"
-      ],
-      "img-src": ["'self'", "data:", "https://eu-assets.i.posthog.com"],
+      "script-src": ["'self'", "'unsafe-inline'", "https://app.posthog.com", "https://eu-assets.i.posthog.com", "https://browser.sentry-cdn.com"],
+      "connect-src": ["'self'", "https://app.posthog.com", "https://eu.i.posthog.com", "https://eu-assets.i.posthog.com", "https://generativelanguage.googleapis.com", "https://*.sentry.io"],
     },
   },
 }));
@@ -58,65 +53,61 @@ app.use(cors());
 app.use(express.json({ limit: '1kb' }));
 
 const cache = new NodeCache({ stdTTL: 21600 });
-let dailyCost = 0;
-let lastResetDate = new Date().getUTCDate();
 
 const limiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
-  limit: 5,
+  limit: 10,
   keyGenerator: (req, res) => ipKeyGenerator(req, res),
   handler: (req, res) => {
-    res.status(429).json({ error: 'Limit reached. Try again tomorrow.' });
+    res.status(429).json({ error: 'Limit reached.' });
   }
 });
 
-// --- 1 & 2. Инициализация Gemini и обработка ответа ---
 app.post('/api/analyze', limiter, async (req, res) => {
   const { topic, lang } = req.body;
   if (!topic) return res.status(400).json({ error: 'Topic required' });
 
-  const cacheKey = crypto.createHash('md5').update(`${topic}:${lang}`).digest('hex');
-  const cached = cache.get(cacheKey);
-  if (cached) return res.json(cached);
-
   try {
-    if (!GEMINI_API_KEY) throw new Error('API Key Missing');
-    
+    // Проверка ключа перед вызовом
+    if (!GEMINI_API_KEY || GEMINI_API_KEY.length < 10) {
+      console.error('[Server] CRITICAL: GEMINI_API_KEY is missing or too short.');
+      return res.status(500).json({ error: 'Server configuration error: API Key is missing.' });
+    }
+
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     
-    // Инициализация с поддержкой Google Search
+    // Используем максимально стабильную 1.5 Flash для поиска
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.0-flash",
+      model: "gemini-1.5-flash",
       tools: [{ googleSearch: {} }] 
     });
 
-    const systemPrompt = `Objective, non-partisan AI Political Analyst. Return ONLY valid JSON.`;
-    const prompt = `Analyse the topic: "${topic}". Perform a google search for current German news. Respond in language: ${lang}.`;
+    const systemPrompt = `Objective, non-partisan AI Political Analyst. Provide fact-check consensus and narrative split. Return ONLY valid JSON.`;
+    const prompt = `Analyse the topic: "${topic}" using Google Search for German media. Language: ${lang}.`;
 
+    console.log(`[Gemini] Requesting analysis for: ${topic}...`);
     const result = await model.generateContent([systemPrompt, prompt]);
     const response = await result.response;
 
-    // Безопасная проверка кандидатов
     if (!response.candidates || response.candidates.length === 0) {
-      console.error('[Gemini] No candidates returned. Blocked or Safety filter trigger.');
-      return res.status(500).json({ error: 'Google Gemini returned no results. It might be blocked by safety filters or regional restrictions.' });
+      return res.status(500).json({ error: 'Gemini returned no results. Try again.' });
     }
 
     const text = response.text();
     const cleanJson = text.replace(/```json\n?|\n?```/g, "").trim();
     const data = JSON.parse(cleanJson);
 
-    cache.set(cacheKey, data);
     res.json(data);
   } catch (error) {
     console.error('[Gemini Error]:', error);
     
-    // Обработка 403 Forbidden (обычно это бан Grounding в регионе)
     if (error.status === 403) {
-      return res.status(500).json({ error: 'Search Grounding is not available for this key/region.' });
+      return res.status(500).json({ 
+        error: 'Google Search is restricted. Try disabling grounding or check billing at AI Studio.' 
+      });
     }
 
-    res.status(500).json({ error: 'Analysis failed on server side. Please try a different topic.' });
+    res.status(500).json({ error: 'Analysis failed. Please try a different topic.' });
   }
 });
 
