@@ -1,32 +1,20 @@
-export interface Source {
-  outlet_name: string;
-  spectrum: string;
-  headline: string;
-  summary: string;
-  tone: string;
-  url: string;
-}
-
-export interface Analysis {
-  left_narrative: string;
-  right_narrative: string;
-  bias_verdict: string;
-  blindspot_alert: string;
+export interface NewsSource {
+  source_name: string;
+  article_title: string;
+  article_url: string;
+  summary_of_perspective: string;
+  publication_date: string;
 }
 
 export interface NewsAnalysisResult {
-  topic_title: string;
-  fact_check_summary: string;
-  sources: Source[];
-  analysis: Analysis;
-}
-
-export enum SpectrumType {
-  LEFT = 'Left',
-  CENTER_LEFT = 'Center-Left',
-  CENTER = 'Center',
-  CENTER_RIGHT = 'Center-Right',
-  RIGHT = 'Right'
+  analysis_topic: string;
+  response_language: string;
+  news_spectrum: {
+    left: NewsSource;
+    center: NewsSource;
+    right: NewsSource;
+  };
+  overall_non_partisan_analysis: string;
 }
 
 export type FetchStatus = 'idle' | 'loading' | 'success' | 'error';

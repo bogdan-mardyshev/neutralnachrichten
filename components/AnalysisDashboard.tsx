@@ -10,15 +10,16 @@ interface AnalysisDashboardProps {
 
 export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang }) => {
   const t = translations[lang];
+  const { news_spectrum, overall_non_partisan_analysis, analysis_topic } = data;
 
   return (
     <div className="animate-fade-in space-y-8">
-
+      
       {/* Header & Fact Check */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="bg-slate-900 text-white p-6 md:p-8">
           <div className="uppercase tracking-widest text-xs font-semibold text-slate-400 mb-2">{t.topic}</div>
-          <h2 className="serif text-3xl md:text-4xl font-bold">{data.topic_title}</h2>
+          <h2 className="serif text-3xl md:text-4xl font-bold capitalize">{analysis_topic}</h2>
         </div>
         <div className="p-6 md:p-8">
           <h3 className="text-sm font-bold text-emerald-600 uppercase tracking-wide mb-2 flex items-center">
@@ -26,7 +27,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
             {t.factCheck}
           </h3>
           <p className="text-lg text-gray-700 leading-relaxed border-l-4 border-emerald-500 pl-4">
-            {data.fact_check_summary}
+            {overall_non_partisan_analysis || "No analysis available."}
           </p>
         </div>
       </div>
@@ -42,7 +43,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
             <h3 className="font-bold text-gray-900 text-lg">{t.narrativeLeft}</h3>
           </div>
           <p className="text-gray-600 leading-relaxed">
-            {data.analysis?.left_narrative || "No analysis available for this spectrum."}
+            {news_spectrum?.left?.summary_of_perspective || "No specific narrative captured for this spectrum."}
           </p>
         </div>
 
@@ -55,22 +56,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
             <h3 className="font-bold text-gray-900 text-lg">{t.narrativeRight}</h3>
           </div>
           <p className="text-gray-600 leading-relaxed text-left md:text-right">
-            {data.analysis?.right_narrative || "No analysis available for this spectrum."}
-          </p>
-        </div>
-      </div>
-
-      {/* Blindspot Alert */}
-      <div className="bg-amber-50 rounded-xl p-6 border border-amber-200 flex items-start gap-4">
-        <div className="flex-shrink-0 pt-1">
-          <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-        </div>
-        <div>
-          <h3 className="font-bold text-amber-800 mb-1">{t.blindspotTitle}</h3>
-          <p className="text-amber-900 mb-2 italic">"{data.analysis?.bias_verdict || "Neutral or balanced coverage detected."}"</p>
-          <p className="text-sm text-amber-800/80">
-            <span className="font-bold">{t.blindspotWarning} </span>
-            {data.analysis?.blindspot_alert || "No major blindspots identified."}
+            {news_spectrum?.right?.summary_of_perspective || "No specific narrative captured for this spectrum."}
           </p>
         </div>
       </div>
@@ -79,9 +65,15 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
       <div>
         <h3 className="text-xl font-bold text-gray-900 mb-4 px-2">{t.analyzedSources}</h3>
         <div className="grid md:grid-cols-3 gap-4">
-          {data.sources.map((source, index) => (
-            <SourceCard key={index} source={source} lang={lang} />
-          ))}
+          {news_spectrum?.left && (
+            <SourceCard source={news_spectrum.left} leaning={t.leaningLeft} lang={lang} />
+          )}
+          {news_spectrum?.center && (
+            <SourceCard source={news_spectrum.center} leaning={t.leaningCenter} lang={lang} />
+          )}
+          {news_spectrum?.right && (
+            <SourceCard source={news_spectrum.right} leaning={t.leaningRight} lang={lang} />
+          )}
         </div>
       </div>
     </div>
