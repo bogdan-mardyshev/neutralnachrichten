@@ -11,134 +11,115 @@ import { dirname } from 'path';
 import * as Sentry from '@sentry/node';
 import fs from 'fs';
 
-// --- ESM __dirname equivalent ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// --- Load environment variables in development ---
 if (process.env.NODE_ENV !== 'production') {
   try {
     const dotenv = await import('dotenv');
     dotenv.config({ path: '.env.local' });
   } catch (err) {
-    console.warn('.env.local not found, skipping...');
+    console.warn('.env.local not found');
   }
 }
 
-// --- Configuration ---
 const PORT = process.env.PORT || 3001;
 const BUDGET_CAP = parseFloat(process.env.DAILY_BUDGET_USD || '5.0');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-const SENTRY_DSN = process.env.SENTRY_DSN;
-
-// Only init Sentry if it's a real DSN
-if (SENTRY_DSN && SENTRY_DSN.startsWith('http')) {
-  Sentry.init({ dsn: SENTRY_DSN });
-}
 
 const app = express();
-const cache = new NodeCache({ stdTTL: 21600 }); // 6 hours
-let dailyCost = 0;
-let lastResetDate = new Date().getUTCDate();
 
-// --- Security Middleware ---
+// --- 3. Обновление Content Security Policy (CSP) ---
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      "script-src": ["'self'", "'unsafe-inline'", "https://app.posthog.com", "https://browser.sentry-cdn.com"],
-      "connect-src": ["'self'", "https://app.posthog.com", "https://*.sentry.io"],
+      "script-src": [
+        "'self'", 
+        "'unsafe-inline'", 
+        "https://app.posthog.com", 
+        "https://eu-assets.i.posthog.com", 
+        "https://browser.sentry-cdn.com"
+      ],
+      "connect-src": [
+        "'self'", 
+        "https://app.posthog.com", 
+        "https://eu.i.posthog.com", 
+        "https://eu-assets.i.posthog.com", 
+        "https://generativelanguage.googleapis.com", 
+        "https://*.sentry.io"
+      ],
+      "img-src": ["'self'", "data:", "https://eu-assets.i.posthog.com"],
     },
   },
 }));
+
 app.use(cors());
 app.use(express.json({ limit: '1kb' }));
 
-// --- Cost Counter Reset ---
-const checkBudgetReset = () => {
-  const now = new Date();
-  if (now.getUTCDate() !== lastResetDate) {
-    dailyCost = 0;
-    lastResetDate = now.getUTCDate();
-  }
-};
+const cache = new NodeCache({ stdTTL: 21600 });
+let dailyCost = 0;
+let lastResetDate = new Date().getUTCDate();
 
-// --- Rate Limiting ---
 const limiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
-  limit: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
+  limit: 5,
   keyGenerator: (req, res) => ipKeyGenerator(req, res),
   handler: (req, res) => {
-    const lang = req.headers['accept-language-app'] || 'en';
-    const messages = {
-      de: 'Limit erreicht. Bitte morgen wiederkommen.',
-      en: 'Limit reached. Please try again tomorrow.',
-      ru: 'Лимит исчерпан. Пожалуйста, попробуйте завтра.'
-    };
-    res.status(429).json({ error: messages[lang] || messages.en });
+    res.status(429).json({ error: 'Limit reached. Try again tomorrow.' });
   }
 });
 
-// --- Gemini Proxy Endpoint ---
+// --- 1 & 2. Инициализация Gemini и обработка ответа ---
 app.post('/api/analyze', limiter, async (req, res) => {
-  checkBudgetReset();
   const { topic, lang } = req.body;
-  if (!topic) return res.status(400).json({ error: 'Topic is required' });
-
-  if (dailyCost >= BUDGET_CAP) return res.status(503).json({ error: 'Daily budget reached' });
+  if (!topic) return res.status(400).json({ error: 'Topic required' });
 
   const cacheKey = crypto.createHash('md5').update(`${topic}:${lang}`).digest('hex');
-  const cachedResponse = cache.get(cacheKey);
-  if (cachedResponse) {
-    res.setHeader('X-Cache', 'HIT');
-    return res.json(cachedResponse);
-  }
+  const cached = cache.get(cacheKey);
+  if (cached) return res.json(cached);
 
   try {
     if (!GEMINI_API_KEY) throw new Error('API Key Missing');
     
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    // Используем Gemini 2.0 Flash + Google Search
+    
+    // Инициализация с поддержкой Google Search
     const model = genAI.getGenerativeModel({ 
       model: "gemini-2.0-flash",
       tools: [{ googleSearch: {} }] 
     });
 
-    const systemPrompt = `You are an objective, non-partisan AI Political Analyst specialized in the German Media Landscape (DACH region). 
-    Use the Google Search tool to find current German news articles from different political spectrums (Left, Center, Right). 
-    Provide fact-check consensus, narrative split, and blindspot alert. Return ONLY a valid JSON object.`;
-    
-    const prompt = `Analyse the topic: "${topic}". Respond in ${lang}.`;
+    const systemPrompt = `Objective, non-partisan AI Political Analyst. Return ONLY valid JSON.`;
+    const prompt = `Analyse the topic: "${topic}". Perform a google search for current German news. Respond in language: ${lang}.`;
 
-    console.log(`[Gemini] Calling API for: ${topic} with Search Grounding...`);
     const result = await model.generateContent([systemPrompt, prompt]);
     const response = await result.response;
-    const text = response.text();
 
+    // Безопасная проверка кандидатов
+    if (!response.candidates || response.candidates.length === 0) {
+      console.error('[Gemini] No candidates returned. Blocked or Safety filter trigger.');
+      return res.status(500).json({ error: 'Google Gemini returned no results. It might be blocked by safety filters or regional restrictions.' });
+    }
+
+    const text = response.text();
     const cleanJson = text.replace(/```json\n?|\n?```/g, "").trim();
     const data = JSON.parse(cleanJson);
 
-    dailyCost += 0.035; 
     cache.set(cacheKey, data);
-    res.setHeader('X-Cache', 'MISS');
     res.json(data);
   } catch (error) {
     console.error('[Gemini Error]:', error);
     
-    // Если поиск запрещен (403), даем внятный ответ
+    // Обработка 403 Forbidden (обычно это бан Grounding в регионе)
     if (error.status === 403) {
-       return res.status(500).json({ 
-         error: 'Google Search Grounding is restricted for this API Key/Region. Please disable Search in code or check AI Studio settings.' 
-       });
+      return res.status(500).json({ error: 'Search Grounding is not available for this key/region.' });
     }
-    
-    res.status(500).json({ error: 'Analysis failed' });
+
+    res.status(500).json({ error: 'Analysis failed on server side. Please try a different topic.' });
   }
 });
 
-// --- Static Frontend Serving ---
 const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath));
 
