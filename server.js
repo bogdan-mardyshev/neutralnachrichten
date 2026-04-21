@@ -48,7 +48,7 @@ app.post('/api/analyze', async (req, res) => {
     
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.0-flash", // Reverting to 2.0-flash as it's typically more stable for search
+      model: "gemini-2.5-flash", // Locked to 2.5-flash as requested
       tools: [{ googleSearch: {} }] 
     });
 
