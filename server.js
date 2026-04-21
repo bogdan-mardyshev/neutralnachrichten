@@ -43,9 +43,9 @@ app.post('/api/analyze', async (req, res) => {
 
   try {
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    // Используем gemini-2.0-flash + поиск
+    // Используем самую новую модель 2.5 Flash
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       tools: [{ googleSearch: {} }] 
     });
 
