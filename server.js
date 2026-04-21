@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import NodeCache from 'node-cache';
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -38,57 +38,6 @@ app.use(express.json({ limit: '1kb' }));
 
 const cache = new NodeCache({ stdTTL: 21600 });
 
-// --- STRICT JSON SCHEMA DEFINITION ---
-const ANALYSIS_SCHEMA = {
-  description: "News analysis response schema",
-  type: SchemaType.OBJECT,
-  properties: {
-    analysis_topic: { type: SchemaType.STRING },
-    response_language: { type: SchemaType.STRING },
-    overall_non_partisan_analysis: { type: SchemaType.STRING },
-    news_spectrum: {
-      type: SchemaType.OBJECT,
-      properties: {
-        left: {
-          type: SchemaType.OBJECT,
-          properties: {
-            source_name: { type: SchemaType.STRING },
-            article_title: { type: SchemaType.STRING },
-            article_url: { type: SchemaType.STRING },
-            summary_of_perspective: { type: SchemaType.STRING },
-            publication_date: { type: SchemaType.STRING }
-          },
-          required: ["source_name", "article_title", "article_url", "summary_of_perspective", "publication_date"]
-        },
-        center: {
-          type: SchemaType.OBJECT,
-          properties: {
-            source_name: { type: SchemaType.STRING },
-            article_title: { type: SchemaType.STRING },
-            article_url: { type: SchemaType.STRING },
-            summary_of_perspective: { type: SchemaType.STRING },
-            publication_date: { type: SchemaType.STRING }
-          },
-          required: ["source_name", "article_title", "article_url", "summary_of_perspective", "publication_date"]
-        },
-        right: {
-          type: SchemaType.OBJECT,
-          properties: {
-            source_name: { type: SchemaType.STRING },
-            article_title: { type: SchemaType.STRING },
-            article_url: { type: SchemaType.STRING },
-            summary_of_perspective: { type: SchemaType.STRING },
-            publication_date: { type: SchemaType.STRING }
-          },
-          required: ["source_name", "article_title", "article_url", "summary_of_perspective", "publication_date"]
-        }
-      },
-      required: ["left", "center", "right"]
-    }
-  },
-  required: ["analysis_topic", "response_language", "overall_non_partisan_analysis", "news_spectrum"]
-};
-
 // Validation Helper
 function validateResponse(data) {
   if (!data || typeof data !== 'object') return false;
@@ -105,32 +54,67 @@ function validateResponse(data) {
   });
 }
 
+// Robust JSON Extraction
+function extractJSON(rawText) {
+  let cleaned = rawText.trim();
+  // Strip markdown fences if present
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+  
+  const first = cleaned.indexOf('{');
+  const last = cleaned.lastIndexOf('}');
+  
+  if (first === -1 || last === -1 || last < first) {
+    throw new Error('No JSON object found in Gemini response');
+  }
+  
+  return JSON.parse(cleaned.substring(first, last + 1));
+}
+
 async function callGeminiWithRetry(topic, lang, attempt = 1) {
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
   
-  // Note: some combinations of tools + schema might require handling. 
-  // We use strict prompting as a fallback within the config.
+  // CRITICAL: We REMOVE responseMimeType and responseSchema because they conflict with googleSearch tool
   const model = genAI.getGenerativeModel({ 
     model: "gemini-2.5-flash",
-    tools: [{ googleSearch: {} }],
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: ANALYSIS_SCHEMA
-    }
+    tools: [{ googleSearch: {} }]
   });
 
-  const systemPrompt = `You are a neutral news analysis AI. 
-  You MUST return a valid JSON object with English keys. 
-  NEVER translate JSON keys like "analysis_topic" or "news_spectrum".
-  Only the text VALUES should be in ${lang}.
-  Find exactly one German news article for each spectrum (left, center, right).`;
+  const langNames = { de: 'German', en: 'English', ru: 'Russian' };
+  const targetLang = langNames[lang] || 'English';
 
-  const prompt = `Analyse the topic: "${topic}". Response language: ${lang}.`;
+  const systemPrompt = `You are a neutral news analysis AI. 
+  You MUST return a valid JSON object. Output ONLY raw JSON — no markdown, no code fences, no commentary.
+  
+  REQUIRED JSON SCHEMA (Use these EXACT English keys, NEVER translate them):
+  {
+    "analysis_topic": "${topic}",
+    "response_language": "${lang}",
+    "overall_non_partisan_analysis": "<2-3 sentence consensus in ${targetLang}>",
+    "news_spectrum": {
+      "left": {
+        "source_name": "<outlet>",
+        "article_title": "<title in ${targetLang}>",
+        "article_url": "<https URL>",
+        "summary_of_perspective": "<summary in ${targetLang}>",
+        "publication_date": "<date in ${targetLang}>"
+      },
+      "center": { ... },
+      "right": { ... }
+    }
+  }
+
+  Rules:
+  - JSON keys must be in English.
+  - Text values must be in ${targetLang}.
+  - Exactly one German article per spectrum (left, center, right).
+  - Start response with { and end with }.`;
+
+  const prompt = `Analyse the topic: "${topic}" in the context of German media. Return JSON in ${targetLang}.`;
 
   try {
     const result = await model.generateContent([systemPrompt, prompt]);
     const text = result.response.text();
-    const parsed = JSON.parse(text.replace(/```json\n?|\n?```/g, "").trim());
+    const parsed = extractJSON(text);
     
     if (!validateResponse(parsed)) {
       throw new Error('Invalid schema in AI response');
