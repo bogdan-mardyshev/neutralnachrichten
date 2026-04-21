@@ -8,13 +8,13 @@ export interface NewsSource {
 
 export interface NewsAnalysisResult {
   analysis_topic: string;
-  response_language: string;
+  response_language: 'de' | 'en' | 'ru';
+  overall_non_partisan_analysis: string;
   news_spectrum: {
     left: NewsSource;
     center: NewsSource;
     right: NewsSource;
   };
-  overall_non_partisan_analysis: string;
 }
 
 export type FetchStatus = 'idle' | 'loading' | 'success' | 'error';
