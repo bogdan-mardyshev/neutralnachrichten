@@ -10,31 +10,26 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import * as Sentry from '@sentry/node';
 import fs from 'fs';
+import dotenv from 'dotenv';
+
+// Загружаем переменные (для локалки и на всякий случай для Railway)
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-if (process.env.NODE_ENV !== 'production') {
-  try {
-    const dotenv = await import('dotenv');
-    dotenv.config({ path: '.env.local' });
-  } catch (err) {
-    console.warn('.env.local not found');
-  }
-}
-
 const PORT = process.env.PORT || 3001;
-const BUDGET_CAP = parseFloat(process.env.DAILY_BUDGET_USD || '5.0');
 
-// Очищаем ключ от возможных кавычек или пробелов
+// ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ (Видим только ключи, не значения)
+console.log('[Server] Startup - All available ENV keys:', Object.keys(process.env));
+
 const rawKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 const GEMINI_API_KEY = rawKey.replace(/["']/g, '').trim();
 
-// --- API Key Verification on Startup ---
 if (GEMINI_API_KEY) {
-  console.log(`[Server] API Key loaded: ${GEMINI_API_KEY.substring(0, 4)}...${GEMINI_API_KEY.substring(GEMINI_API_KEY.length - 4)} (Length: ${GEMINI_API_KEY.length})`);
+  console.log(`[Server] SUCCESS: API Key found. Length: ${GEMINI_API_KEY.length}. Prefix: ${GEMINI_API_KEY.substring(0, 4)}`);
 } else {
-  console.error('[Server] CRITICAL: GEMINI_API_KEY is empty!');
+  console.error('[Server] ERROR: GEMINI_API_KEY is still empty in process.env');
 }
 
 const app = express();
@@ -56,7 +51,7 @@ const cache = new NodeCache({ stdTTL: 21600 });
 
 const limiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
-  limit: 10,
+  limit: 20, // Увеличим лимит для тестов
   keyGenerator: (req, res) => ipKeyGenerator(req, res),
   handler: (req, res) => {
     res.status(429).json({ error: 'Limit reached.' });
@@ -68,46 +63,25 @@ app.post('/api/analyze', limiter, async (req, res) => {
   if (!topic) return res.status(400).json({ error: 'Topic required' });
 
   try {
-    // Проверка ключа перед вызовом
-    if (!GEMINI_API_KEY || GEMINI_API_KEY.length < 10) {
-      console.error('[Server] CRITICAL: GEMINI_API_KEY is missing or too short.');
-      return res.status(500).json({ error: 'Server configuration error: API Key is missing.' });
-    }
-
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    if (!GEMINI_API_KEY) throw new Error('API Key Missing');
     
-    // Используем максимально стабильную 1.5 Flash для поиска
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ 
       model: "gemini-1.5-flash",
       tools: [{ googleSearch: {} }] 
     });
 
-    const systemPrompt = `Objective, non-partisan AI Political Analyst. Provide fact-check consensus and narrative split. Return ONLY valid JSON.`;
-    const prompt = `Analyse the topic: "${topic}" using Google Search for German media. Language: ${lang}.`;
+    const systemPrompt = `You are a non-partisan news analyzer. Respond ONLY in valid JSON.`;
+    const prompt = `Topic: "${topic}". Language: ${lang}. Search German news.`;
 
-    console.log(`[Gemini] Requesting analysis for: ${topic}...`);
     const result = await model.generateContent([systemPrompt, prompt]);
     const response = await result.response;
-
-    if (!response.candidates || response.candidates.length === 0) {
-      return res.status(500).json({ error: 'Gemini returned no results. Try again.' });
-    }
-
     const text = response.text();
     const cleanJson = text.replace(/```json\n?|\n?```/g, "").trim();
-    const data = JSON.parse(cleanJson);
-
-    res.json(data);
+    res.json(JSON.parse(cleanJson));
   } catch (error) {
-    console.error('[Gemini Error]:', error);
-    
-    if (error.status === 403) {
-      return res.status(500).json({ 
-        error: 'Google Search is restricted. Try disabling grounding or check billing at AI Studio.' 
-      });
-    }
-
-    res.status(500).json({ error: 'Analysis failed. Please try a different topic.' });
+    console.error('[API Error]:', error);
+    res.status(500).json({ error: error.message || 'Analysis failed' });
   }
 });
 
@@ -119,5 +93,5 @@ app.get(/^(?!\/api\/).*$/, (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
