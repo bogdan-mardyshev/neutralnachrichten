@@ -27,7 +27,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
             {t.factCheck}
           </h3>
           <p className="text-lg text-gray-700 leading-relaxed border-l-4 border-emerald-500 pl-4">
-            {overall_non_partisan_analysis || "No analysis available."}
+            {overall_non_partisan_analysis}
           </p>
         </div>
       </div>
@@ -43,7 +43,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
             <h3 className="font-bold text-gray-900 text-lg">{t.narrativeLeft}</h3>
           </div>
           <p className="text-gray-600 leading-relaxed">
-            {news_spectrum?.left?.summary_of_perspective || "No specific narrative captured for this spectrum."}
+            {news_spectrum.left.summary_of_perspective}
           </p>
         </div>
 
@@ -56,7 +56,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
             <h3 className="font-bold text-gray-900 text-lg">{t.narrativeRight}</h3>
           </div>
           <p className="text-gray-600 leading-relaxed text-left md:text-right">
-            {news_spectrum?.right?.summary_of_perspective || "No specific narrative captured for this spectrum."}
+            {news_spectrum.right.summary_of_perspective}
           </p>
         </div>
       </div>
@@ -65,15 +65,9 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
       <div>
         <h3 className="text-xl font-bold text-gray-900 mb-4 px-2">{t.analyzedSources}</h3>
         <div className="grid md:grid-cols-3 gap-4">
-          {news_spectrum?.left && (
-            <SourceCard source={news_spectrum.left} leaning={t.leaningLeft} lang={lang} />
-          )}
-          {news_spectrum?.center && (
-            <SourceCard source={news_spectrum.center} leaning={t.leaningCenter} lang={lang} />
-          )}
-          {news_spectrum?.right && (
-            <SourceCard source={news_spectrum.right} leaning={t.leaningRight} lang={lang} />
-          )}
+          <SourceCard source={news_spectrum.left} leaning={t.leaningLeft} lang={lang} />
+          <SourceCard source={news_spectrum.center} leaning={t.leaningCenter} lang={lang} />
+          <SourceCard source={news_spectrum.right} leaning={t.leaningRight} lang={lang} />
         </div>
       </div>
     </div>
