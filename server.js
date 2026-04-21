@@ -41,32 +41,42 @@ app.post('/api/analyze', async (req, res) => {
   const { topic, lang } = req.body;
   if (!topic) return res.status(400).json({ error: 'Topic required' });
 
+  console.log(`[Server] Analyzing topic: "${topic}" in ${lang}`);
+
   try {
+    if (!GEMINI_API_KEY) throw new Error('API Key Missing on Server');
+    
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    // Используем самую новую модель 2.5 Flash
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash",
+      model: "gemini-2.0-flash", // Reverting to 2.0-flash as it's typically more stable for search
       tools: [{ googleSearch: {} }] 
     });
 
     const systemPrompt = `You are a non-partisan political news analyst. 
-    Use Google Search to find current German news articles. 
-    Provide fact-check consensus and narrative split (Left vs Right). 
+    Use Google Search to find current German news articles from Left, Center and Right spectrums. 
     Return ONLY a valid JSON object.`;
     
-    const prompt = `Analyse the topic: "${topic}". Language: ${lang}.`;
+    const prompt = `Analyse: "${topic}". Response Language: ${lang}.`;
 
     const result = await model.generateContent([systemPrompt, prompt]);
     const response = await result.response;
     
-    if (!response.candidates) throw new Error('No results from Gemini');
+    if (!response.candidates || response.candidates.length === 0) {
+      throw new Error('No candidates returned from Gemini');
+    }
     
     const text = response.text();
     const cleanJson = text.replace(/```json\n?|\n?```/g, "").trim();
+    
+    console.log(`[Server] Success. Response length: ${text.length}`);
     res.json(JSON.parse(cleanJson));
   } catch (error) {
     console.error('[Analyze Error]:', error);
-    res.status(500).json({ error: error.message || 'Analysis failed' });
+    res.status(500).json({ 
+      error: 'Analysis failed', 
+      message: error.message,
+      status: error.status 
+    });
   }
 });
 
@@ -74,4 +84,11 @@ const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath));
 app.get(/^(?!\/api\/).*$/, (req, res) => res.sendFile(path.join(distPath, 'index.html')));
 
-app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+// Increase timeout for long-running Gemini search (60 seconds)
+server.timeout = 60000;
+server.keepAliveTimeout = 61000;
+server.headersTimeout = 62000;
