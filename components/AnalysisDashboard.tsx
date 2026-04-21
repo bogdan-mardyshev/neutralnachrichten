@@ -42,7 +42,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
             <h3 className="font-bold text-gray-900 text-lg">{t.narrativeLeft}</h3>
           </div>
           <p className="text-gray-600 leading-relaxed">
-            {data.analysis.left_narrative}
+            {data.analysis?.left_narrative || "No analysis available for this spectrum."}
           </p>
         </div>
 
@@ -55,7 +55,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
             <h3 className="font-bold text-gray-900 text-lg">{t.narrativeRight}</h3>
           </div>
           <p className="text-gray-600 leading-relaxed text-left md:text-right">
-            {data.analysis.right_narrative}
+            {data.analysis?.right_narrative || "No analysis available for this spectrum."}
           </p>
         </div>
       </div>
@@ -67,10 +67,10 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
         </div>
         <div>
           <h3 className="font-bold text-amber-800 mb-1">{t.blindspotTitle}</h3>
-          <p className="text-amber-900 mb-2 italic">"{data.analysis.bias_verdict}"</p>
+          <p className="text-amber-900 mb-2 italic">"{data.analysis?.bias_verdict || "Neutral or balanced coverage detected."}"</p>
           <p className="text-sm text-amber-800/80">
             <span className="font-bold">{t.blindspotWarning} </span>
-            {data.analysis.blindspot_alert}
+            {data.analysis?.blindspot_alert || "No major blindspots identified."}
           </p>
         </div>
       </div>

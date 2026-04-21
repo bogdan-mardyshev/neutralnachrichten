@@ -14,7 +14,7 @@ import { translations, Language } from './translations';
 
 // Initialize Sentry
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
-if (SENTRY_DSN) {
+if (SENTRY_DSN && SENTRY_DSN.startsWith('http')) {
   Sentry.init({ dsn: SENTRY_DSN });
 }
 
