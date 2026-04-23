@@ -30,7 +30,8 @@ export const translations = {
     imprint: "Impressum",
     privacy: "Datenschutz",
     terms: "AGB",
-    backToHome: "Zurück zur Startseite"
+    backToHome: "Zurück zur Startseite",
+    degraded_warning: "Einige Quellen sind möglicherweise nicht verfügbar. Es werden die besten verfügbaren Ergebnisse angezeigt."
   },
   en: {
     title: "NeutralNews",
@@ -61,7 +62,8 @@ export const translations = {
     imprint: "Imprint",
     privacy: "Privacy Policy",
     terms: "Terms of Service",
-    backToHome: "Back to Home"
+    backToHome: "Back to Home",
+    degraded_warning: "Some sources may be unavailable. Showing best available results."
   },
   ru: {
     title: "НейтральныеНовости",
@@ -92,6 +94,7 @@ export const translations = {
     imprint: "Выходные данные",
     privacy: "Конфиденциальность",
     terms: "Условия использования",
-    backToHome: "На главную"
+    backToHome: "На главную",
+    degraded_warning: "Некоторые источники могут быть недоступны. Показываем лучшие доступные результаты."
   }
 };

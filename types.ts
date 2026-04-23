@@ -15,6 +15,14 @@ export interface NewsAnalysisResult {
     center: NewsSource;
     right: NewsSource;
   };
+  _meta?: {
+    degraded: boolean;
+    validation_summary?: {
+      valid_sources: number;
+      total_sources: number;
+      issues: Record<string, string[]>;
+    };
+  };
 }
 
 export type FetchStatus = 'idle' | 'loading' | 'success' | 'error';
