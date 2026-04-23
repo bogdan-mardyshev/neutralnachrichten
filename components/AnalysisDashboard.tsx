@@ -14,7 +14,13 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
 
   return (
     <div className="animate-fade-in space-y-8">
-      
+
+      {data._meta?.degraded && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-md text-sm">
+          {t.degraded_warning}
+        </div>
+      )}
+
       {/* Header & Fact Check */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="bg-slate-900 text-white p-6 md:p-8">
