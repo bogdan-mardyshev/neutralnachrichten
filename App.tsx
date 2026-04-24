@@ -25,6 +25,8 @@ function MainApp() {
   const [error, setError] = useState<string | null>(null);
   const [showCookieBanner, setShowCookieBanner] = useState(false);
   const [loadingStage, setLoadingStage] = useState(0);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [stageVisible, setStageVisible] = useState(true);
 
   const t = translations[lang];
 
@@ -38,14 +40,36 @@ function MainApp() {
   }, []);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (status === 'loading') {
-      setLoadingStage(0);
-      interval = setInterval(() => {
-        setLoadingStage((prev) => (prev < t.loadingStages.length - 1 ? prev + 1 : prev));
-      }, 3500);
-    }
-    return () => clearInterval(interval);
+    if (status !== 'loading') return;
+
+    setLoadingStage(0);
+    setLoadingProgress(0);
+    setStageVisible(true);
+
+    const STAGE_DURATION = 3500;
+    const TOTAL_EXPECTED_MS = 35000;
+
+    // Cycle through stages with fade transition
+    const stageInterval = setInterval(() => {
+      setStageVisible(false);
+      setTimeout(() => {
+        setLoadingStage(prev => Math.min(prev + 1, t.loadingStages.length - 1));
+        setStageVisible(true);
+      }, 300);
+    }, STAGE_DURATION);
+
+    // Smooth progress bar (never reaches 100% until done)
+    const start = Date.now();
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const pct = Math.min((elapsed / TOTAL_EXPECTED_MS) * 95, 95);
+      setLoadingProgress(pct);
+    }, 200);
+
+    return () => {
+      clearInterval(stageInterval);
+      clearInterval(progressInterval);
+    };
   }, [status, t.loadingStages.length]);
 
   const initPostHog = () => {
@@ -148,10 +172,42 @@ function MainApp() {
               <SearchBar onSearch={handleSearch} status={status} lang={lang} />
 
               {status === 'loading' && (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <div className="w-16 h-16 mb-4 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-slate-600 font-medium">{t.loadingStages[loadingStage]}</p>
-                  <p className="text-slate-400 text-sm mt-2">{t.loadingSubtext}</p>
+                <div className="flex flex-col items-center justify-center py-20 max-w-sm mx-auto w-full">
+                  {/* Spinner */}
+                  <div className="w-14 h-14 mb-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin"></div>
+
+                  {/* Stage text with fade */}
+                  <div className="h-7 mb-6 flex items-center justify-center">
+                    <p
+                      className="text-slate-700 font-medium text-center transition-opacity duration-300"
+                      style={{ opacity: stageVisible ? 1 : 0 }}
+                    >
+                      {t.loadingStages[loadingStage]}
+                    </p>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4 overflow-hidden">
+                    <div
+                      className="bg-slate-900 h-1.5 rounded-full transition-all duration-200 ease-out"
+                      style={{ width: `${loadingProgress}%` }}
+                    />
+                  </div>
+
+                  {/* Step dots */}
+                  <div className="flex gap-1.5">
+                    {t.loadingStages.map((_, i) => (
+                      <div
+                        key={i}
+                        className="rounded-full transition-all duration-300"
+                        style={{
+                          width: i === loadingStage ? '20px' : '6px',
+                          height: '6px',
+                          backgroundColor: i <= loadingStage ? '#0f172a' : '#e2e8f0',
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
 
