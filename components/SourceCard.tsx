@@ -51,8 +51,14 @@ export const SourceCard: React.FC<SourceCardProps> = ({ source, leaning, lang })
       </p>
 
       <div className="mt-auto pt-3 border-t border-gray-200/60 flex justify-between items-center text-xs">
-        <span className="text-gray-500 font-medium text-gray-700">{source.publication_date}</span>
-        <span className="text-blue-600 font-medium hover:underline">{t.readArticle} →</span>
+        <span className="text-gray-500 font-medium text-gray-700">
+          {source.publication_date || ''}
+        </span>
+        {source.url_is_search_fallback ? (
+          <span className="text-slate-500 font-medium hover:underline text-xs">🔍 {t.searchArticle}</span>
+        ) : (
+          <span className="text-blue-600 font-medium hover:underline">{t.readArticle} →</span>
+        )}
       </div>
     </a>
   );

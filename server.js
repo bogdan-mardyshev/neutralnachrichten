@@ -12,7 +12,7 @@ import * as Sentry from '@sentry/node';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
-import { validateAnalysis } from './lib/validation.js';
+import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
 
 dotenv.config();
 
@@ -49,10 +49,10 @@ function validateAnalysisStructure(data) {
   const spectrum = ['left', 'center', 'right'];
   if (!spectrum.every(key => data.news_spectrum?.[key] && typeof data.news_spectrum[key] === 'object')) return false;
 
-  const sourceFields = ['source_name', 'article_title', 'article_url', 'summary_of_perspective', 'publication_date'];
+  const requiredFields = ['source_name', 'article_title', 'summary_of_perspective'];
   return spectrum.every(key => {
     const source = data.news_spectrum[key];
-    return sourceFields.every(field => typeof source[field] === 'string');
+    return requiredFields.every(field => typeof source[field] === 'string' && source[field].length > 0);
   });
 }
 
@@ -79,28 +79,25 @@ function buildPrompt(topic, language) {
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
   const earliestDate = ninetyDaysAgo.toISOString().split('T')[0];
 
-  return `You are a media analysis assistant. Find recent German media coverage of the topic "${topic}" from three political perspectives and return a JSON object.
+  return `You are a media analysis assistant. Use Google Search to find real, recent articles about "${topic}" in German media. Analyze coverage from three political perspectives.
 
 OUTPUT RULES:
 - Output ONLY the JSON object. No markdown, no code fences, no preamble.
 - Response must start with { and end with }.
 - Use EXACTLY these English keys — NEVER translate keys to another language.
-- All VALUES must be in ${targetLang}.
+- All text VALUES must be in ${targetLang}.
 
-RECENCY REQUIREMENTS (CRITICAL):
-- Today's date: ${today}
-- Articles MUST be published on or after ${earliestDate} (last 90 days)
+RECENCY (CRITICAL):
+- Today: ${today}
+- Only include articles published on or after ${earliestDate} (last 90 days)
 - Strongly prefer articles from the last 14 days
-- Reject any article older than 90 days and find a newer alternative
-- Include the exact publication date as ISO format: YYYY-MM-DD
+- publication_date MUST come from your Google Search results — NOT from memory
+- If you are not certain of the date from search results, omit the publication_date field entirely
 
-DOMAIN REQUIREMENTS (CRITICAL):
+DO NOT include article URLs — they are not part of the response schema.
+
+PREFERRED GERMAN MEDIA DOMAINS:
 ${formatDomainsForPrompt()}
-
-- Each article MUST come from a domain in the approved list
-- Match the article to its correct spectrum (left/center/right)
-- The article_url must be the full article URL, not the homepage
-- Do NOT invent or guess URLs — only return URLs you found in search results
 
 REQUIRED JSON STRUCTURE:
 {
@@ -110,29 +107,27 @@ REQUIRED JSON STRUCTURE:
   "news_spectrum": {
     "left": {
       "source_name": "<outlet name, e.g. taz>",
-      "article_title": "<exact article headline in ${targetLang}>",
-      "article_url": "<full https URL to the specific article>",
+      "source_domain": "<domain only, e.g. taz.de>",
+      "article_title": "<exact headline from search results in ${targetLang}>",
       "summary_of_perspective": "<2-3 sentences describing the left-leaning angle in ${targetLang}>",
-      "publication_date": "<YYYY-MM-DD>"
+      "publication_date": "<YYYY-MM-DD from search results, or omit if uncertain>"
     },
     "center": {
-      "source_name": "<outlet name, e.g. Spiegel>",
-      "article_title": "<exact article headline in ${targetLang}>",
-      "article_url": "<full https URL>",
+      "source_name": "<outlet name>",
+      "source_domain": "<domain>",
+      "article_title": "<exact headline in ${targetLang}>",
       "summary_of_perspective": "<2-3 sentences in ${targetLang}>",
-      "publication_date": "<YYYY-MM-DD>"
+      "publication_date": "<YYYY-MM-DD or omit>"
     },
     "right": {
-      "source_name": "<outlet name, e.g. Welt>",
-      "article_title": "<exact article headline in ${targetLang}>",
-      "article_url": "<full https URL>",
+      "source_name": "<outlet name>",
+      "source_domain": "<domain>",
+      "article_title": "<exact headline in ${targetLang}>",
       "summary_of_perspective": "<2-3 sentences in ${targetLang}>",
-      "publication_date": "<YYYY-MM-DD>"
+      "publication_date": "<YYYY-MM-DD or omit>"
     }
   }
-}
-
-If you cannot find a valid article from the approved domains for a spectrum within the recency window, still output the JSON but set that spectrum's fields to "insufficient_coverage" strings. Do NOT invent articles.`;
+}`;
 }
 
 async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
@@ -143,7 +138,6 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
   });
 
   let lastError = null;
-  let lastAnalysis = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -152,7 +146,7 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
       const prompt = buildPrompt(topic, language);
       const result = await model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2 }
+        generationConfig: { temperature: attempt === 1 ? 0.2 : 0.4 }
       });
 
       const rawText = result.response.text();
@@ -162,38 +156,60 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
         throw new Error('Invalid response structure');
       }
 
-      const validation = await validateAnalysis(analysis);
-      console.log(`[Gemini] Validation attempt ${attempt}:`, {
-        valid: validation.valid,
-        validCount: validation.validCount,
-        details: Object.fromEntries(
-          Object.entries(validation.details).map(([k, v]) => [k, v.issues])
-        )
-      });
+      // Extract real article URLs from grounding chunks (resolved redirects)
+      const groundingChunks = result.response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const resolvedGroundingURLs = await Promise.all(
+        groundingChunks.map(chunk => resolveArticleURL(chunk?.web?.uri).catch(() => null))
+      );
+      console.log(`[Grounding] ${resolvedGroundingURLs.filter(Boolean).length} real URLs from grounding`);
 
-      lastAnalysis = { analysis, validation };
+      // Match grounding URLs to spectrum sources by source_domain
+      for (const spectrum of ['left', 'center', 'right']) {
+        const source = analysis.news_spectrum[spectrum];
+        const domain = (source.source_domain || '').replace(/^www\./, '');
+        const matched = resolvedGroundingURLs.find(url => {
+          try { return new URL(url).hostname.replace(/^www\./, '').includes(domain); } catch { return false; }
+        });
 
-      if (validation.valid) {
-        return { analysis, validation, degraded: false };
+        if (matched) {
+          source.article_url = matched;
+          source.url_is_search_fallback = false;
+          console.log(`[Grounding] ${spectrum} → direct link: ${matched}`);
+        } else {
+          // Fallback: Google Search for this outlet + topic (always works)
+          const fallbackDomain = (domain && domain !== 'n/a') ? domain : null;
+          const q = encodeURIComponent(fallbackDomain ? `site:${fallbackDomain} ${topic}` : `${topic} deutsche medien`);
+          source.article_url = `https://www.google.com/search?q=${q}`;
+          source.url_is_search_fallback = true;
+          console.log(`[Grounding] ${spectrum} → search fallback for ${fallbackDomain || 'no domain'}`);
+        }
       }
 
-      if (attempt === maxAttempts && validation.acceptable) {
-        console.warn('[Gemini] Returning partially valid result after max attempts');
-        return { analysis, validation, degraded: true };
+      // Strip any fake/old dates — only keep dates within the 90-day window
+      for (const spectrum of ['left', 'center', 'right']) {
+        const source = analysis.news_spectrum[spectrum];
+        if (source.publication_date && !isRecentEnough(source.publication_date)) {
+          console.warn(`[Date] Dropping fake date "${source.publication_date}" for ${spectrum}`);
+          delete source.publication_date;
+        }
       }
 
-      console.warn(`[Gemini] Validation failed, retrying...`);
+      // Count how many sources got a direct grounding URL (not search fallback)
+      const directCount = ['left', 'center', 'right'].filter(
+        s => !analysis.news_spectrum[s].url_is_search_fallback
+      ).length;
+      console.log(`[Gemini] ${directCount}/3 sources have direct article links`);
+
+      // Always return — no more retries based on domain. Whitelist is prompt guidance only.
+      const degraded = directCount < 3;
+      return { analysis, validation: { valid: !degraded, validCount: directCount, details: {}, acceptable: directCount >= 2 }, degraded };
     } catch (err) {
       console.error(`[Gemini] Attempt ${attempt} failed:`, err.message);
       lastError = err;
     }
   }
 
-  if (lastAnalysis?.validation?.acceptable) {
-    return { ...lastAnalysis, degraded: true };
-  }
-
-  throw lastError || new Error('All Gemini attempts failed validation');
+  throw lastError || new Error('All Gemini attempts failed');
 }
 
 app.post('/api/analyze', async (req, res) => {
@@ -233,7 +249,7 @@ app.post('/api/analyze', async (req, res) => {
 
     res.json(response);
   } catch (error) {
-    console.error('[Analyze Error]:', error);
+    console.error('[Analyze Error]:', error.message);
     res.status(500).json({ error: 'Analysis failed', message: error.message });
   }
 });

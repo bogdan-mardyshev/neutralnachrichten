@@ -4,6 +4,8 @@ export interface NewsSource {
   article_url: string;
   summary_of_perspective: string;
   publication_date: string;
+  url_valid?: boolean;
+  url_is_search_fallback?: boolean;
 }
 
 export interface NewsAnalysisResult {

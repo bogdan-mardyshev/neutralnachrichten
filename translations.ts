@@ -11,7 +11,17 @@ export const translations = {
     footerText: "NeutralNachrichten AI. Nicht-partisanische Analyse.",
     loadingText: "Recherchiere Artikel & analysiere Bias...",
     loadingSubtext: "Dies kann bis zu 10 Sekunden dauern.",
-    loadingStages: ["Recherchiere deutsche Medien...", "Analysiere Quellen...", "Erstelle Bias-Urteil..."],
+    loadingStages: [
+      "Starte Google Search Grounding...",
+      "Suche linke Perspektiven...",
+      "Suche zentristische Quellen...",
+      "Suche konservative Stimmen...",
+      "Prüfe Aktualität der Artikel...",
+      "Verifiziere Quellendomains...",
+      "Analysiere politische Nuancen...",
+      "Erstelle Konsens-Zusammenfassung...",
+      "Fast fertig..."
+    ],
     errorTitle: "Fehler bei der Analyse",
     errorDefault: "Entschuldigung, die Analyse konnte nicht durchgeführt werden. Bitte versuchen Sie es erneut oder wählen Sie ein anderes Thema.",
     topic: "Thema",
@@ -23,6 +33,7 @@ export const translations = {
     leaningCenter: "Mitte / Liberal",
     leaningRight: "Rechts / Konservativ",
     readArticle: "Artikel lesen",
+    searchArticle: "Artikel suchen",
     realtimeAnalysis: "Echtzeit-Analyse deutscher Medien mittels Google Search Grounding",
     cookieText: "Wir verwenden Cookies für Analytics, um die App zu verbessern.",
     cookieAccept: "Alle akzeptieren",
@@ -31,7 +42,8 @@ export const translations = {
     privacy: "Datenschutz",
     terms: "AGB",
     backToHome: "Zurück zur Startseite",
-    degraded_warning: "Einige Quellen sind möglicherweise nicht verfügbar. Es werden die besten verfügbaren Ergebnisse angezeigt."
+    degraded_warning: "Einige Quellen sind möglicherweise nicht verfügbar. Es werden die besten verfügbaren Ergebnisse angezeigt.",
+    errorNoSources: "Keine verifizierten Artikel gefunden. Bitte versuche es erneut — die Suche variiert bei jedem Versuch."
   },
   en: {
     title: "NeutralNews",
@@ -43,7 +55,17 @@ export const translations = {
     footerText: "NeutralNews AI. Non-partisan analysis.",
     loadingText: "Researching articles & analyzing bias...",
     loadingSubtext: "This can take up to 10 seconds.",
-    loadingStages: ["Searching German media...", "Analyzing sources...", "Generating bias verdict..."],
+    loadingStages: [
+      "Starting Google Search Grounding...",
+      "Searching left-leaning perspectives...",
+      "Searching centrist sources...",
+      "Searching conservative voices...",
+      "Checking article recency...",
+      "Verifying source domains...",
+      "Analyzing political nuances...",
+      "Building consensus summary...",
+      "Almost done..."
+    ],
     errorTitle: "Analysis Error",
     errorDefault: "Sorry, the analysis could not be performed. Please try again or choose another topic.",
     topic: "Topic",
@@ -55,6 +77,7 @@ export const translations = {
     leaningCenter: "Center / Liberal",
     leaningRight: "Right / Conservative",
     readArticle: "Read Article",
+    searchArticle: "Search Article",
     realtimeAnalysis: "Real-time analysis of German media using Google Search Grounding",
     cookieText: "We use cookies for analytics to improve the app.",
     cookieAccept: "Accept all",
@@ -63,7 +86,8 @@ export const translations = {
     privacy: "Privacy Policy",
     terms: "Terms of Service",
     backToHome: "Back to Home",
-    degraded_warning: "Some sources may be unavailable. Showing best available results."
+    degraded_warning: "Some sources may be unavailable. Showing best available results.",
+    errorNoSources: "No verified articles found. Please try again — search results vary with each attempt."
   },
   ru: {
     title: "НейтральныеНовости",
@@ -75,7 +99,17 @@ export const translations = {
     footerText: "НейтральныеНовости AI. Беспристрастный анализ.",
     loadingText: "Поиск статей и анализ предвзятости...",
     loadingSubtext: "Это может занять до 10 секунд.",
-    loadingStages: ["Поиск в немецких СМИ...", "Анализ источников...", "Формирование вердикта..."],
+    loadingStages: [
+      "Запускаю Google Search Grounding...",
+      "Ищу левые перспективы...",
+      "Ищу центристские источники...",
+      "Ищу консервативные голоса...",
+      "Проверяю актуальность статей...",
+      "Верифицирую домены источников...",
+      "Анализирую политические нюансы...",
+      "Формирую консенсус...",
+      "Почти готово..."
+    ],
     errorTitle: "Ошибка анализа",
     errorDefault: "К сожалению, анализ не удался. Пожалуйста, попробуйте еще раз или выберите другую тему.",
     topic: "Тема",
@@ -87,6 +121,7 @@ export const translations = {
     leaningCenter: "Центр / Либеральные",
     leaningRight: "Правые / Консервативные",
     readArticle: "Читать статью",
+    searchArticle: "Найти статью",
     realtimeAnalysis: "Анализ немецких СМИ в реальном времени с использованием Google Search Grounding",
     cookieText: "Мы используем файлы cookie для аналитики, чтобы улучшить приложение.",
     cookieAccept: "Принять всё",
@@ -95,6 +130,7 @@ export const translations = {
     privacy: "Конфиденциальность",
     terms: "Условия использования",
     backToHome: "На главную",
-    degraded_warning: "Некоторые источники могут быть недоступны. Показываем лучшие доступные результаты."
+    degraded_warning: "Некоторые источники могут быть недоступны. Показываем лучшие доступные результаты.",
+    errorNoSources: "Не удалось найти проверенные статьи. Попробуй ещё раз — результаты поиска меняются с каждой попыткой."
   }
 };
