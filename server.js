@@ -13,6 +13,7 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
 import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
+import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
 
 dotenv.config();
 
@@ -22,6 +23,9 @@ const PORT = process.env.PORT || 3001;
 
 const rawKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 const GEMINI_API_KEY = rawKey.replace(/["']/g, '').trim();
+
+// Single genAI instance reused across all calls (query translate, search, analysis translate)
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 const app = express();
 
@@ -131,7 +135,6 @@ REQUIRED JSON STRUCTURE:
 }
 
 async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
-  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
     tools: [{ googleSearch: {} }]
@@ -216,34 +219,40 @@ app.post('/api/analyze', async (req, res) => {
   const { topic, lang } = req.body;
   if (!topic) return res.status(400).json({ error: 'Topic required' });
 
-  const cacheKey = crypto.createHash('md5').update(`${topic}:${lang}:v1`).digest('hex');
+  if (!GEMINI_API_KEY) return res.status(500).json({ error: 'API Key Missing' });
+
+  // Cache per topic+lang (topic as-is, search always in German mode via prompt)
+  const cacheKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:v2`).digest('hex');
   const cached = cache.get(cacheKey);
-  if (cached) return res.json(cached);
+  if (cached) {
+    console.log(`[Cache] HIT for "${topic}" (${lang})`);
+    return res.json(cached);
+  }
 
   try {
-    if (!GEMINI_API_KEY) throw new Error('API Key Missing');
+    // Step 1: Search in German (prompt forces German media regardless of query language)
+    const { analysis: germanAnalysis, degraded } = await callGeminiWithRetry(topic, 'de');
 
-    const { analysis, validation, degraded } = await callGeminiWithRetry(topic, lang);
+    // Step 2: Translate output to user language (skip if German)
+    let finalAnalysis = germanAnalysis;
+    if (lang !== 'de') {
+      try {
+        finalAnalysis = await translateAnalysis(germanAnalysis, lang, genAI);
+        console.log(`[Translate] Analysis → ${lang} done`);
+      } catch (err) {
+        console.error('[Translate] Falling back to German:', err.message);
+        finalAnalysis = germanAnalysis;
+      }
+    }
+
+    // Restore original topic and language
+    finalAnalysis = { ...finalAnalysis, analysis_topic: topic, response_language: lang };
 
     const response = {
-      ...analysis,
-      _meta: {
-        degraded,
-        ...(degraded && {
-          validation_summary: {
-            valid_sources: validation.validCount,
-            total_sources: 3,
-            issues: Object.fromEntries(
-              Object.entries(validation.details)
-                .filter(([, v]) => !v.valid)
-                .map(([k, v]) => [k, v.issues])
-            )
-          }
-        })
-      }
+      ...finalAnalysis,
+      _meta: { degraded }
     };
 
-    // Cache duration: 24h for fully valid, 30min for degraded
     const ttl = degraded ? 1800 : 86400;
     cache.set(cacheKey, response, ttl);
 
