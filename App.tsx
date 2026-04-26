@@ -7,6 +7,9 @@ import { SearchBar } from './components/SearchBar';
 import { AnalysisDashboard } from './components/AnalysisDashboard';
 import { CookieBanner } from './components/CookieBanner';
 import { LegalPage } from './components/LegalPages';
+import { AboutPage } from './components/AboutPage';
+import { MethodologyPage } from './components/MethodologyPage';
+import { SuggestPage } from './components/SuggestPage';
 
 import { analyzeTopic } from './services/geminiService';
 import { NewsAnalysisResult, FetchStatus } from './types';
@@ -232,19 +235,28 @@ function MainApp() {
           <Route path="/imprint" element={<LegalPage lang={lang} type="imprint" />} />
           <Route path="/privacy" element={<LegalPage lang={lang} type="privacy" />} />
           <Route path="/terms" element={<LegalPage lang={lang} type="terms" />} />
+          <Route path="/about" element={<AboutPage lang={lang} />} />
+          <Route path="/methodology" element={<MethodologyPage lang={lang} />} />
+          <Route path="/suggest" element={<SuggestPage lang={lang} />} />
         </Routes>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 bg-white py-8">
+      <footer className="border-t border-gray-200 bg-white py-8 mt-auto">
         <div className="max-w-5xl mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-400">
-            <p>&copy; {new Date().getFullYear()} {t.footerText}</p>
-            <div className="flex gap-6">
+          <div className="flex flex-col gap-4 text-sm text-gray-400">
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+              <Link to="/about" className="hover:text-slate-600">{t.nav.about}</Link>
+              <Link to="/methodology" className="hover:text-slate-600">{t.nav.methodology}</Link>
+              <Link to="/suggest" className="hover:text-slate-600">{t.nav.suggest}</Link>
+              <span className="text-gray-200">·</span>
               <Link to="/imprint" className="hover:text-slate-600">{t.imprint}</Link>
               <Link to="/privacy" className="hover:text-slate-600">{t.privacy}</Link>
               <Link to="/terms" className="hover:text-slate-600">{t.terms}</Link>
             </div>
+            <p className="text-center text-xs text-gray-300">
+              &copy; {new Date().getFullYear()} {t.footerText}
+            </p>
           </div>
         </div>
       </footer>

@@ -301,8 +301,36 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
+app.post('/api/suggest-source', (req, res) => {
+  const { name, email, url, spectrum, why } = req.body;
+  if (!url || !why) return res.status(400).json({ error: 'url and why are required' });
+
+  const entry = {
+    timestamp: new Date().toISOString(),
+    name: (name || '').trim().substring(0, 100),
+    email: (email || '').trim().substring(0, 200),
+    url: (url || '').trim().substring(0, 500),
+    spectrum: ['left', 'center', 'right', 'unsure'].includes(spectrum) ? spectrum : 'unsure',
+    why: (why || '').trim().substring(0, 1000),
+  };
+
+  const suggestionsFile = path.join(__dirname, 'suggestions.json');
+  try {
+    const existing = fs.existsSync(suggestionsFile)
+      ? JSON.parse(fs.readFileSync(suggestionsFile, 'utf8'))
+      : [];
+    existing.push(entry);
+    fs.writeFileSync(suggestionsFile, JSON.stringify(existing, null, 2));
+    console.log(`[Suggest] New submission: ${entry.url} (${entry.spectrum})`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Suggest] Write error:', err.message);
+    res.status(500).json({ error: 'storage error' });
+  }
+});
+
 const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath));
-app.get(/^(?!\/api\/).*$/, (req, res) => res.sendFile(path.join(distPath, 'index.html')));
+app.get(/^(?!\/api\/).*$/, (req, res) => res.sendFile('index.html', { root: distPath }));
 
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
