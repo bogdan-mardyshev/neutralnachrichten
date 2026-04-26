@@ -43,7 +43,26 @@ export const translations = {
     terms: "AGB",
     backToHome: "Zurück zur Startseite",
     degraded_warning: "Einige Quellen sind möglicherweise nicht verfügbar. Es werden die besten verfügbaren Ergebnisse angezeigt.",
-    errorNoSources: "Keine verifizierten Artikel gefunden. Bitte versuche es erneut — die Suche variiert bei jedem Versuch."
+    errorNoSources: "Keine verifizierten Artikel gefunden. Bitte versuche es erneut — die Suche variiert bei jedem Versuch.",
+    biasBar: {
+      title: "Medienabdeckung nach politischer Ausrichtung",
+      left: "Links",
+      center: "Mitte",
+      right: "Rechts",
+      high: "Stark",
+      medium: "Moderat",
+      low: "Minimal",
+    },
+    blindspot: {
+      header: "TOTER WINKEL",
+      subheaderLeft: "Linke deutsche Medien haben dieses Thema nicht behandelt.",
+      subheaderCenter: "Zentristische deutsche Medien haben dieses Thema nicht behandelt.",
+      subheaderRight: "Konservative deutsche Medien haben dieses Thema nicht behandelt.",
+      bodyLeft: (topic: string) => `Medien wie taz, Neues Deutschland und Junge Welt haben in den letzten 14 Tagen nicht über „${topic}" berichtet. Wer nur linke Quellen liest, verpasst diese Geschichte.`,
+      bodyCenter: (topic: string) => `Medien wie Spiegel, Süddeutsche und Zeit haben in den letzten 14 Tagen nicht über „${topic}" berichtet. Wer nur zentristische Quellen liest, verpasst diese Geschichte.`,
+      bodyRight: (topic: string) => `Medien wie Welt, Bild und Junge Freiheit haben in den letzten 14 Tagen nicht über „${topic}" berichtet. Wer nur konservative Quellen liest, verpasst diese Geschichte.`,
+      allLow: "Dieses Thema hat insgesamt nur geringe Berichterstattung in deutschen Medien.",
+    },
   },
   en: {
     title: "NeutralNews",
@@ -87,7 +106,26 @@ export const translations = {
     terms: "Terms of Service",
     backToHome: "Back to Home",
     degraded_warning: "Some sources may be unavailable. Showing best available results.",
-    errorNoSources: "No verified articles found. Please try again — search results vary with each attempt."
+    errorNoSources: "No verified articles found. Please try again — search results vary with each attempt.",
+    biasBar: {
+      title: "Media coverage by political leaning",
+      left: "Left",
+      center: "Center",
+      right: "Right",
+      high: "Strong",
+      medium: "Moderate",
+      low: "Minimal",
+    },
+    blindspot: {
+      header: "BLIND SPOT",
+      subheaderLeft: "Left-leaning German media did not cover this topic.",
+      subheaderCenter: "Centrist German media did not cover this topic.",
+      subheaderRight: "Right-leaning German media did not cover this topic.",
+      bodyLeft: (topic: string) => `Outlets like taz, Neues Deutschland, and Junge Welt did not report on "${topic}" in the last 14 days. If you only read left-leaning sources, you would miss this story.`,
+      bodyCenter: (topic: string) => `Outlets like Spiegel, Süddeutsche Zeitung, and Die Zeit did not report on "${topic}" in the last 14 days. If you only read centrist sources, you would miss this story.`,
+      bodyRight: (topic: string) => `Outlets like Welt, Bild, and Junge Freiheit did not report on "${topic}" in the last 14 days. If you only read right-leaning sources, you would miss this story.`,
+      allLow: "This topic has limited overall coverage in German media.",
+    },
   },
   ru: {
     title: "НейтральныеНовости",
@@ -131,6 +169,25 @@ export const translations = {
     terms: "Условия использования",
     backToHome: "На главную",
     degraded_warning: "Некоторые источники могут быть недоступны. Показываем лучшие доступные результаты.",
-    errorNoSources: "Не удалось найти проверенные статьи. Попробуй ещё раз — результаты поиска меняются с каждой попыткой."
+    errorNoSources: "Не удалось найти проверенные статьи. Попробуй ещё раз — результаты поиска меняются с каждой попыткой.",
+    biasBar: {
+      title: "Охват СМИ по политическому направлению",
+      left: "Левые",
+      center: "Центр",
+      right: "Правые",
+      high: "Высокий",
+      medium: "Средний",
+      low: "Минимальный",
+    },
+    blindspot: {
+      header: "СЛЕПОЕ ПЯТНО",
+      subheaderLeft: "Левые немецкие СМИ не освещали эту тему.",
+      subheaderCenter: "Центристские немецкие СМИ не освещали эту тему.",
+      subheaderRight: "Правые немецкие СМИ не освещали эту тему.",
+      bodyLeft: (topic: string) => `Такие издания, как taz, Neues Deutschland и Junge Welt, не сообщали о «${topic}» в последние 14 дней. Если вы читаете только левые источники, вы пропустите эту историю.`,
+      bodyCenter: (topic: string) => `Такие издания, как Spiegel, Süddeutsche Zeitung и Die Zeit, не сообщали о «${topic}» в последние 14 дней. Если вы читаете только центристские источники, вы пропустите эту историю.`,
+      bodyRight: (topic: string) => `Такие издания, как Welt, Bild и Junge Freiheit, не сообщали о «${topic}» в последние 14 дней. Если вы читаете только правые источники, вы пропустите эту историю.`,
+      allLow: "Эта тема имеет ограниченное освещение в немецких СМИ в целом.",
+    },
   }
 };

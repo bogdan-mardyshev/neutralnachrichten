@@ -1,6 +1,8 @@
 import React from 'react';
 import { NewsAnalysisResult } from '../types';
 import { SourceCard } from './SourceCard';
+import { BiasBar } from './BiasBar';
+import { BlindspotBanner } from './BlindspotBanner';
 import { translations, Language } from '../translations';
 
 interface AnalysisDashboardProps {
@@ -66,6 +68,20 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
           </p>
         </div>
       </div>
+
+      {/* Bias Bar */}
+      {data.coverage_distribution && (
+        <BiasBar coverage={data.coverage_distribution} lang={lang} />
+      )}
+
+      {/* Blindspot Banner */}
+      {data.coverage_distribution && (
+        <BlindspotBanner
+          coverage={data.coverage_distribution}
+          topic={analysis_topic}
+          lang={lang}
+        />
+      )}
 
       {/* Sources Grid */}
       <div>
