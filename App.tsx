@@ -5,6 +5,7 @@ import posthog from 'posthog-js';
 
 import { SearchBar } from './components/SearchBar';
 import { AnalysisDashboard } from './components/AnalysisDashboard';
+import { TrendingTopics } from './components/TrendingTopics';
 import { CookieBanner } from './components/CookieBanner';
 import { LegalPage } from './components/LegalPages';
 import { AboutPage } from './components/AboutPage';
@@ -169,16 +170,19 @@ function MainApp() {
             <>
               {status === 'idle' && (
                 <div className="text-center mb-10">
-                  <h1 className="serif text-4xl md:text-5xl font-bold text-slate-900 mb-6">
+                  <h1 className="serif text-3xl md:text-5xl font-bold text-slate-900 mb-4 leading-tight">
                     {t.subtitle}
                   </h1>
-                  <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-8">
-                    {t.description}
-                  </p>
+                  <p className="text-xl text-gray-500 mb-2">{t.description}</p>
+                  <p className="text-sm text-gray-400 tracking-wide">{t.heroSub}</p>
                 </div>
               )}
 
               <SearchBar onSearch={handleSearch} status={status} lang={lang} />
+
+              {status === 'idle' && (
+                <TrendingTopics lang={lang} onSelect={(topic) => handleSearch(topic)} />
+              )}
 
               {status === 'loading' && (
                 <div className="flex flex-col items-center justify-center py-20 max-w-sm mx-auto w-full">
