@@ -24,6 +24,7 @@ function MainApp() {
   const [data, setData] = useState<NewsAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showCookieBanner, setShowCookieBanner] = useState(false);
+  const [lastQuery, setLastQuery] = useState<string | null>(null);
   const [loadingStage, setLoadingStage] = useState(0);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [stageVisible, setStageVisible] = useState(true);
@@ -92,21 +93,23 @@ function MainApp() {
     setShowCookieBanner(false);
   };
 
-  const handleSearch = async (query: string) => {
+  const handleSearch = async (query: string, overrideLang?: Language) => {
+    const activeLang = overrideLang ?? lang;
     setStatus('loading');
     setError(null);
     setData(null);
-    
+
     const startTime = Date.now();
-    posthog.capture('analysis_started', { topic: query, lang });
+    posthog.capture('analysis_started', { topic: query, lang: activeLang });
 
     try {
-      const result = await analyzeTopic(query, lang);
+      const result = await analyzeTopic(query, activeLang);
       setData(result);
+      setLastQuery(query);
       setStatus('success');
-      posthog.capture('analysis_completed', { 
-        topic: query, 
-        duration: Date.now() - startTime 
+      posthog.capture('analysis_completed', {
+        topic: query,
+        duration: Date.now() - startTime
       });
     } catch (err: any) {
       console.error(err);
@@ -121,6 +124,9 @@ function MainApp() {
     const oldLang = lang;
     setLang(newLang);
     posthog.capture('language_switched', { from: oldLang, to: newLang });
+    if (lastQuery && status === 'success') {
+      handleSearch(lastQuery, newLang);
+    }
   };
 
   return (

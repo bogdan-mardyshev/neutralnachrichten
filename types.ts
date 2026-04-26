@@ -1,9 +1,16 @@
+export type CoverageEstimate = 'high' | 'medium' | 'low';
+
+export interface CoverageEntry {
+  estimate: CoverageEstimate;
+  percent: number;
+}
+
 export interface NewsSource {
   source_name: string;
   article_title: string;
   article_url: string;
   summary_of_perspective: string;
-  publication_date: string;
+  publication_date?: string;
   url_valid?: boolean;
   url_is_search_fallback?: boolean;
 }
@@ -16,6 +23,11 @@ export interface NewsAnalysisResult {
     left: NewsSource;
     center: NewsSource;
     right: NewsSource;
+  };
+  coverage_distribution?: {
+    left: CoverageEntry;
+    center: CoverageEntry;
+    right: CoverageEntry;
   };
   _meta?: {
     degraded: boolean;

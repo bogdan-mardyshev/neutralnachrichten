@@ -103,6 +103,12 @@ DO NOT include article URLs — they are not part of the response schema.
 PREFERRED GERMAN MEDIA DOMAINS:
 ${formatDomainsForPrompt()}
 
+COVERAGE ESTIMATE (per spectrum):
+For each spectrum, set "coverage_estimate" based on your search results:
+- "high"   → 3 or more outlets in that spectrum have recent articles on this topic
+- "medium" → 1 or 2 outlets have recent articles
+- "low"    → no outlets in that spectrum covered this topic recently
+
 REQUIRED JSON STRUCTURE:
 {
   "analysis_topic": "${topic}",
@@ -114,24 +120,36 @@ REQUIRED JSON STRUCTURE:
       "source_domain": "<domain only, e.g. taz.de>",
       "article_title": "<exact headline from search results in ${targetLang}>",
       "summary_of_perspective": "<2-3 sentences describing the left-leaning angle in ${targetLang}>",
-      "publication_date": "<YYYY-MM-DD from search results, or omit if uncertain>"
+      "publication_date": "<YYYY-MM-DD from search results, or omit if uncertain>",
+      "coverage_estimate": "<high|medium|low>"
     },
     "center": {
       "source_name": "<outlet name>",
       "source_domain": "<domain>",
       "article_title": "<exact headline in ${targetLang}>",
       "summary_of_perspective": "<2-3 sentences in ${targetLang}>",
-      "publication_date": "<YYYY-MM-DD or omit>"
+      "publication_date": "<YYYY-MM-DD or omit>",
+      "coverage_estimate": "<high|medium|low>"
     },
     "right": {
       "source_name": "<outlet name>",
       "source_domain": "<domain>",
       "article_title": "<exact headline in ${targetLang}>",
       "summary_of_perspective": "<2-3 sentences in ${targetLang}>",
-      "publication_date": "<YYYY-MM-DD or omit>"
+      "publication_date": "<YYYY-MM-DD or omit>",
+      "coverage_estimate": "<high|medium|low>"
     }
   }
 }`;
+}
+
+function coverageToPercent(estimate) {
+  switch (estimate) {
+    case 'high': return 75;
+    case 'medium': return 40;
+    case 'low': return 5;
+    default: return 40;
+  }
 }
 
 async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
@@ -203,9 +221,21 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
       ).length;
       console.log(`[Gemini] ${directCount}/3 sources have direct article links`);
 
+      // Build coverage_distribution from Gemini's coverage_estimate fields
+      const coverage_distribution = {};
+      for (const spectrum of ['left', 'center', 'right']) {
+        const source = analysis.news_spectrum[spectrum];
+        const estimate = ['high', 'medium', 'low'].includes(source.coverage_estimate)
+          ? source.coverage_estimate
+          : 'medium';
+        coverage_distribution[spectrum] = { estimate, percent: coverageToPercent(estimate) };
+        delete source.coverage_estimate; // keep news_spectrum clean
+      }
+      console.log(`[Coverage] ${JSON.stringify(coverage_distribution)}`);
+
       // Always return — no more retries based on domain. Whitelist is prompt guidance only.
       const degraded = directCount < 3;
-      return { analysis, validation: { valid: !degraded, validCount: directCount, details: {}, acceptable: directCount >= 2 }, degraded };
+      return { analysis: { ...analysis, coverage_distribution }, validation: { valid: !degraded, validCount: directCount, details: {}, acceptable: directCount >= 2 }, degraded };
     } catch (err) {
       console.error(`[Gemini] Attempt ${attempt} failed:`, err.message);
       lastError = err;
@@ -221,7 +251,7 @@ app.post('/api/analyze', async (req, res) => {
 
   if (!GEMINI_API_KEY) return res.status(500).json({ error: 'API Key Missing' });
 
-  // Cache per topic+lang (topic as-is, search always in German mode via prompt)
+  // Translated result cache (per topic+lang)
   const cacheKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:v2`).digest('hex');
   const cached = cache.get(cacheKey);
   if (cached) {
@@ -230,8 +260,19 @@ app.post('/api/analyze', async (req, res) => {
   }
 
   try {
-    // Step 1: Search in German (prompt forces German media regardless of query language)
-    const { analysis: germanAnalysis, degraded } = await callGeminiWithRetry(topic, 'de');
+    // Step 1: German search — shared base for all languages on the same topic
+    const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v2`).digest('hex');
+    let germanAnalysis, degraded;
+
+    const cachedBase = cache.get(deKey);
+    if (cachedBase) {
+      console.log(`[Cache] HIT German base for "${topic}"`);
+      ({ germanAnalysis, degraded } = cachedBase);
+    } else {
+      ({ analysis: germanAnalysis, degraded } = await callGeminiWithRetry(topic, 'de'));
+      const ttl = degraded ? 1800 : 86400;
+      cache.set(deKey, { germanAnalysis, degraded }, ttl);
+    }
 
     // Step 2: Translate output to user language (skip if German)
     let finalAnalysis = germanAnalysis;
@@ -248,10 +289,7 @@ app.post('/api/analyze', async (req, res) => {
     // Restore original topic and language
     finalAnalysis = { ...finalAnalysis, analysis_topic: topic, response_language: lang };
 
-    const response = {
-      ...finalAnalysis,
-      _meta: { degraded }
-    };
+    const response = { ...finalAnalysis, _meta: { degraded } };
 
     const ttl = degraded ? 1800 : 86400;
     cache.set(cacheKey, response, ttl);
