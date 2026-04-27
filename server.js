@@ -47,17 +47,11 @@ const cache = new NodeCache({ stdTTL: 86400 });
 
 function validateAnalysisStructure(data) {
   if (!data || typeof data !== 'object') return false;
-  const topLevel = ['analysis_topic', 'response_language', 'overall_non_partisan_analysis', 'news_spectrum'];
+  // Only require top-level keys and that news_spectrum has the three objects
+  const topLevel = ['overall_non_partisan_analysis', 'news_spectrum'];
   if (!topLevel.every(key => key in data)) return false;
-
   const spectrum = ['left', 'center', 'right'];
-  if (!spectrum.every(key => data.news_spectrum?.[key] && typeof data.news_spectrum[key] === 'object')) return false;
-
-  const requiredFields = ['source_name', 'article_title', 'summary_of_perspective'];
-  return spectrum.every(key => {
-    const source = data.news_spectrum[key];
-    return requiredFields.every(field => typeof source[field] === 'string' && source[field].length > 0);
-  });
+  return spectrum.every(key => data.news_spectrum?.[key] && typeof data.news_spectrum[key] === 'object');
 }
 
 function extractJSON(rawText) {
@@ -165,10 +159,16 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
       console.log(`[Gemini] Attempt ${attempt}/${maxAttempts} for topic="${topic}" lang=${language}`);
 
       const prompt = buildPrompt(topic, language);
-      const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: attempt === 1 ? 0.2 : 0.4 }
-      });
+      const GEMINI_ATTEMPT_TIMEOUT = 25000;
+      const result = await Promise.race([
+        model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: attempt === 1 ? 0.2 : 0.4 }
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Gemini attempt timed out')), GEMINI_ATTEMPT_TIMEOUT)
+        )
+      ]);
 
       const rawText = result.response.text();
       const analysis = extractJSON(rawText);
