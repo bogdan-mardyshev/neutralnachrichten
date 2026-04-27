@@ -1,6 +1,9 @@
 import React from 'react';
 import { NewsAnalysisResult } from '../types';
 import { SourceCard } from './SourceCard';
+import { BiasBar } from './BiasBar';
+import { BlindspotBanner } from './BlindspotBanner';
+import { ShareButtons } from './ShareButtons';
 import { translations, Language } from '../translations';
 
 interface AnalysisDashboardProps {
@@ -14,7 +17,13 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
 
   return (
     <div className="animate-fade-in space-y-8">
-      
+
+      {data._meta?.degraded && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-md text-sm">
+          {t.degraded_warning}
+        </div>
+      )}
+
       {/* Header & Fact Check */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="bg-slate-900 text-white p-6 md:p-8">
@@ -61,6 +70,20 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
         </div>
       </div>
 
+      {/* Bias Bar */}
+      {data.coverage_distribution && (
+        <BiasBar coverage={data.coverage_distribution} lang={lang} />
+      )}
+
+      {/* Blindspot Banner */}
+      {data.coverage_distribution && (
+        <BlindspotBanner
+          coverage={data.coverage_distribution}
+          topic={analysis_topic}
+          lang={lang}
+        />
+      )}
+
       {/* Sources Grid */}
       <div>
         <h3 className="text-xl font-bold text-gray-900 mb-4 px-2">{t.analyzedSources}</h3>
@@ -69,6 +92,11 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
           <SourceCard source={news_spectrum.center} leaning={t.leaningCenter} lang={lang} />
           <SourceCard source={news_spectrum.right} leaning={t.leaningRight} lang={lang} />
         </div>
+      </div>
+
+      {/* Share */}
+      <div className="border-t border-gray-100 pt-6">
+        <ShareButtons topic={analysis_topic} lang={lang} />
       </div>
     </div>
   );
