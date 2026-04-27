@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useSearchParams } from 'react-router-dom';
 import * as Sentry from "@sentry/react";
 import posthog from 'posthog-js';
 
 import { SearchBar } from './components/SearchBar';
 import { AnalysisDashboard } from './components/AnalysisDashboard';
+import { TrendingTopics } from './components/TrendingTopics';
 import { CookieBanner } from './components/CookieBanner';
 import { LegalPage } from './components/LegalPages';
+import { AboutPage } from './components/AboutPage';
+import { MethodologyPage } from './components/MethodologyPage';
+import { SuggestPage } from './components/SuggestPage';
 
 import { analyzeTopic } from './services/geminiService';
 import { NewsAnalysisResult, FetchStatus } from './types';
@@ -19,14 +23,30 @@ if (SENTRY_DSN && SENTRY_DSN.startsWith('https') && !SENTRY_DSN.includes('your_s
 }
 
 function MainApp() {
-  const [lang, setLang] = useState<Language>('de');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [lang, setLang] = useState<Language>(() => {
+    const p = searchParams.get('lang');
+    return (p === 'en' || p === 'ru' || p === 'de') ? p : 'de';
+  });
   const [status, setStatus] = useState<FetchStatus>('idle');
   const [data, setData] = useState<NewsAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showCookieBanner, setShowCookieBanner] = useState(false);
+  const [lastQuery, setLastQuery] = useState<string | null>(null);
   const [loadingStage, setLoadingStage] = useState(0);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [stageVisible, setStageVisible] = useState(true);
 
   const t = translations[lang];
+
+  // Auto-trigger analysis from shared URL (?topic=...&lang=...)
+  useEffect(() => {
+    const topicParam = searchParams.get('topic');
+    if (topicParam) {
+      handleSearch(topicParam, lang);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const consent = localStorage.getItem('cookie-consent');
@@ -38,14 +58,36 @@ function MainApp() {
   }, []);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (status === 'loading') {
-      setLoadingStage(0);
-      interval = setInterval(() => {
-        setLoadingStage((prev) => (prev < t.loadingStages.length - 1 ? prev + 1 : prev));
-      }, 3500);
-    }
-    return () => clearInterval(interval);
+    if (status !== 'loading') return;
+
+    setLoadingStage(0);
+    setLoadingProgress(0);
+    setStageVisible(true);
+
+    const STAGE_DURATION = 3500;
+    const TOTAL_EXPECTED_MS = 35000;
+
+    // Cycle through stages with fade transition
+    const stageInterval = setInterval(() => {
+      setStageVisible(false);
+      setTimeout(() => {
+        setLoadingStage(prev => Math.min(prev + 1, t.loadingStages.length - 1));
+        setStageVisible(true);
+      }, 300);
+    }, STAGE_DURATION);
+
+    // Smooth progress bar (never reaches 100% until done)
+    const start = Date.now();
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const pct = Math.min((elapsed / TOTAL_EXPECTED_MS) * 95, 95);
+      setLoadingProgress(pct);
+    }, 200);
+
+    return () => {
+      clearInterval(stageInterval);
+      clearInterval(progressInterval);
+    };
   }, [status, t.loadingStages.length]);
 
   const initPostHog = () => {
@@ -68,21 +110,24 @@ function MainApp() {
     setShowCookieBanner(false);
   };
 
-  const handleSearch = async (query: string) => {
+  const handleSearch = async (query: string, overrideLang?: Language) => {
+    const activeLang = overrideLang ?? lang;
     setStatus('loading');
     setError(null);
     setData(null);
-    
+
     const startTime = Date.now();
-    posthog.capture('analysis_started', { topic: query, lang });
+    posthog.capture('analysis_started', { topic: query, lang: activeLang });
 
     try {
-      const result = await analyzeTopic(query, lang);
+      const result = await analyzeTopic(query, activeLang);
       setData(result);
+      setLastQuery(query);
       setStatus('success');
-      posthog.capture('analysis_completed', { 
-        topic: query, 
-        duration: Date.now() - startTime 
+      setSearchParams({ topic: query, lang: activeLang }, { replace: true });
+      posthog.capture('analysis_completed', {
+        topic: query,
+        duration: Date.now() - startTime
       });
     } catch (err: any) {
       console.error(err);
@@ -97,6 +142,9 @@ function MainApp() {
     const oldLang = lang;
     setLang(newLang);
     posthog.capture('language_switched', { from: oldLang, to: newLang });
+    if (lastQuery && status === 'success') {
+      handleSearch(lastQuery, newLang);
+    }
   };
 
   return (
@@ -136,22 +184,57 @@ function MainApp() {
             <>
               {status === 'idle' && (
                 <div className="text-center mb-10">
-                  <h1 className="serif text-4xl md:text-5xl font-bold text-slate-900 mb-6">
+                  <h1 className="serif text-3xl md:text-5xl font-bold text-slate-900 mb-4 leading-tight">
                     {t.subtitle}
                   </h1>
-                  <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-8">
-                    {t.description}
-                  </p>
+                  <p className="text-xl text-gray-500 mb-2">{t.description}</p>
+                  <p className="text-sm text-gray-400 tracking-wide">{t.heroSub}</p>
                 </div>
               )}
 
               <SearchBar onSearch={handleSearch} status={status} lang={lang} />
 
+              {status === 'idle' && (
+                <TrendingTopics lang={lang} onSelect={(topic) => handleSearch(topic)} />
+              )}
+
               {status === 'loading' && (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <div className="w-16 h-16 mb-4 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-slate-600 font-medium">{t.loadingStages[loadingStage]}</p>
-                  <p className="text-slate-400 text-sm mt-2">{t.loadingSubtext}</p>
+                <div className="flex flex-col items-center justify-center py-20 max-w-sm mx-auto w-full">
+                  {/* Spinner */}
+                  <div className="w-14 h-14 mb-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin"></div>
+
+                  {/* Stage text with fade */}
+                  <div className="h-7 mb-6 flex items-center justify-center">
+                    <p
+                      className="text-slate-700 font-medium text-center transition-opacity duration-300"
+                      style={{ opacity: stageVisible ? 1 : 0 }}
+                    >
+                      {t.loadingStages[loadingStage]}
+                    </p>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4 overflow-hidden">
+                    <div
+                      className="bg-slate-900 h-1.5 rounded-full transition-all duration-200 ease-out"
+                      style={{ width: `${loadingProgress}%` }}
+                    />
+                  </div>
+
+                  {/* Step dots */}
+                  <div className="flex gap-1.5">
+                    {t.loadingStages.map((_, i) => (
+                      <div
+                        key={i}
+                        className="rounded-full transition-all duration-300"
+                        style={{
+                          width: i === loadingStage ? '20px' : '6px',
+                          height: '6px',
+                          backgroundColor: i <= loadingStage ? '#0f172a' : '#e2e8f0',
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -170,19 +253,28 @@ function MainApp() {
           <Route path="/imprint" element={<LegalPage lang={lang} type="imprint" />} />
           <Route path="/privacy" element={<LegalPage lang={lang} type="privacy" />} />
           <Route path="/terms" element={<LegalPage lang={lang} type="terms" />} />
+          <Route path="/about" element={<AboutPage lang={lang} />} />
+          <Route path="/methodology" element={<MethodologyPage lang={lang} />} />
+          <Route path="/suggest" element={<SuggestPage lang={lang} />} />
         </Routes>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 bg-white py-8">
+      <footer className="border-t border-gray-200 bg-white py-8 mt-auto">
         <div className="max-w-5xl mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-400">
-            <p>&copy; {new Date().getFullYear()} {t.footerText}</p>
-            <div className="flex gap-6">
+          <div className="flex flex-col gap-4 text-sm text-gray-400">
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+              <Link to="/about" className="hover:text-slate-600">{t.nav.about}</Link>
+              <Link to="/methodology" className="hover:text-slate-600">{t.nav.methodology}</Link>
+              <Link to="/suggest" className="hover:text-slate-600">{t.nav.suggest}</Link>
+              <span className="text-gray-200">·</span>
               <Link to="/imprint" className="hover:text-slate-600">{t.imprint}</Link>
               <Link to="/privacy" className="hover:text-slate-600">{t.privacy}</Link>
               <Link to="/terms" className="hover:text-slate-600">{t.terms}</Link>
             </div>
+            <p className="text-center text-xs text-gray-300">
+              &copy; {new Date().getFullYear()} {t.footerText}
+            </p>
           </div>
         </div>
       </footer>
