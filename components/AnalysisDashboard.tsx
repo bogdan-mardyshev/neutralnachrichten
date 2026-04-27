@@ -4,6 +4,7 @@ import { SourceCard } from './SourceCard';
 import { BiasBar } from './BiasBar';
 import { BlindspotBanner } from './BlindspotBanner';
 import { ShareButtons } from './ShareButtons';
+import { DeepAnalysisBlock } from './DeepAnalysisBlock';
 import { translations, Language } from '../translations';
 
 interface AnalysisDashboardProps {
@@ -93,6 +94,15 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
           <SourceCard source={news_spectrum.right} leaning={t.leaningRight} lang={lang} />
         </div>
       </div>
+
+      {/* Deep Analysis */}
+      {data.deep_analysis && (
+        data.deep_analysis.shared_facts?.length > 0 ||
+        data.deep_analysis.diverging_points?.length > 0 ||
+        data.deep_analysis.silenced_topics?.length > 0
+      ) && (
+        <DeepAnalysisBlock data={data.deep_analysis} lang={lang} />
+      )}
 
       {/* Share */}
       <div className="border-t border-gray-100 pt-6">

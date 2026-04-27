@@ -105,6 +105,12 @@ COVERAGE ESTIMATE (per spectrum):
 - "medium" → 1-2 outlets covered it
 - "low"    → only older articles found
 
+DEEP ANALYSIS RULES:
+- shared_facts: 2-4 factual claims ALL three spectrums agree on (no spin, pure facts)
+- diverging_points: 2-3 areas where left/center/right frame the story differently; each view is 1 sentence
+- silenced_topics: 1-3 angles/facts that appear in only one spectrum or are avoided by most; only_in = "left"|"center"|"right"|"none"
+- All deep_analysis text must be in ${targetLang}
+
 REQUIRED JSON STRUCTURE:
 {
   "analysis_topic": "${topic}",
@@ -135,6 +141,26 @@ REQUIRED JSON STRUCTURE:
       "publication_date": "<YYYY-MM-DD or omit>",
       "coverage_estimate": "<high|medium|low>"
     }
+  },
+  "deep_analysis": {
+    "shared_facts": [
+      { "claim": "<factual statement all spectrums agree on in ${targetLang}>" }
+    ],
+    "diverging_points": [
+      {
+        "topic": "<area of divergence in ${targetLang}>",
+        "left_view": "<how left frames it in ${targetLang}>",
+        "center_view": "<how center frames it in ${targetLang}>",
+        "right_view": "<how right frames it in ${targetLang}>"
+      }
+    ],
+    "silenced_topics": [
+      {
+        "topic": "<angle or fact mostly avoided in ${targetLang}>",
+        "only_in": "<left|center|right|none>",
+        "description": "<1 sentence why this is notable in ${targetLang}>"
+      }
+    ]
   }
 }`;
 }
