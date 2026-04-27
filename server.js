@@ -77,7 +77,7 @@ function buildPrompt(topic, language) {
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
   const earliestDate = ninetyDaysAgo.toISOString().split('T')[0];
 
-  return `You are a media analysis assistant. Use Google Search to find real, recent articles about "${topic}" in German media. Analyze coverage from three political perspectives.
+  return `You are a German media analysis assistant. Use Google Search to find REAL articles about "${topic}" in German-language media. You MUST return one real article for each of the three political spectrums.
 
 OUTPUT RULES:
 - Output ONLY the JSON object. No markdown, no code fences, no preamble.
@@ -85,36 +85,38 @@ OUTPUT RULES:
 - Use EXACTLY these English keys — NEVER translate keys to another language.
 - All text VALUES must be in ${targetLang}.
 
-RECENCY (CRITICAL):
+MANDATORY: You MUST find a real article for LEFT, CENTER, and RIGHT. Never leave any spectrum empty or use placeholder text. If a preferred outlet has no coverage, search any German-language outlet with that political leaning.
+
+SEARCH STRATEGY — run these searches:
+1. LEFT: "${topic} taz" OR "${topic} nd-aktuell" OR "${topic} freitag.de" OR "${topic} linke perspektive"
+2. CENTER: "${topic} spiegel" OR "${topic} sueddeutsche" OR "${topic} zeit.de" OR "${topic} tagesspiegel" OR "${topic} faz"
+3. RIGHT: "${topic} welt.de" OR "${topic} bild.de" OR "${topic} focus.de" OR "${topic} cicero" OR "${topic} konservativ"
+
+RECENCY:
 - Today: ${today}
-- Only include articles published on or after ${earliestDate} (last 90 days)
-- Strongly prefer articles from the last 14 days
-- publication_date MUST come from your Google Search results — NOT from memory
-- If you are not certain of the date from search results, omit the publication_date field entirely
+- Prefer articles from the last 90 days (after ${earliestDate})
+- If no article found in 90 days, use the most recent available article — do NOT leave the spectrum empty
+- publication_date MUST come from search results — omit if uncertain
 
-DO NOT include article URLs — they are not part of the response schema.
-
-PREFERRED GERMAN MEDIA DOMAINS:
-${formatDomainsForPrompt()}
+DO NOT include article URLs — not part of the schema.
 
 COVERAGE ESTIMATE (per spectrum):
-For each spectrum, set "coverage_estimate" based on your search results:
-- "high"   → 3 or more outlets in that spectrum have recent articles on this topic
-- "medium" → 1 or 2 outlets have recent articles
-- "low"    → no outlets in that spectrum covered this topic recently
+- "high"   → 3+ outlets in that spectrum covered this recently
+- "medium" → 1-2 outlets covered it
+- "low"    → only older articles found
 
 REQUIRED JSON STRUCTURE:
 {
   "analysis_topic": "${topic}",
   "response_language": "${language}",
-  "overall_non_partisan_analysis": "<2-3 sentence consensus summary in ${targetLang}>",
+  "overall_non_partisan_analysis": "<2-3 sentence factual summary in ${targetLang}>",
   "news_spectrum": {
     "left": {
       "source_name": "<outlet name, e.g. taz>",
-      "source_domain": "<domain only, e.g. taz.de>",
-      "article_title": "<exact headline from search results in ${targetLang}>",
-      "summary_of_perspective": "<2-3 sentences describing the left-leaning angle in ${targetLang}>",
-      "publication_date": "<YYYY-MM-DD from search results, or omit if uncertain>",
+      "source_domain": "<domain, e.g. taz.de>",
+      "article_title": "<exact headline from search in ${targetLang}>",
+      "summary_of_perspective": "<2-3 sentences on left-leaning angle in ${targetLang}>",
+      "publication_date": "<YYYY-MM-DD or omit>",
       "coverage_estimate": "<high|medium|low>"
     },
     "center": {
