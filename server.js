@@ -259,6 +259,15 @@ app.post('/api/analyze', async (req, res) => {
     return res.json(cached);
   }
 
+  // Hard timeout: Railway kills connections after ~60s, so we respond before that
+  const TIMEOUT_MS = 55000;
+  const timeoutHandle = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error('[Timeout] Analysis exceeded 55s, returning error');
+      res.status(503).json({ error: 'Analysis timed out. Please try again.' });
+    }
+  }, TIMEOUT_MS);
+
   try {
     // Step 1: German search — shared base for all languages on the same topic
     const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v2`).digest('hex');
@@ -269,7 +278,7 @@ app.post('/api/analyze', async (req, res) => {
       console.log(`[Cache] HIT German base for "${topic}"`);
       ({ germanAnalysis, degraded } = cachedBase);
     } else {
-      ({ analysis: germanAnalysis, degraded } = await callGeminiWithRetry(topic, 'de'));
+      ({ analysis: germanAnalysis, degraded } = await callGeminiWithRetry(topic, 'de', 2));
       const ttl = degraded ? 1800 : 86400;
       cache.set(deKey, { germanAnalysis, degraded }, ttl);
     }
@@ -294,10 +303,12 @@ app.post('/api/analyze', async (req, res) => {
     const ttl = degraded ? 1800 : 86400;
     cache.set(cacheKey, response, ttl);
 
-    res.json(response);
+    clearTimeout(timeoutHandle);
+    if (!res.headersSent) res.json(response);
   } catch (error) {
+    clearTimeout(timeoutHandle);
     console.error('[Analyze Error]:', error.message);
-    res.status(500).json({ error: 'Analysis failed', message: error.message });
+    if (!res.headersSent) res.status(500).json({ error: 'Analysis failed', message: error.message });
   }
 });
 
