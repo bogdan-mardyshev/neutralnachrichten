@@ -161,11 +161,11 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
       console.log(`[Gemini] Attempt ${attempt}/${maxAttempts} for topic="${topic}" lang=${language}`);
 
       const prompt = buildPrompt(topic, language);
-      const GEMINI_ATTEMPT_TIMEOUT = 25000;
+      const GEMINI_ATTEMPT_TIMEOUT = 50000;
       const result = await Promise.race([
         model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: attempt === 1 ? 0.2 : 0.4 }
+          generationConfig: { temperature: 0.2 }
         }),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Gemini attempt timed out')), GEMINI_ATTEMPT_TIMEOUT)
@@ -305,7 +305,7 @@ app.post('/api/analyze', async (req, res) => {
       console.log(`[Cache] HIT German base for "${topic}"`);
       ({ germanAnalysis, degraded } = cachedBase);
     } else {
-      ({ analysis: germanAnalysis, degraded } = await callGeminiWithRetry(topic, 'de', 2));
+      ({ analysis: germanAnalysis, degraded } = await callGeminiWithRetry(topic, 'de', 1));
       const ttl = degraded ? 1800 : 86400;
       cache.set(deKey, { germanAnalysis, degraded }, ttl);
     }
