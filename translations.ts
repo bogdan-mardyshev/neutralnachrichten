@@ -46,6 +46,15 @@ export const translations = {
     backToHome: "Zurück zur Startseite",
     degraded_warning: "Einige Quellen sind möglicherweise nicht verfügbar. Es werden die besten verfügbaren Ergebnisse angezeigt.",
     errorNoSources: "Keine verifizierten Artikel gefunden. Bitte versuche es erneut — die Suche variiert bei jedem Versuch.",
+    share: {
+      label: "Analyse teilen",
+      twitter: "Twitter / X",
+      whatsapp: "WhatsApp",
+      telegram: "Telegram",
+      copy: "Link kopieren",
+      copied: "Kopiert!",
+      text: (topic: string, url: string) => `So berichten deutsche Medien über „${topic}". Drei Perspektiven, ein Thema. → ${url}`,
+    },
     biasBar: {
       title: "Medienabdeckung nach politischer Ausrichtung",
       left: "Links",
@@ -176,6 +185,15 @@ export const translations = {
     backToHome: "Back to Home",
     degraded_warning: "Some sources may be unavailable. Showing best available results.",
     errorNoSources: "No verified articles found. Please try again — search results vary with each attempt.",
+    share: {
+      label: "Share analysis",
+      twitter: "Twitter / X",
+      whatsapp: "WhatsApp",
+      telegram: "Telegram",
+      copy: "Copy link",
+      copied: "Copied!",
+      text: (topic: string, url: string) => `How German media covers "${topic}". Three perspectives, one topic. → ${url}`,
+    },
     biasBar: {
       title: "Media coverage by political leaning",
       left: "Left",
@@ -306,6 +324,15 @@ export const translations = {
     backToHome: "На главную",
     degraded_warning: "Некоторые источники могут быть недоступны. Показываем лучшие доступные результаты.",
     errorNoSources: "Не удалось найти проверенные статьи. Попробуй ещё раз — результаты поиска меняются с каждой попыткой.",
+    share: {
+      label: "Поделиться анализом",
+      twitter: "Twitter / X",
+      whatsapp: "WhatsApp",
+      telegram: "Telegram",
+      copy: "Скопировать ссылку",
+      copied: "Скопировано!",
+      text: (topic: string, url: string) => `Как немецкие СМИ освещают «${topic}». Три перспективы, одна тема. → ${url}`,
+    },
     biasBar: {
       title: "Охват СМИ по политическому направлению",
       left: "Левые",

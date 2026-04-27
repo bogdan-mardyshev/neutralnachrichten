@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useSearchParams } from 'react-router-dom';
 import * as Sentry from "@sentry/react";
 import posthog from 'posthog-js';
 
@@ -23,7 +23,11 @@ if (SENTRY_DSN && SENTRY_DSN.startsWith('https') && !SENTRY_DSN.includes('your_s
 }
 
 function MainApp() {
-  const [lang, setLang] = useState<Language>('de');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [lang, setLang] = useState<Language>(() => {
+    const p = searchParams.get('lang');
+    return (p === 'en' || p === 'ru' || p === 'de') ? p : 'de';
+  });
   const [status, setStatus] = useState<FetchStatus>('idle');
   const [data, setData] = useState<NewsAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +38,15 @@ function MainApp() {
   const [stageVisible, setStageVisible] = useState(true);
 
   const t = translations[lang];
+
+  // Auto-trigger analysis from shared URL (?topic=...&lang=...)
+  useEffect(() => {
+    const topicParam = searchParams.get('topic');
+    if (topicParam) {
+      handleSearch(topicParam, lang);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const consent = localStorage.getItem('cookie-consent');
@@ -111,6 +124,7 @@ function MainApp() {
       setData(result);
       setLastQuery(query);
       setStatus('success');
+      setSearchParams({ topic: query, lang: activeLang }, { replace: true });
       posthog.capture('analysis_completed', {
         topic: query,
         duration: Date.now() - startTime

@@ -3,6 +3,7 @@ import { NewsAnalysisResult } from '../types';
 import { SourceCard } from './SourceCard';
 import { BiasBar } from './BiasBar';
 import { BlindspotBanner } from './BlindspotBanner';
+import { ShareButtons } from './ShareButtons';
 import { translations, Language } from '../translations';
 
 interface AnalysisDashboardProps {
@@ -91,6 +92,11 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
           <SourceCard source={news_spectrum.center} leaning={t.leaningCenter} lang={lang} />
           <SourceCard source={news_spectrum.right} leaning={t.leaningRight} lang={lang} />
         </div>
+      </div>
+
+      {/* Share */}
+      <div className="border-t border-gray-100 pt-6">
+        <ShareButtons topic={analysis_topic} lang={lang} />
       </div>
     </div>
   );
