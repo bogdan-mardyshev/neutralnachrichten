@@ -242,7 +242,32 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
     }
   }
 
-  throw lastError || new Error('All Gemini attempts failed');
+  // All attempts failed — return a graceful "no coverage" result instead of throwing
+  console.warn(`[Gemini] All attempts failed for "${topic}", returning empty result`);
+  const noResult = (label) => ({
+    source_name: label,
+    source_domain: 'n/a',
+    article_title: label,
+    summary_of_perspective: label,
+    article_url: `https://www.google.com/search?q=${encodeURIComponent(topic + ' deutsche Medien')}`,
+    url_is_search_fallback: true,
+  });
+  const emptyAnalysis = {
+    analysis_topic: topic,
+    response_language: 'de',
+    overall_non_partisan_analysis: `Zu diesem Thema wurden keine aktuellen deutschen Medienberichte gefunden.`,
+    news_spectrum: {
+      left: noResult('Kein Artikel gefunden'),
+      center: noResult('Kein Artikel gefunden'),
+      right: noResult('Kein Artikel gefunden'),
+    },
+    coverage_distribution: {
+      left: { estimate: 'low', percent: 5 },
+      center: { estimate: 'low', percent: 5 },
+      right: { estimate: 'low', percent: 5 },
+    },
+  };
+  return { analysis: emptyAnalysis, degraded: true };
 }
 
 app.post('/api/analyze', async (req, res) => {
