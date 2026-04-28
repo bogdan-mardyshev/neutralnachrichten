@@ -6,6 +6,8 @@ import posthog from 'posthog-js';
 import { SearchBar } from './components/SearchBar';
 import { AnalysisDashboard } from './components/AnalysisDashboard';
 import { TrendingTopics } from './components/TrendingTopics';
+import { SearchHistory } from './components/SearchHistory';
+import { useSearchHistory } from './hooks/useSearchHistory';
 import { CookieBanner } from './components/CookieBanner';
 import { LegalPage } from './components/LegalPages';
 import { AboutPage } from './components/AboutPage';
@@ -38,6 +40,7 @@ function MainApp() {
   const [stageVisible, setStageVisible] = useState(true);
 
   const t = translations[lang];
+  const { history, addToHistory, clearHistory } = useSearchHistory();
 
   // Auto-trigger analysis from shared URL (?topic=...&lang=...)
   useEffect(() => {
@@ -125,6 +128,7 @@ function MainApp() {
       setLastQuery(query);
       setStatus('success');
       setSearchParams({ topic: query, lang: activeLang }, { replace: true });
+      addToHistory(query, activeLang);
       posthog.capture('analysis_completed', {
         topic: query,
         duration: Date.now() - startTime
@@ -193,6 +197,13 @@ function MainApp() {
               )}
 
               <SearchBar onSearch={handleSearch} status={status} lang={lang} />
+
+              <SearchHistory
+                history={history}
+                onSelect={(topic) => handleSearch(topic)}
+                onClear={clearHistory}
+                lang={lang}
+              />
 
               {status === 'idle' && (
                 <TrendingTopics lang={lang} onSelect={(topic) => handleSearch(topic)} />

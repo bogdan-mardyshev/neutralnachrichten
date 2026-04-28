@@ -1,9 +1,10 @@
 import React from 'react';
 import { NewsAnalysisResult } from '../types';
-import { SourceCard } from './SourceCard';
+import { ThreeColumnComparison } from './ThreeColumnComparison';
 import { BiasBar } from './BiasBar';
 import { BlindspotBanner } from './BlindspotBanner';
 import { ShareButtons } from './ShareButtons';
+import { DeepAnalysisBlock } from './DeepAnalysisBlock';
 import { translations, Language } from '../translations';
 
 interface AnalysisDashboardProps {
@@ -41,34 +42,13 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
         </div>
       </div>
 
-      {/* Narrative Split */}
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Left Narrative */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border-t-4 border-red-500">
-          <div className="flex items-center mb-4">
-            <span className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 mr-3">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-            </span>
-            <h3 className="font-bold text-gray-900 text-lg">{t.narrativeLeft}</h3>
-          </div>
-          <p className="text-gray-600 leading-relaxed">
-            {news_spectrum.left.summary_of_perspective}
-          </p>
-        </div>
-
-        {/* Right Narrative */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border-t-4 border-slate-700">
-           <div className="flex items-center mb-4 justify-end md:flex-row-reverse">
-            <span className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-800 ml-0 md:ml-3 mr-3 md:mr-0">
-               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
-            </span>
-            <h3 className="font-bold text-gray-900 text-lg">{t.narrativeRight}</h3>
-          </div>
-          <p className="text-gray-600 leading-relaxed text-left md:text-right">
-            {news_spectrum.right.summary_of_perspective}
-          </p>
-        </div>
-      </div>
+      {/* 3-Column Comparison (sources + summaries) */}
+      <ThreeColumnComparison
+        left={news_spectrum.left}
+        center={news_spectrum.center}
+        right={news_spectrum.right}
+        lang={lang}
+      />
 
       {/* Bias Bar */}
       {data.coverage_distribution && (
@@ -84,15 +64,14 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
         />
       )}
 
-      {/* Sources Grid */}
-      <div>
-        <h3 className="text-xl font-bold text-gray-900 mb-4 px-2">{t.analyzedSources}</h3>
-        <div className="grid md:grid-cols-3 gap-4">
-          <SourceCard source={news_spectrum.left} leaning={t.leaningLeft} lang={lang} />
-          <SourceCard source={news_spectrum.center} leaning={t.leaningCenter} lang={lang} />
-          <SourceCard source={news_spectrum.right} leaning={t.leaningRight} lang={lang} />
-        </div>
-      </div>
+      {/* Deep Analysis */}
+      {data.deep_analysis && (
+        data.deep_analysis.shared_facts?.length > 0 ||
+        data.deep_analysis.diverging_points?.length > 0 ||
+        data.deep_analysis.silenced_topics?.length > 0
+      ) && (
+        <DeepAnalysisBlock data={data.deep_analysis} lang={lang} />
+      )}
 
       {/* Share */}
       <div className="border-t border-gray-100 pt-6">

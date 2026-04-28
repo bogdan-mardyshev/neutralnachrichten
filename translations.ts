@@ -74,6 +74,25 @@ export const translations = {
       bodyRight: (topic: string) => `Medien wie Welt, Bild und Junge Freiheit haben in den letzten 14 Tagen nicht über „${topic}" berichtet. Wer nur konservative Quellen liest, verpasst diese Geschichte.`,
       allLow: "Dieses Thema hat insgesamt nur geringe Berichterstattung in deutschen Medien.",
     },
+    searchHistory: {
+      label: "Letzte Suchen",
+      clear: "Löschen",
+    },
+    deepAnalysis: {
+      title: "Tiefenanalyse",
+      sharedFactsTitle: "Was alle berichten",
+      sharedFactsDesc: "Fakten, über die sich alle drei politischen Lager einig sind",
+      divergingTitle: "Wo sie sich unterscheiden",
+      divergingDesc: "Dieselben Ereignisse — unterschiedliche Deutungen",
+      silencedTitle: "Was verschwiegen wird",
+      silencedDesc: "Aspekte, die kaum oder nur einseitig berichtet werden",
+      onlyIn: {
+        left: "Nur in linken Medien",
+        center: "Nur in Zentrums-Medien",
+        right: "Nur in rechten Medien",
+        none: "In kaum einem Medium",
+      },
+    },
     nav: {
       about: "Über uns",
       methodology: "Methodik",
@@ -213,6 +232,25 @@ export const translations = {
       bodyRight: (topic: string) => `Outlets like Welt, Bild, and Junge Freiheit did not report on "${topic}" in the last 14 days. If you only read right-leaning sources, you would miss this story.`,
       allLow: "This topic has limited overall coverage in German media.",
     },
+    searchHistory: {
+      label: "Recent searches",
+      clear: "Clear",
+    },
+    deepAnalysis: {
+      title: "Deep Analysis",
+      sharedFactsTitle: "What everyone reports",
+      sharedFactsDesc: "Facts all three political perspectives agree on",
+      divergingTitle: "Where they diverge",
+      divergingDesc: "Same events — different framings",
+      silencedTitle: "What's being silenced",
+      silencedDesc: "Angles barely covered or only covered by one side",
+      onlyIn: {
+        left: "Only in left-leaning media",
+        center: "Only in centrist media",
+        right: "Only in right-leaning media",
+        none: "Barely covered anywhere",
+      },
+    },
     nav: {
       about: "About",
       methodology: "Methodology",
@@ -351,6 +389,25 @@ export const translations = {
       bodyCenter: (topic: string) => `Такие издания, как Spiegel, Süddeutsche Zeitung и Die Zeit, не сообщали о «${topic}» в последние 14 дней. Если вы читаете только центристские источники, вы пропустите эту историю.`,
       bodyRight: (topic: string) => `Такие издания, как Welt, Bild и Junge Freiheit, не сообщали о «${topic}» в последние 14 дней. Если вы читаете только правые источники, вы пропустите эту историю.`,
       allLow: "Эта тема имеет ограниченное освещение в немецких СМИ в целом.",
+    },
+    searchHistory: {
+      label: "Недавние поиски",
+      clear: "Очистить",
+    },
+    deepAnalysis: {
+      title: "Глубокий анализ",
+      sharedFactsTitle: "Что сообщают все",
+      sharedFactsDesc: "Факты, с которыми согласны все три политических лагеря",
+      divergingTitle: "Где расходятся",
+      divergingDesc: "Одни и те же события — разные интерпретации",
+      silencedTitle: "Что замалчивается",
+      silencedDesc: "Аспекты, о которых почти не говорят или говорит только одна сторона",
+      onlyIn: {
+        left: "Только в левых СМИ",
+        center: "Только в центристских СМИ",
+        right: "Только в правых СМИ",
+        none: "Почти нигде не освещается",
+      },
     },
     nav: {
       about: "О нас",
