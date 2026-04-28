@@ -1,39 +1,41 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Language, translations } from '../translations';
-import { CoverageEstimate } from '../types';
+import { CoverageDistribution, SpectrumKey } from '../types';
 
 interface BlindspotBannerProps {
-  coverage: {
-    left: { estimate: CoverageEstimate };
-    center: { estimate: CoverageEstimate };
-    right: { estimate: CoverageEstimate };
-  };
+  coverage: CoverageDistribution;
   topic: string;
   lang: Language;
 }
 
+const SPECTRUM_ORDER: SpectrumKey[] = ['left', 'center_left', 'center', 'center_right', 'right'];
+
 export const BlindspotBanner: React.FC<BlindspotBannerProps> = ({ coverage, topic, lang }) => {
   const t = translations[lang];
 
-  const missing = (['left', 'center', 'right'] as const).filter(
-    (s) => coverage[s].estimate === 'low'
+  const missing = SPECTRUM_ORDER.filter(
+    (s) => coverage[s]?.estimate === 'low'
   );
 
   if (missing.length === 0) return null;
 
-  const allLow = missing.length === 3;
+  const allLow = missing.length === SPECTRUM_ORDER.length;
 
-  const subheaderMap = {
-    left: t.blindspot.subheaderLeft,
-    center: t.blindspot.subheaderCenter,
-    right: t.blindspot.subheaderRight,
+  const subheaderMap: Record<SpectrumKey, string> = {
+    left:         t.blindspot.subheaderLeft,
+    center_left:  t.blindspot.subheaderCenterLeft,
+    center:       t.blindspot.subheaderCenter,
+    center_right: t.blindspot.subheaderCenterRight,
+    right:        t.blindspot.subheaderRight,
   };
 
-  const bodyMap = {
-    left: t.blindspot.bodyLeft,
-    center: t.blindspot.bodyCenter,
-    right: t.blindspot.bodyRight,
+  const bodyMap: Record<SpectrumKey, (topic: string) => string> = {
+    left:         t.blindspot.bodyLeft,
+    center_left:  t.blindspot.bodyCenterLeft,
+    center:       t.blindspot.bodyCenter,
+    center_right: t.blindspot.bodyCenterRight,
+    right:        t.blindspot.bodyRight,
   };
 
   return (
@@ -43,16 +45,6 @@ export const BlindspotBanner: React.FC<BlindspotBannerProps> = ({ coverage, topi
         <div className="space-y-2">
           <p className="text-amber-900 font-bold text-sm tracking-widest uppercase">
             {t.blindspot.header}
-            {!allLow && missing.length === 1 && (
-              <span className="font-normal normal-case tracking-normal">
-                {' '}· {subheaderMap[missing[0]]}
-              </span>
-            )}
-            {!allLow && missing.length === 2 && (
-              <span className="font-normal normal-case tracking-normal">
-                {' '}· {subheaderMap[missing[0]]} {subheaderMap[missing[1]]}
-              </span>
-            )}
           </p>
 
           {allLow ? (
@@ -60,6 +52,7 @@ export const BlindspotBanner: React.FC<BlindspotBannerProps> = ({ coverage, topi
           ) : (
             missing.map((spectrum) => (
               <p key={spectrum} className="text-amber-800 text-sm leading-relaxed">
+                <span className="font-semibold">{subheaderMap[spectrum]}</span>{' '}
                 {bodyMap[spectrum](topic)}
               </p>
             ))
