@@ -139,6 +139,87 @@ REQUIRED JSON STRUCTURE:
 }`;
 }
 
+function buildDeepAnalysisPrompt(analysis) {
+  const left = analysis.news_spectrum.left;
+  const center = analysis.news_spectrum.center;
+  const right = analysis.news_spectrum.right;
+
+  return `Analyze how three German media outlets cover the same topic from different political perspectives.
+
+TOPIC: "${analysis.analysis_topic}"
+
+LEFT (${left.source_name}): ${left.summary_of_perspective}
+CENTER (${center.source_name}): ${center.summary_of_perspective}
+RIGHT (${right.source_name}): ${right.summary_of_perspective}
+
+OUTPUT RULES:
+- Output ONLY the JSON object. No markdown, no code fences, no preamble.
+- Response must start with { and end with }.
+- Use EXACTLY these English keys — never translate them.
+- All text VALUES must be in German.
+
+REQUIRED JSON:
+{
+  "shared_facts": [
+    { "claim": "<factual statement all three agree on>" },
+    { "claim": "<another shared fact>" }
+  ],
+  "diverging_points": [
+    {
+      "topic": "<area of divergence>",
+      "left_view": "<how left frames it, 1 sentence>",
+      "center_view": "<how center frames it, 1 sentence>",
+      "right_view": "<how right frames it, 1 sentence>"
+    }
+  ],
+  "silenced_topics": [
+    {
+      "topic": "<angle barely mentioned>",
+      "only_in": "<left|center|right|none>",
+      "description": "<1 sentence why this is notable>"
+    }
+  ]
+}
+
+RULES:
+- shared_facts: 2-4 facts ALL three sides accept as true (no spin, no interpretation)
+- diverging_points: 2-3 areas where framing clearly differs between spectrums
+- silenced_topics: 1-3 angles present in only one outlet or absent from all`;
+}
+
+async function callDeepAnalysis(analysis, timeoutMs = 15000) {
+  // Text-only call — no googleSearch tool, so we can use responseMimeType: 'application/json'
+  // This forces Gemini to always return valid JSON (no markdown, no prose, no broken escaping)
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const prompt = buildDeepAnalysisPrompt(analysis);
+
+  const DEEP_TIMEOUT = timeoutMs;
+  const result = await Promise.race([
+    model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 8192,
+        responseMimeType: 'application/json',
+      }
+    }),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Deep analysis timed out')), DEEP_TIMEOUT)
+    )
+  ]);
+
+  const rawText = result.response.text();
+  console.log(`[DeepAnalysis] Raw length=${rawText?.length}`);
+  const deep = extractJSON(rawText); // extractJSON strips any markdown wrapping
+
+  // Basic sanity check
+  if (!Array.isArray(deep.shared_facts) || !Array.isArray(deep.diverging_points) || !Array.isArray(deep.silenced_topics)) {
+    throw new Error('Invalid deep_analysis structure');
+  }
+
+  return deep;
+}
+
 function coverageToPercent(estimate) {
   switch (estimate) {
     case 'high': return 75;
@@ -161,7 +242,7 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
       console.log(`[Gemini] Attempt ${attempt}/${maxAttempts} for topic="${topic}" lang=${language}`);
 
       const prompt = buildPrompt(topic, language);
-      const GEMINI_ATTEMPT_TIMEOUT = 50000;
+      const GEMINI_ATTEMPT_TIMEOUT = 38000; // 38s leaves ~17s for deep analysis within 55s hard limit
       const result = await Promise.race([
         model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -173,6 +254,9 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
       ]);
 
       const rawText = result.response.text();
+      if (!rawText || rawText.trim().length < 10) {
+        throw new Error('Empty or too-short response from Gemini');
+      }
       const analysis = extractJSON(rawText);
 
       if (!validateAnalysisStructure(analysis)) {
@@ -235,9 +319,9 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
       }
       console.log(`[Coverage] ${JSON.stringify(coverage_distribution)}`);
 
-      // Always return — no more retries based on domain. Whitelist is prompt guidance only.
-      const degraded = directCount < 3;
-      return { analysis: { ...analysis, coverage_distribution }, validation: { valid: !degraded, validCount: directCount, details: {}, acceptable: directCount >= 2 }, degraded };
+      // degraded = true only when Gemini returned the empty fallback (no articles found at all)
+      // search-fallback URLs are acceptable — content is still valid
+      return { analysis: { ...analysis, coverage_distribution }, degraded: false };
     } catch (err) {
       console.error(`[Gemini] Attempt ${attempt} failed:`, err.message);
       lastError = err;
@@ -278,8 +362,8 @@ app.post('/api/analyze', async (req, res) => {
 
   if (!GEMINI_API_KEY) return res.status(500).json({ error: 'API Key Missing' });
 
-  // Translated result cache (per topic+lang)
-  const cacheKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:v2`).digest('hex');
+  // Translated result cache (per topic+lang) — v3 includes deep_analysis
+  const cacheKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:v3`).digest('hex');
   const cached = cache.get(cacheKey);
   if (cached) {
     console.log(`[Cache] HIT for "${topic}" (${lang})`);
@@ -288,6 +372,7 @@ app.post('/api/analyze', async (req, res) => {
 
   // Hard timeout: Railway kills connections after ~60s, so we respond before that
   const TIMEOUT_MS = 55000;
+  const requestStart = Date.now();
   const timeoutHandle = setTimeout(() => {
     if (!res.headersSent) {
       console.error('[Timeout] Analysis exceeded 55s, returning error');
@@ -297,25 +382,52 @@ app.post('/api/analyze', async (req, res) => {
 
   try {
     // Step 1: German search — shared base for all languages on the same topic
-    const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v2`).digest('hex');
-    let germanAnalysis, degraded;
+    // v3: also caches germanDeepAnalysis so non-DE requests don't recompute it
+    const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v3`).digest('hex');
+    let germanAnalysis, degraded, germanDeepAnalysis;
 
     const cachedBase = cache.get(deKey);
     if (cachedBase) {
       console.log(`[Cache] HIT German base for "${topic}"`);
-      ({ germanAnalysis, degraded } = cachedBase);
+      ({ germanAnalysis, degraded, germanDeepAnalysis } = cachedBase);
     } else {
       ({ analysis: germanAnalysis, degraded } = await callGeminiWithRetry(topic, 'de', 1));
+
+      // Step 2a: Deep analysis right after main call, while no translation overhead yet
+      // Reserve 14s for translation if non-DE; 4s buffer always
+      if (!degraded) {
+        const elapsed = Date.now() - requestStart;
+        const translationReserve = lang !== 'de' ? 14000 : 0;
+        const deepBudget = Math.max(0, TIMEOUT_MS - elapsed - translationReserve - 4000);
+        console.log(`[DeepAnalysis] Budget: ${deepBudget}ms (elapsed: ${elapsed}ms, translReserve: ${translationReserve}ms)`);
+        if (deepBudget > 5000) {
+          try {
+            germanDeepAnalysis = await callDeepAnalysis(germanAnalysis, deepBudget);
+            console.log(`[DeepAnalysis] OK — ${germanDeepAnalysis.shared_facts.length} facts, ${germanDeepAnalysis.diverging_points.length} diverging, ${germanDeepAnalysis.silenced_topics.length} silenced`);
+          } catch (err) {
+            console.warn('[DeepAnalysis] Skipped:', err.message);
+          }
+        } else {
+          console.warn(`[DeepAnalysis] Skipped — budget too small (${deepBudget}ms)`);
+        }
+      }
+
       const ttl = degraded ? 1800 : 86400;
-      cache.set(deKey, { germanAnalysis, degraded }, ttl);
+      cache.set(deKey, { germanAnalysis, degraded, germanDeepAnalysis: germanDeepAnalysis ?? null }, ttl);
     }
 
-    // Step 2: Translate output to user language (skip if German)
+    let deepAnalysis = germanDeepAnalysis ?? null;
+
+    // Step 2b: Translate output to user language (skip if German)
     let finalAnalysis = germanAnalysis;
     if (lang !== 'de') {
       try {
-        finalAnalysis = await translateAnalysis(germanAnalysis, lang, genAI);
+        const baseForTranslation = deepAnalysis
+          ? { ...germanAnalysis, deep_analysis: deepAnalysis }
+          : germanAnalysis;
+        finalAnalysis = await translateAnalysis(baseForTranslation, lang, genAI);
         console.log(`[Translate] Analysis → ${lang} done`);
+        deepAnalysis = finalAnalysis.deep_analysis ?? deepAnalysis;
       } catch (err) {
         console.error('[Translate] Falling back to German:', err.message);
         finalAnalysis = germanAnalysis;
@@ -324,6 +436,7 @@ app.post('/api/analyze', async (req, res) => {
 
     // Restore original topic and language
     finalAnalysis = { ...finalAnalysis, analysis_topic: topic, response_language: lang };
+    if (deepAnalysis) finalAnalysis.deep_analysis = deepAnalysis;
 
     const response = { ...finalAnalysis, _meta: { degraded } };
 

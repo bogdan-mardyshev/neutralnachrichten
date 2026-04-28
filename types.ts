@@ -15,6 +15,29 @@ export interface NewsSource {
   url_is_search_fallback?: boolean;
 }
 
+export interface SharedFact {
+  claim: string;
+}
+
+export interface DivergingPoint {
+  topic: string;
+  left_view: string;
+  center_view: string;
+  right_view: string;
+}
+
+export interface SilencedTopic {
+  topic: string;
+  only_in: 'left' | 'center' | 'right' | 'none';
+  description: string;
+}
+
+export interface DeepAnalysis {
+  shared_facts: SharedFact[];
+  diverging_points: DivergingPoint[];
+  silenced_topics: SilencedTopic[];
+}
+
 export interface NewsAnalysisResult {
   analysis_topic: string;
   response_language: 'de' | 'en' | 'ru';
@@ -29,6 +52,7 @@ export interface NewsAnalysisResult {
     center: CoverageEntry;
     right: CoverageEntry;
   };
+  deep_analysis?: DeepAnalysis;
   _meta?: {
     degraded: boolean;
     validation_summary?: {
