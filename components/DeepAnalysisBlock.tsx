@@ -59,7 +59,10 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
               <CheckCircleIcon />
             </span>
             <div>
-              <div className="font-semibold text-gray-900 text-sm">{da.sharedFactsTitle}</div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-gray-900 text-sm">{da.sharedFactsTitle}</span>
+                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">{data.shared_facts.length}</span>
+              </div>
               <div className="text-xs text-gray-500">{da.sharedFactsDesc}</div>
             </div>
           </div>
@@ -95,7 +98,10 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
               <SplitIcon />
             </span>
             <div>
-              <div className="font-semibold text-gray-900 text-sm">{da.divergingTitle}</div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-gray-900 text-sm">{da.divergingTitle}</span>
+                <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{data.diverging_points.length}</span>
+              </div>
               <div className="text-xs text-gray-500">{da.divergingDesc}</div>
             </div>
           </div>
@@ -148,7 +154,10 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
               <EyeOffIcon />
             </span>
             <div>
-              <div className="font-semibold text-gray-900 text-sm">{da.silencedTitle}</div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-gray-900 text-sm">{da.silencedTitle}</span>
+                <span className="text-[10px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">{data.silenced_topics.length}</span>
+              </div>
               <div className="text-xs text-gray-500">{da.silencedDesc}</div>
             </div>
           </div>
