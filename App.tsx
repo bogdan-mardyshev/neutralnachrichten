@@ -13,8 +13,9 @@ import { LegalPage } from './components/LegalPages';
 import { AboutPage } from './components/AboutPage';
 import { MethodologyPage } from './components/MethodologyPage';
 import { SuggestPage } from './components/SuggestPage';
+import { TopCharts } from './components/TopCharts';
 
-import { analyzeTopic } from './services/geminiService';
+import { analyzeTopic, fetchDeepAnalysis } from './services/geminiService';
 import { NewsAnalysisResult, FetchStatus } from './types';
 import { translations, Language } from './translations';
 
@@ -35,6 +36,7 @@ function MainApp() {
   const [error, setError] = useState<string | null>(null);
   const [showCookieBanner, setShowCookieBanner] = useState(false);
   const [lastQuery, setLastQuery] = useState<string | null>(null);
+  const [deepLoading, setDeepLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState(0);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [stageVisible, setStageVisible] = useState(true);
@@ -133,6 +135,17 @@ function MainApp() {
         topic: query,
         duration: Date.now() - startTime
       });
+
+      // If main result has no deep_analysis and Gemini actually found content, fetch it in background
+      if (!result.deep_analysis && !result._meta?.degraded) {
+        setDeepLoading(true);
+        fetchDeepAnalysis(query, activeLang).then((deep) => {
+          setDeepLoading(false);
+          if (deep) {
+            setData(prev => prev ? { ...prev, deep_analysis: deep } : prev);
+          }
+        });
+      }
     } catch (err: any) {
       console.error(err);
       setError(err.message || t.errorDefault);
@@ -206,7 +219,10 @@ function MainApp() {
               />
 
               {status === 'idle' && (
-                <TrendingTopics lang={lang} onSelect={(topic) => handleSearch(topic)} />
+                <>
+                  <TrendingTopics lang={lang} onSelect={(topic) => handleSearch(topic)} />
+                  <TopCharts lang={lang} onSelect={(topic) => handleSearch(topic)} />
+                </>
               )}
 
               {status === 'loading' && (
@@ -257,7 +273,7 @@ function MainApp() {
               )}
 
               {status === 'success' && data && (
-                <AnalysisDashboard data={data} lang={lang} />
+                <AnalysisDashboard data={data} lang={lang} deepLoading={deepLoading} />
               )}
             </>
           } />
