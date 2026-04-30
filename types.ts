@@ -55,7 +55,7 @@ export interface DeepAnalysis {
   coverage_volume?: Record<SpectrumKey, CoverageVolume>;
 }
 
-export type NewsSpectrum = Record<SpectrumKey, NewsSource>;
+export type NewsSpectrum = Record<SpectrumKey, NewsSource[]>;
 export type CoverageDistribution = Record<SpectrumKey, CoverageEntry>;
 
 export interface NewsAnalysisResult {

@@ -1,22 +1,34 @@
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { Language, translations } from '../translations';
-import { CoverageDistribution, SpectrumKey } from '../types';
+import { CoverageDistribution, NewsSpectrum, SpectrumKey } from '../types';
 
 interface BlindspotBannerProps {
   coverage: CoverageDistribution;
+  news_spectrum?: NewsSpectrum;
   topic: string;
   lang: Language;
 }
 
 const SPECTRUM_ORDER: SpectrumKey[] = ['left', 'center_left', 'center', 'center_right', 'right'];
 
-export const BlindspotBanner: React.FC<BlindspotBannerProps> = ({ coverage, topic, lang }) => {
+const SPECTRUM_DOT: Record<SpectrumKey, string> = {
+  left:         'bg-rose-600',
+  center_left:  'bg-orange-400',
+  center:       'bg-slate-500',
+  center_right: 'bg-sky-500',
+  right:        'bg-blue-700',
+};
+
+export const BlindspotBanner: React.FC<BlindspotBannerProps> = ({ coverage, news_spectrum, topic, lang }) => {
   const t = translations[lang];
 
-  const missing = SPECTRUM_ORDER.filter(
-    (s) => coverage[s]?.estimate === 'low'
-  );
+  const missing = SPECTRUM_ORDER.filter((s) => {
+    const hasArticle = Array.isArray(news_spectrum?.[s])
+      ? (news_spectrum![s] as any[]).some((a: any) => a?.article_title && a.article_title !== 'Kein Artikel gefunden')
+      : (news_spectrum?.[s] as any)?.article_title;
+    if (hasArticle) return false;
+    return coverage[s]?.estimate === 'low';
+  });
 
   if (missing.length === 0) return null;
 
@@ -39,25 +51,28 @@ export const BlindspotBanner: React.FC<BlindspotBannerProps> = ({ coverage, topi
   };
 
   return (
-    <div className="bg-amber-50 border-l-4 border-amber-500 rounded-r-xl px-5 py-4 shadow-sm">
-      <div className="flex items-start gap-3">
-        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-        <div className="space-y-2">
-          <p className="text-amber-900 font-bold text-sm tracking-widest uppercase">
-            {t.blindspot.header}
-          </p>
+    <div className="border-2 border-[#1a1a1a] overflow-hidden">
+      {/* Header */}
+      <div className="bg-[#1a1a1a] px-5 py-3 flex items-center gap-2">
+        <span className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">
+          {t.blindspot.header}
+        </span>
+      </div>
 
-          {allLow ? (
-            <p className="text-amber-800 text-sm leading-relaxed">{t.blindspot.allLow}</p>
-          ) : (
-            missing.map((spectrum) => (
-              <p key={spectrum} className="text-amber-800 text-sm leading-relaxed">
-                <span className="font-semibold">{subheaderMap[spectrum]}</span>{' '}
+      <div className="px-5 py-4 space-y-2">
+        {allLow ? (
+          <p className="font-sans text-sm text-[#1a1a1a] leading-relaxed">{t.blindspot.allLow}</p>
+        ) : (
+          missing.map((spectrum) => (
+            <div key={spectrum} className="flex items-start gap-3">
+              <span className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${SPECTRUM_DOT[spectrum]}`} />
+              <p className="font-sans text-sm text-[#1a1a1a] leading-relaxed">
+                <span className="font-bold">{subheaderMap[spectrum]}</span>{' '}
                 {bodyMap[spectrum](topic)}
               </p>
-            ))
-          )}
-        </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
