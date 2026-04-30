@@ -9,12 +9,12 @@ interface BiasBarProps {
 
 const SPECTRUM_ORDER: SpectrumKey[] = ['left', 'center_left', 'center', 'center_right', 'right'];
 
-const COLORS: Record<SpectrumKey, { bar: string; text: string }> = {
-  left:         { bar: 'bg-rose-600',  text: 'text-rose-600' },
-  center_left:  { bar: 'bg-orange-400', text: 'text-orange-600' },
-  center:       { bar: 'bg-slate-500', text: 'text-slate-600' },
-  center_right: { bar: 'bg-sky-500',   text: 'text-sky-600' },
-  right:        { bar: 'bg-blue-700',  text: 'text-blue-700' },
+const COLORS: Record<SpectrumKey, { bar: string; hex: string }> = {
+  left:         { bar: 'bg-rose-600',   hex: '#e11d48' },
+  center_left:  { bar: 'bg-orange-400', hex: '#fb923c' },
+  center:       { bar: 'bg-slate-500',  hex: '#64748b' },
+  center_right: { bar: 'bg-sky-500',    hex: '#0ea5e9' },
+  right:        { bar: 'bg-blue-700',   hex: '#1d4ed8' },
 };
 
 export const BiasBar: React.FC<BiasBarProps> = ({ coverage, lang }) => {
@@ -28,58 +28,73 @@ export const BiasBar: React.FC<BiasBarProps> = ({ coverage, lang }) => {
     right:        t.biasBar.right,
   };
 
-  const levelKey = { high: 'high', medium: 'medium', low: 'low' } as const;
+  const total = SPECTRUM_ORDER.reduce((acc, s) => acc + (coverage[s]?.percent ?? 0), 0);
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-      <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-5">
-        {t.biasBar.title}
-      </h3>
+    <div className="border-2 border-[#1a1a1a] overflow-hidden">
+      {/* Newspaper-style black header */}
+      <div className="bg-[#1a1a1a] px-5 py-3">
+        <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{t.biasBar.title}</p>
+      </div>
 
-      <div className="space-y-4">
-        {SPECTRUM_ORDER.map((spectrum) => {
-          const entry = coverage[spectrum];
-          if (!entry) return null;
-          const colors = COLORS[spectrum];
-          const label = labelMap[spectrum];
-          const level = t.biasBar[levelKey[entry.estimate]];
-
-          return (
-            <div key={spectrum}>
-              <div className="flex justify-between items-center mb-1.5">
-                <span className={`text-xs font-bold uppercase tracking-wider ${colors.text}`}>
-                  {label}
-                </span>
-                <span className="text-xs text-gray-400 font-medium">
-                  {level} · {entry.percent}%
-                </span>
-              </div>
-              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+      <div className="px-5 py-5 space-y-5">
+        {/* Stacked bar */}
+        <div>
+          <div className="flex overflow-hidden h-4 gap-px">
+            {SPECTRUM_ORDER.map((spectrum) => {
+              const entry = coverage[spectrum];
+              if (!entry) return null;
+              const pct = total > 0 ? (entry.percent / total) * 100 : 0;
+              return (
                 <div
-                  className={`${colors.bar} h-2.5 rounded-full transition-all duration-700 ease-out`}
-                  style={{ width: `${entry.percent}%` }}
-                  role="progressbar"
-                  aria-valuenow={entry.percent}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label={`${label}: ${level}`}
+                  key={spectrum}
+                  className={`${COLORS[spectrum].bar} transition-all duration-700`}
+                  style={{ width: `${pct}%` }}
+                  title={`${labelMap[spectrum]}: ${Math.round(pct)}%`}
                 />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
+          <div className="flex justify-between mt-1.5 font-sans text-[9px] uppercase tracking-widest text-gray-400">
+            <span>{t.leaningLeft}</span>
+            <span>{t.leaningCenter}</span>
+            <span>{t.leaningRight}</span>
+          </div>
+        </div>
 
-      {/* Mini spectrum legend */}
-      <div className="flex items-center gap-0.5 mt-5 mb-1">
-        {SPECTRUM_ORDER.map((key) => (
-          <div key={key} className={`flex-1 h-1 rounded-full ${COLORS[key].bar} opacity-60`} />
-        ))}
-      </div>
-      <div className="flex justify-between text-[10px] text-gray-400">
-        <span>{t.leaningLeft}</span>
-        <span>{t.leaningCenter}</span>
-        <span>{t.leaningRight}</span>
+        {/* Row bars */}
+        <div className="space-y-3">
+          {SPECTRUM_ORDER.map((spectrum) => {
+            const entry = coverage[spectrum];
+            if (!entry) return null;
+            const pct = total > 0 ? Math.round((entry.percent / total) * 100) : 0;
+
+            return (
+              <div key={spectrum} className="flex items-center gap-3">
+                {/* Color dot */}
+                <div className={`w-2 h-2 rounded-full shrink-0 ${COLORS[spectrum].bar}`} />
+
+                {/* Label */}
+                <span className="font-sans text-[10px] uppercase tracking-wider text-gray-600 w-24 shrink-0">
+                  {labelMap[spectrum]}
+                </span>
+
+                {/* Bar track */}
+                <div className="flex-1 bg-[#e8e0d5] h-1.5 overflow-hidden">
+                  <div
+                    className={`${COLORS[spectrum].bar} h-full transition-all duration-700 ease-out`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+
+                {/* Percent */}
+                <span className="font-sans text-xs font-bold text-[#1a1a1a] w-10 text-right shrink-0">
+                  {pct}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
