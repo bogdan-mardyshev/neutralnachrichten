@@ -7,134 +7,78 @@ interface DeepAnalysisBlockProps {
   lang: Language;
 }
 
-// ── Icons ─────────────────────────────────────────────────────────────────────
-const CheckCircleIcon = () => (
-  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-const SplitIcon = () => (
-  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-  </svg>
-);
-const EyeOffIcon = () => (
-  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-  </svg>
-);
-const BarChartIcon = () => (
-  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-  </svg>
-);
-const SmileIcon = () => (
-  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-const TagIcon = () => (
-  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-  </svg>
-);
-const MicIcon = () => (
-  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-  </svg>
-);
-const ChevronDown = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-  </svg>
-);
-
-// ── Spectrum config ───────────────────────────────────────────────────────────
 const SPECTRUM_ORDER: SpectrumKey[] = ['left', 'center_left', 'center', 'center_right', 'right'];
 
-const SPECTRUM_STYLE: Record<SpectrumKey, {
-  label: string; bar: string; badge: string; tag: string; dot: string; text: string;
-}> = {
-  left:         { label: '←',  bar: 'bg-rose-500',   badge: 'bg-rose-100 text-rose-700',    tag: 'bg-rose-50 border-rose-200 text-rose-800',   dot: 'bg-rose-500',   text: 'text-rose-700'  },
-  center_left:  { label: '↖',  bar: 'bg-orange-400', badge: 'bg-orange-100 text-orange-700', tag: 'bg-orange-50 border-orange-200 text-orange-800', dot: 'bg-orange-400', text: 'text-orange-700' },
-  center:       { label: '·',  bar: 'bg-slate-400',  badge: 'bg-slate-100 text-slate-700',  tag: 'bg-slate-50 border-slate-200 text-slate-700',  dot: 'bg-slate-400',  text: 'text-slate-600' },
-  center_right: { label: '↗',  bar: 'bg-sky-500',    badge: 'bg-sky-100 text-sky-700',      tag: 'bg-sky-50 border-sky-200 text-sky-800',      dot: 'bg-sky-500',    text: 'text-sky-700'   },
-  right:        { label: '→',  bar: 'bg-blue-700',   badge: 'bg-blue-100 text-blue-800',    tag: 'bg-blue-50 border-blue-200 text-blue-800',   dot: 'bg-blue-700',   text: 'text-blue-700'  },
+const SPECTRUM_STYLE: Record<SpectrumKey, { dot: string; text: string; bar: string; hex: string }> = {
+  left:         { dot: 'bg-rose-600',   text: 'text-rose-700',   bar: 'bg-rose-600',   hex: '#e11d48' },
+  center_left:  { dot: 'bg-orange-400', text: 'text-orange-700', bar: 'bg-orange-400', hex: '#fb923c' },
+  center:       { dot: 'bg-slate-500',  text: 'text-slate-600',  bar: 'bg-slate-500',  hex: '#64748b' },
+  center_right: { dot: 'bg-sky-500',    text: 'text-sky-700',    bar: 'bg-sky-500',    hex: '#0ea5e9' },
+  right:        { dot: 'bg-blue-700',   text: 'text-blue-800',   bar: 'bg-blue-700',   hex: '#1d4ed8' },
 };
 
-const onlyInColors: Record<string, string> = {
-  left:         'bg-rose-50 text-rose-700 border-rose-200',
-  center_left:  'bg-orange-50 text-orange-700 border-orange-200',
-  center:       'bg-slate-50 text-slate-700 border-slate-200',
-  center_right: 'bg-sky-50 text-sky-700 border-sky-200',
-  right:        'bg-blue-50 text-blue-700 border-blue-200',
-  none:         'bg-gray-50 text-gray-600 border-gray-200',
+const onlyInDot: Record<string, string> = {
+  left: 'bg-rose-600', center_left: 'bg-orange-400', center: 'bg-slate-500',
+  center_right: 'bg-sky-500', right: 'bg-blue-700', none: 'bg-gray-400',
 };
 
 const divergingViews = [
-  { key: 'left_view',         colorClass: 'bg-rose-50 border-rose-100',     textClass: 'text-rose-900',   labelClass: 'text-rose-400',   leaningKey: 'leaningLeft'        },
-  { key: 'center_left_view',  colorClass: 'bg-orange-50 border-orange-100', textClass: 'text-orange-900', labelClass: 'text-orange-400', leaningKey: 'leaningCenterLeft'  },
-  { key: 'center_view',       colorClass: 'bg-slate-50 border-slate-100',   textClass: 'text-slate-700',  labelClass: 'text-slate-400',  leaningKey: 'leaningCenter'      },
-  { key: 'center_right_view', colorClass: 'bg-sky-50 border-sky-100',       textClass: 'text-sky-900',    labelClass: 'text-sky-400',    leaningKey: 'leaningCenterRight' },
-  { key: 'right_view',        colorClass: 'bg-blue-50 border-blue-100',     textClass: 'text-blue-900',   labelClass: 'text-blue-400',   leaningKey: 'leaningRight'       },
+  { key: 'left_view',         leaningKey: 'leaningLeft',        borderHex: '#e11d48' },
+  { key: 'center_left_view',  leaningKey: 'leaningCenterLeft',  borderHex: '#fb923c' },
+  { key: 'center_view',       leaningKey: 'leaningCenter',      borderHex: '#64748b' },
+  { key: 'center_right_view', leaningKey: 'leaningCenterRight', borderHex: '#0ea5e9' },
+  { key: 'right_view',        leaningKey: 'leaningRight',       borderHex: '#1d4ed8' },
 ] as const;
 
-// ── Accordion wrapper ─────────────────────────────────────────────────────────
+const SENTIMENT_CONFIG: Record<Sentiment, { icon: string; bar: string; label: string }> = {
+  positive: { icon: '↑', bar: 'bg-emerald-500', label: 'sentimentPositive' },
+  neutral:  { icon: '→', bar: 'bg-slate-400',   label: 'sentimentNeutral'  },
+  negative: { icon: '↓', bar: 'bg-rose-500',    label: 'sentimentNegative' },
+};
+
+// ── Accordion row ─────────────────────────────────────────────────────────────
 const Section: React.FC<{
-  id: string;
   open: boolean;
   onToggle: () => void;
-  iconBg: string;
-  iconColor: string;
-  icon: React.ReactNode;
   title: string;
   desc: string;
-  badge?: React.ReactNode;
-  hoverBg: string;
+  count?: number;
+  accent: string;   // Tailwind text color, e.g. 'text-emerald-600'
+  accentBar: string; // Tailwind bg color, e.g. 'bg-emerald-500'
   children: React.ReactNode;
-}> = ({ open, onToggle, iconBg, iconColor, icon, title, desc, badge, hoverBg, children }) => (
-  <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+}> = ({ open, onToggle, title, desc, count, accent, accentBar, children }) => (
+  <div className="border-b border-[#e0d8cf] last:border-0">
     <button
       onClick={onToggle}
-      className={`w-full flex items-center justify-between p-4 text-left ${hoverBg} transition-colors`}
+      className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-[#f0e8dc] transition-colors"
     >
       <div className="flex items-center gap-3">
-        <span className={`w-8 h-8 rounded-full ${iconBg} ${iconColor} flex items-center justify-center shrink-0`}>
-          {icon}
-        </span>
+        <div className={`w-0.5 h-8 ${accentBar} shrink-0`} />
         <div>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-gray-900 text-sm">{title}</span>
-            {badge}
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="font-serif font-bold text-sm text-[#1a1a1a]">{title}</span>
+            {count !== undefined && (
+              <span className={`font-sans text-[10px] font-bold text-white px-1.5 py-0.5 min-w-[18px] text-center ${accentBar}`}>
+                {count}
+              </span>
+            )}
           </div>
-          <div className="text-xs text-gray-500">{desc}</div>
+          <span className="font-sans text-[10px] text-gray-400 uppercase tracking-wider">{desc}</span>
         </div>
       </div>
-      <span className={`text-gray-400 transition-transform duration-200 shrink-0 ${open ? 'rotate-180' : ''}`}>
-        <ChevronDown />
+      <span className={`font-sans text-gray-400 text-lg leading-none transition-transform duration-200 shrink-0 ml-3 ${open ? 'rotate-180' : ''}`}>
+        ∨
       </span>
     </button>
-    {open && <div className="border-t border-gray-50">{children}</div>}
+    {open && (
+      <div className="border-t border-[#e0d8cf] bg-[#FFF8F0]">
+        {children}
+      </div>
+    )}
   </div>
 );
 
-const CountBadge: React.FC<{ n: number; color: string }> = ({ n, color }) => (
-  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${color}`}>{n}</span>
-);
-
-// ── Sentiment section ─────────────────────────────────────────────────────────
-const SENTIMENT_CONFIG: Record<Sentiment, { icon: string; bar: string; label: string; bg: string }> = {
-  positive: { icon: '😊', bar: 'bg-emerald-500', label: 'sentimentPositive', bg: 'bg-emerald-50 text-emerald-700' },
-  neutral:  { icon: '😐', bar: 'bg-slate-400',   label: 'sentimentNeutral',  bg: 'bg-slate-50 text-slate-600'    },
-  negative: { icon: '😠', bar: 'bg-rose-500',    label: 'sentimentNegative', bg: 'bg-rose-50 text-rose-700'      },
-};
-
-// ── Coverage bar ──────────────────────────────────────────────────────────────
-function maxWeek(cv: Record<SpectrumKey, { week: number; month: number }>) {
-  return Math.max(1, ...SPECTRUM_ORDER.map(s => cv[s]?.week ?? 0));
-}
-
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Main component ─────────────────────────────────────────────────────────────
 export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang }) => {
   const t = translations[lang];
   const da = t.deepAnalysis;
@@ -143,68 +87,64 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
   const toggle = (id: SectionId) => setOpen(prev => (prev === id ? ('' as SectionId) : id));
 
   const leaningLabel: Record<SpectrumKey, string> = {
-    left:         t.leaningLeft,
-    center_left:  t.leaningCenterLeft,
-    center:       t.leaningCenter,
-    center_right: t.leaningCenterRight,
-    right:        t.leaningRight,
+    left: t.leaningLeft, center_left: t.leaningCenterLeft, center: t.leaningCenter,
+    center_right: t.leaningCenterRight, right: t.leaningRight,
   };
 
   const hasKeywords       = !!data.keywords       && SPECTRUM_ORDER.some(s => (data.keywords![s]?.length ?? 0) > 0);
   const hasSentiment      = !!data.sentiment;
   const hasExperts        = !!data.experts_cited   && SPECTRUM_ORDER.some(s => (data.experts_cited![s]?.length ?? 0) > 0);
   const hasCoverageVolume = !!data.coverage_volume && SPECTRUM_ORDER.some(s => (data.coverage_volume![s]?.week ?? 0) > 0);
-
-  const totalWeek = data.coverage_volume
-    ? SPECTRUM_ORDER.reduce((acc, s) => acc + (data.coverage_volume![s]?.week ?? 0), 0)
-    : 0;
+  const totalWeek         = data.coverage_volume
+    ? SPECTRUM_ORDER.reduce((acc, s) => acc + (data.coverage_volume![s]?.week ?? 0), 0) : 0;
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-1">
-        <div className="w-1 h-6 rounded-full bg-gradient-to-b from-emerald-500 via-amber-400 to-red-500" />
-        <h3 className="text-lg font-bold text-gray-900">{da.title}</h3>
+    <div className="border-2 border-[#1a1a1a] overflow-hidden">
+      {/* Black title bar */}
+      <div className="bg-[#1a1a1a] px-5 py-3">
+        <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{da.title}</p>
       </div>
 
-      {/* ── 1. SHARED FACTS ── */}
+      {/* ── 1. SHARED FACTS / Проверка фактов ─── */}
       <Section
-        id="facts" open={open === 'facts'} onToggle={() => toggle('facts')}
-        iconBg="bg-emerald-100" iconColor="text-emerald-600" icon={<CheckCircleIcon />}
-        title={da.sharedFactsTitle} desc={da.sharedFactsDesc} hoverBg="hover:bg-emerald-50/50"
-        badge={<CountBadge n={data.shared_facts.length} color="bg-emerald-100 text-emerald-700" />}
+        open={open === 'facts'} onToggle={() => toggle('facts')}
+        title={da.sharedFactsTitle} desc={da.sharedFactsDesc}
+        count={data.shared_facts.length}
+        accent="text-emerald-600" accentBar="bg-emerald-500"
       >
-        <div className="divide-y divide-gray-50">
+        <div className="divide-y divide-[#e0d8cf]">
           {data.shared_facts.map((fact, i) => (
-            <div key={i} className="flex items-start gap-3 px-4 py-3">
-              <span className="mt-0.5 text-emerald-500 shrink-0"><CheckCircleIcon /></span>
-              <p className="text-sm text-gray-700 leading-relaxed">{fact.claim}</p>
+            <div key={i} className="flex items-start gap-4 px-5 py-3.5">
+              <span className="font-sans text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0 mt-0.5 w-4">{i + 1}</span>
+              <p className="font-serif text-sm text-[#1a1a1a] leading-relaxed">{fact.claim}</p>
             </div>
           ))}
         </div>
       </Section>
 
-      {/* ── 2. DIVERGING POINTS ── */}
+      {/* ── 2. DIVERGING POINTS ─── */}
       <Section
-        id="diverging" open={open === 'diverging'} onToggle={() => toggle('diverging')}
-        iconBg="bg-amber-100" iconColor="text-amber-600" icon={<SplitIcon />}
-        title={da.divergingTitle} desc={da.divergingDesc} hoverBg="hover:bg-amber-50/50"
-        badge={<CountBadge n={data.diverging_points.length} color="bg-amber-100 text-amber-700" />}
+        open={open === 'diverging'} onToggle={() => toggle('diverging')}
+        title={da.divergingTitle} desc={da.divergingDesc}
+        count={data.diverging_points.length}
+        accent="text-amber-600" accentBar="bg-amber-400"
       >
-        <div className="divide-y divide-gray-50">
+        <div className="divide-y divide-[#e0d8cf]">
           {data.diverging_points.map((point, i) => (
-            <div key={i} className="px-4 py-4 space-y-3">
-              <p className="text-xs font-bold uppercase tracking-widest text-amber-600">{point.topic}</p>
+            <div key={i} className="px-5 py-4 space-y-3">
+              <p className="font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-[#1a1a1a] border-b border-[#1a1a1a] pb-1.5 mb-3">
+                {point.topic}
+              </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-                {divergingViews.map(({ key, colorClass, textClass, labelClass, leaningKey }) => {
+                {divergingViews.map(({ key, leaningKey, borderHex }) => {
                   const text = (point as any)[key];
                   if (!text) return null;
                   return (
-                    <div key={key} className={`${colorClass} border rounded-lg px-3 py-2`}>
-                      <div className={`text-[10px] font-bold uppercase tracking-wider ${labelClass} mb-1`}>
+                    <div key={key} className="border-l-2 pl-3 py-1" style={{ borderColor: borderHex }}>
+                      <div className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-1">
                         {(t as any)[leaningKey]}
                       </div>
-                      <p className={`text-xs ${textClass} leading-relaxed`}>{text}</p>
+                      <p className="font-sans text-xs text-[#1a1a1a] leading-relaxed">{text}</p>
                     </div>
                   );
                 })}
@@ -214,168 +154,153 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
         </div>
       </Section>
 
-      {/* ── 3. SILENCED TOPICS ── */}
+      {/* ── 3. SILENCED TOPICS ─── */}
       <Section
-        id="silenced" open={open === 'silenced'} onToggle={() => toggle('silenced')}
-        iconBg="bg-red-100" iconColor="text-red-500" icon={<EyeOffIcon />}
-        title={da.silencedTitle} desc={da.silencedDesc} hoverBg="hover:bg-red-50/50"
-        badge={<CountBadge n={data.silenced_topics.length} color="bg-red-100 text-red-600" />}
+        open={open === 'silenced'} onToggle={() => toggle('silenced')}
+        title={da.silencedTitle} desc={da.silencedDesc}
+        count={data.silenced_topics.length}
+        accent="text-red-600" accentBar="bg-red-500"
       >
-        <div className="divide-y divide-gray-50">
+        <div className="divide-y divide-[#e0d8cf]">
           {data.silenced_topics.map((item, i) => (
-            <div key={i} className="flex items-start gap-3 px-4 py-3">
+            <div key={i} className="flex items-start gap-4 px-5 py-3.5">
+              <div className={`w-2 h-2 rounded-full shrink-0 mt-1 ${onlyInDot[item.only_in] ?? 'bg-gray-400'}`} />
               <div className="flex-1 space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-medium text-gray-800">{item.topic}</p>
-                  <span className={`text-[10px] font-bold uppercase tracking-wider border rounded px-2 py-0.5 ${onlyInColors[item.only_in] || onlyInColors.none}`}>
+                  <p className="font-serif text-sm font-semibold text-[#1a1a1a]">{item.topic}</p>
+                  <span className="font-sans text-[9px] font-bold uppercase tracking-wider border border-[#1a1a1a] px-1.5 py-0.5 text-[#1a1a1a]">
                     {da.onlyIn[item.only_in as keyof typeof da.onlyIn] ?? da.onlyIn.none}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 leading-relaxed">{item.description}</p>
+                <p className="font-sans text-xs text-gray-500 leading-relaxed">{item.description}</p>
               </div>
             </div>
           ))}
         </div>
       </Section>
 
-      {/* ── 4. COVERAGE VOLUME ── */}
+      {/* ── 4. COVERAGE VOLUME ─── */}
       {hasCoverageVolume && (
         <Section
-          id="coverage" open={open === 'coverage'} onToggle={() => toggle('coverage')}
-          iconBg="bg-violet-100" iconColor="text-violet-600" icon={<BarChartIcon />}
-          title={da.coverageTitle} desc={da.coverageDesc} hoverBg="hover:bg-violet-50/50"
-          badge={
-            <span className="text-[10px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full">
-              {totalWeek} {da.coverageArticles}
-            </span>
-          }
+          open={open === 'coverage'} onToggle={() => toggle('coverage')}
+          title={da.coverageTitle} desc={da.coverageDesc}
+          count={totalWeek}
+          accent="text-violet-600" accentBar="bg-violet-500"
         >
-          <div className="px-4 py-4 space-y-4">
-            {/* Total week summary cards */}
-            <div className="grid grid-cols-5 gap-2">
+          <div className="px-5 py-5 space-y-5">
+            {/* Stacked bar */}
+            <div>
+              <div className="flex overflow-hidden h-2 gap-px mb-1.5">
+                {SPECTRUM_ORDER.map(s => {
+                  const cv = data.coverage_volume![s];
+                  const pct = totalWeek > 0 ? (cv.week / totalWeek) * 100 : 0;
+                  return <div key={s} className={`${SPECTRUM_STYLE[s].bar} transition-all duration-700`} style={{ width: `${pct}%` }} />;
+                })}
+              </div>
+              <div className="flex justify-between font-sans text-[9px] uppercase tracking-widest text-gray-400">
+                <span>{t.leaningLeft}</span><span>{t.leaningCenter}</span><span>{t.leaningRight}</span>
+              </div>
+            </div>
+
+            {/* Summary numbers */}
+            <div className="grid grid-cols-5 gap-2 border-t border-b border-[#e0d8cf] py-4">
               {SPECTRUM_ORDER.map(s => {
                 const cv = data.coverage_volume![s];
-                const st = SPECTRUM_STYLE[s];
+                const pct = totalWeek > 0 ? Math.round((cv.week / totalWeek) * 100) : 0;
                 return (
                   <div key={s} className="text-center">
-                    <div className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${st.text}`}>
+                    <div className={`font-sans text-[9px] font-bold uppercase tracking-widest mb-1 ${SPECTRUM_STYLE[s].text}`}>
                       {leaningLabel[s]}
                     </div>
-                    <div className="text-xl font-black text-gray-900">{cv.week}</div>
-                    <div className="text-[10px] text-gray-400">{da.coverageWeek}</div>
-                    <div className="text-xs font-medium text-gray-500 mt-0.5">{cv.month} <span className="text-[10px] text-gray-400">{da.coverageMonth.split(' ')[1] ?? da.coverageMonth}</span></div>
+                    <div className="font-serif font-black text-2xl text-[#1a1a1a]">{pct}%</div>
+                    <div className="font-sans text-[10px] text-gray-400 mt-0.5">{cv.week} {da.coverageWeek}</div>
                   </div>
                 );
               })}
             </div>
 
-            {/* Bar chart */}
-            <div className="space-y-2">
+            {/* Row bars */}
+            <div className="space-y-2.5">
               {SPECTRUM_ORDER.map(s => {
                 const cv = data.coverage_volume![s];
-                const pct = Math.round((cv.week / maxWeek(data.coverage_volume!)) * 100);
-                const st = SPECTRUM_STYLE[s];
+                const pct = totalWeek > 0 ? Math.round((cv.week / totalWeek) * 100) : 0;
                 return (
-                  <div key={s} className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${st.dot}`} />
-                    <div className="w-24 shrink-0">
-                      <span className={`text-[10px] font-semibold ${st.text}`}>{leaningLabel[s]}</span>
-                    </div>
-                    <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${st.bar} transition-all duration-700`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-gray-500 w-16 text-right shrink-0">
-                      {cv.week} / {cv.month}
+                  <div key={s} className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${SPECTRUM_STYLE[s].dot}`} />
+                    <span className={`font-sans text-[10px] uppercase tracking-wider w-24 shrink-0 ${SPECTRUM_STYLE[s].text}`}>
+                      {leaningLabel[s]}
                     </span>
+                    <div className="flex-1 bg-[#e8e0d5] h-1.5 overflow-hidden">
+                      <div className={`h-full ${SPECTRUM_STYLE[s].bar} transition-all duration-700`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="font-sans text-xs font-bold text-[#1a1a1a] w-10 text-right shrink-0">{pct}%</span>
+                    <span className="font-sans text-[10px] text-gray-400 w-12 text-right shrink-0">{cv.week} {da.coverageWeek}</span>
                   </div>
                 );
               })}
             </div>
-            <p className="text-[10px] text-gray-400 text-right">
-              {da.coverageTotalWeek}: {totalWeek} · {da.coverageArticles} {da.coverageWeek} / {da.coverageMonth}
-            </p>
           </div>
         </Section>
       )}
 
-      {/* ── 5. SENTIMENT ── */}
+      {/* ── 5. SENTIMENT ─── */}
       {hasSentiment && (
         <Section
-          id="sentiment" open={open === 'sentiment'} onToggle={() => toggle('sentiment')}
-          iconBg="bg-pink-100" iconColor="text-pink-500" icon={<SmileIcon />}
-          title={da.sentimentTitle} desc={da.sentimentDesc} hoverBg="hover:bg-pink-50/50"
+          open={open === 'sentiment'} onToggle={() => toggle('sentiment')}
+          title={da.sentimentTitle} desc={da.sentimentDesc}
+          accent="text-pink-600" accentBar="bg-pink-500"
         >
-          <div className="px-4 py-4 space-y-3">
-            {/* Spectrum row */}
+          <div className="px-5 py-5 space-y-4">
             <div className="grid grid-cols-5 gap-2">
               {SPECTRUM_ORDER.map(s => {
                 const sent: Sentiment = (data.sentiment![s] as Sentiment) ?? 'neutral';
                 const cfg = SENTIMENT_CONFIG[sent];
-                const st = SPECTRUM_STYLE[s];
                 return (
-                  <div key={s} className="flex flex-col items-center gap-1.5">
-                    <span className={`text-[10px] font-bold uppercase tracking-widest ${st.text}`}>
+                  <div key={s} className="text-center border border-[#e0d8cf] py-3">
+                    <div className={`font-sans text-[9px] font-bold uppercase tracking-widest mb-2 ${SPECTRUM_STYLE[s].text}`}>
                       {leaningLabel[s]}
-                    </span>
-                    <span className="text-2xl leading-none">{cfg.icon}</span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cfg.bg}`}>
+                    </div>
+                    <div className="font-serif font-bold text-2xl text-[#1a1a1a] mb-1">{cfg.icon}</div>
+                    <span className="font-sans text-[9px] uppercase tracking-wider text-gray-500">
                       {(da as any)[cfg.label]}
                     </span>
                   </div>
                 );
               })}
             </div>
-
-            {/* Stacked bar */}
-            <div className="mt-3">
-              <div className="flex h-3 rounded-full overflow-hidden gap-0.5">
-                {SPECTRUM_ORDER.map(s => {
-                  const sent: Sentiment = (data.sentiment![s] as Sentiment) ?? 'neutral';
-                  const cfg = SENTIMENT_CONFIG[sent];
-                  return (
-                    <div
-                      key={s}
-                      className={`flex-1 ${cfg.bar} opacity-80`}
-                      title={`${leaningLabel[s]}: ${(da as any)[cfg.label]}`}
-                    />
-                  );
-                })}
-              </div>
-              <div className="flex justify-between mt-1 px-0.5">
-                <span className="text-[9px] text-gray-400">{t.leaningLeft}</span>
-                <span className="text-[9px] text-gray-400">{t.leaningRight}</span>
-              </div>
+            {/* Sentiment stacked bar */}
+            <div className="flex h-2 gap-px overflow-hidden">
+              {SPECTRUM_ORDER.map(s => {
+                const sent: Sentiment = (data.sentiment![s] as Sentiment) ?? 'neutral';
+                return <div key={s} className={`flex-1 ${SENTIMENT_CONFIG[sent].bar}`} />;
+              })}
             </div>
           </div>
         </Section>
       )}
 
-      {/* ── 6. KEYWORDS / LINGUISTIC ANALYSIS ── */}
+      {/* ── 6. KEYWORDS ─── */}
       {hasKeywords && (
         <Section
-          id="keywords" open={open === 'keywords'} onToggle={() => toggle('keywords')}
-          iconBg="bg-teal-100" iconColor="text-teal-600" icon={<TagIcon />}
-          title={da.keywordsTitle} desc={da.keywordsDesc} hoverBg="hover:bg-teal-50/50"
+          open={open === 'keywords'} onToggle={() => toggle('keywords')}
+          title={da.keywordsTitle} desc={da.keywordsDesc}
+          accent="text-teal-600" accentBar="bg-teal-500"
         >
-          <div className="px-4 py-4">
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+          <div className="px-5 py-5">
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-5">
               {SPECTRUM_ORDER.map(s => {
                 const words = data.keywords![s] ?? [];
-                const st = SPECTRUM_STYLE[s];
                 return (
                   <div key={s} className="space-y-2">
-                    <div className={`text-[10px] font-bold uppercase tracking-widest ${st.text}`}>
+                    <div className={`font-sans text-[9px] font-bold uppercase tracking-widest border-b border-[#e0d8cf] pb-1 ${SPECTRUM_STYLE[s].text}`}>
                       {leaningLabel[s]}
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {words.map((w, i) => (
                         <span
                           key={i}
-                          className={`text-[11px] font-medium border rounded-md px-2 py-0.5 ${st.tag}`}
-                          style={{ fontSize: `${Math.max(10, 13 - i * 0.5)}px` }}
+                          className="font-sans text-[10px] border border-[#1a1a1a] px-2 py-0.5 text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-white transition-colors cursor-default"
+                          style={{ fontSize: `${Math.max(10, 12 - i * 0.4)}px` }}
                         >
                           {w}
                         </span>
@@ -389,31 +314,30 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
         </Section>
       )}
 
-      {/* ── 7. EXPERT MAP ── */}
+      {/* ── 7. EXPERTS ─── */}
       {hasExperts && (
         <Section
-          id="experts" open={open === 'experts'} onToggle={() => toggle('experts')}
-          iconBg="bg-indigo-100" iconColor="text-indigo-600" icon={<MicIcon />}
-          title={da.expertsTitle} desc={da.expertsDesc} hoverBg="hover:bg-indigo-50/50"
+          open={open === 'experts'} onToggle={() => toggle('experts')}
+          title={da.expertsTitle} desc={da.expertsDesc}
+          accent="text-indigo-600" accentBar="bg-indigo-500"
         >
-          <div className="px-4 py-4">
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+          <div className="px-5 py-5">
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-5">
               {SPECTRUM_ORDER.map(s => {
                 const names = data.experts_cited![s] ?? [];
-                const st = SPECTRUM_STYLE[s];
                 return (
                   <div key={s} className="space-y-2">
-                    <div className={`text-[10px] font-bold uppercase tracking-widest ${st.text}`}>
+                    <div className={`font-sans text-[9px] font-bold uppercase tracking-widest border-b border-[#e0d8cf] pb-1 ${SPECTRUM_STYLE[s].text}`}>
                       {leaningLabel[s]}
                     </div>
                     {names.length === 0 ? (
-                      <p className="text-[11px] text-gray-300 italic">{da.expertsNone}</p>
+                      <p className="font-sans text-[10px] text-gray-300 italic">{da.expertsNone}</p>
                     ) : (
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         {names.map((name, i) => (
-                          <div key={i} className="flex items-center gap-1.5">
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${st.dot}`} />
-                            <span className="text-[12px] text-gray-700 font-medium leading-tight">{name}</span>
+                          <div key={i} className="flex items-center gap-2">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${SPECTRUM_STYLE[s].dot}`} />
+                            <span className="font-sans text-xs text-[#1a1a1a] leading-tight">{name}</span>
                           </div>
                         ))}
                       </div>

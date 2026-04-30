@@ -14,26 +14,23 @@ export const SearchHistory: React.FC<SearchHistoryProps> = ({ history, onSelect,
   if (history.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 mt-3 flex-wrap">
-      <span className="text-xs text-gray-400 uppercase tracking-widest font-semibold shrink-0">
+    <div className="flex items-center gap-3 mt-3 mb-6 flex-wrap">
+      <span className="font-sans text-[10px] uppercase tracking-[0.2em] text-gray-400 shrink-0">
         {t.searchHistory.label}
       </span>
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap">
         {history.map((entry, i) => (
           <button
             key={i}
             onClick={() => onSelect(entry.topic)}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 text-xs font-medium transition-all duration-150 border border-transparent hover:border-slate-300"
+            className="font-sans text-xs px-2.5 py-1 border border-gray-300 text-gray-600 hover:border-[#1a1a1a] hover:text-[#1a1a1a] transition-colors"
           >
-            <svg className="w-3 h-3 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
             {entry.topic}
           </button>
         ))}
         <button
           onClick={onClear}
-          className="text-xs text-gray-300 hover:text-red-400 transition-colors px-1"
+          className="font-sans text-[10px] text-gray-300 hover:text-red-500 transition-colors uppercase tracking-wider"
           title={t.searchHistory.clear}
         >
           × {t.searchHistory.clear}
