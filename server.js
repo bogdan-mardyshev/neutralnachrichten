@@ -57,14 +57,16 @@ function validateAnalysisStructure(data) {
   if (!data || typeof data !== 'object') return false;
   const topLevel = ['overall_non_partisan_analysis', 'news_spectrum'];
   if (!topLevel.every(key => key in data)) return false;
-  return SPECTRUMS.every(key => data.news_spectrum?.[key] && typeof data.news_spectrum[key] === 'object');
+  return SPECTRUMS.every(key => Array.isArray(data.news_spectrum?.[key]) && data.news_spectrum[key].length > 0);
 }
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
 // In-memory topic counts. Resets on redeploy — acceptable for MVP.
 const topicStats = new Map(); // topic_lower → { topic, count, firstSeen, lastSeen }
+let totalAnalyses = 0; // global counter across all topics
 
 function trackSearch(topic) {
+  totalAnalyses++;
   const key = topic.toLowerCase().trim();
   const now = new Date().toISOString();
   if (topicStats.has(key)) {
@@ -105,7 +107,7 @@ function buildPrompt(topic, language) {
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
   const earliestDate = ninetyDaysAgo.toISOString().split('T')[0];
 
-  return `You are a German media analysis assistant. Use Google Search to find REAL articles about "${topic}" in German-language media. You MUST return one real article for each of the FIVE political spectrums.
+  return `You are a German media analysis assistant. Use Google Search to find ONE real article about "${topic}" from each of the FIVE political spectrums in German-language media.
 
 OUTPUT RULES:
 - Output ONLY the JSON object. No markdown, no code fences, no preamble.
@@ -113,97 +115,50 @@ OUTPUT RULES:
 - Use EXACTLY these English keys — NEVER translate keys to another language.
 - All text VALUES must be in ${targetLang}.
 
-MANDATORY: You MUST find a real article for ALL FIVE spectrums. Never leave any spectrum empty or use placeholder text. If a preferred outlet has no coverage, search any German-language outlet with that political leaning.
+GERMAN MEDIA SPECTRUM (find ONE article per spectrum):
+- LEFT: taz, Junge Welt, nd-aktuell, Freitag — search: "${topic} taz OR nd-aktuell"
+- CENTER_LEFT: Spiegel, Süddeutsche, Zeit, Tagesschau — search: "${topic} spiegel OR sueddeutsche OR tagesschau"
+- CENTER: FAZ, Tagesspiegel, Handelsblatt — search: "${topic} faz OR tagesspiegel OR handelsblatt"
+- CENTER_RIGHT: Welt, Focus, NTV — search: "${topic} welt OR focus OR ntv"
+- RIGHT: Bild, Junge Freiheit, Tichys Einblick — search: "${topic} bild OR junge freiheit"
 
-GERMAN MEDIA SPECTRUM:
-- LEFT (far-left / socialist): taz, Junge Welt, nd-aktuell (Neues Deutschland), Freitag
-- CENTER_LEFT (center-left / social-democratic): Spiegel, Süddeutsche Zeitung, Die Zeit, Stern
-- CENTER (centrist / liberal): FAZ (Frankfurter Allgemeine), Tagesspiegel, t-online, Handelsblatt
-- CENTER_RIGHT (center-right / liberal-conservative): Welt, Focus, NTV
-- RIGHT (right-wing / national-conservative): Bild, Cicero, Junge Freiheit, Tichys Einblick
-
-SEARCH STRATEGY — run these searches:
-1. LEFT: "${topic} taz" OR "${topic} nd-aktuell" OR "${topic} junge welt" OR "${topic} freitag"
-2. CENTER_LEFT: "${topic} spiegel" OR "${topic} sueddeutsche" OR "${topic} zeit.de" OR "${topic} stern"
-3. CENTER: "${topic} faz" OR "${topic} tagesspiegel" OR "${topic} t-online" OR "${topic} handelsblatt"
-4. CENTER_RIGHT: "${topic} welt.de" OR "${topic} focus.de" OR "${topic} ntv"
-5. RIGHT: "${topic} bild.de" OR "${topic} cicero" OR "${topic} junge freiheit" OR "${topic} tichys einblick"
-
-RECENCY:
-- Today: ${today}
-- Prefer articles from the last 90 days (after ${earliestDate})
-- If no article found in 90 days, use the most recent available article — do NOT leave the spectrum empty
-- publication_date MUST come from search results — omit if uncertain
-
+RECENCY: Today: ${today}. Prefer last 90 days (after ${earliestDate}). Never leave a spectrum empty.
+publication_date MUST come from search results — omit if uncertain.
 DO NOT include article URLs — not part of the schema.
 
 COVERAGE ESTIMATE (per spectrum):
-- "high"   → 3+ outlets in that spectrum covered this recently
-- "medium" → 1-2 outlets covered it
-- "low"    → only older articles found
+- "high"   → major outlet covered it prominently recently
+- "medium" → covered but not a top story
+- "low"    → only older or minor coverage found
 
-REQUIRED JSON STRUCTURE:
+REQUIRED JSON STRUCTURE (each spectrum is an ARRAY with exactly 1 object):
 {
   "analysis_topic": "${topic}",
   "response_language": "${language}",
   "overall_non_partisan_analysis": "<2-3 sentence factual summary in ${targetLang}>",
   "news_spectrum": {
-    "left": {
-      "source_name": "<outlet name, e.g. taz>",
-      "source_domain": "<domain, e.g. taz.de>",
-      "article_title": "<exact headline from search in ${targetLang}>",
-      "summary_of_perspective": "<2-3 sentences on far-left angle in ${targetLang}>",
-      "publication_date": "<YYYY-MM-DD or omit>",
-      "coverage_estimate": "<high|medium|low>"
-    },
-    "center_left": {
-      "source_name": "<outlet name, e.g. Spiegel>",
-      "source_domain": "<domain, e.g. spiegel.de>",
-      "article_title": "<exact headline in ${targetLang}>",
-      "summary_of_perspective": "<2-3 sentences on center-left angle in ${targetLang}>",
-      "publication_date": "<YYYY-MM-DD or omit>",
-      "coverage_estimate": "<high|medium|low>"
-    },
-    "center": {
-      "source_name": "<outlet name, e.g. FAZ>",
-      "source_domain": "<domain, e.g. faz.net>",
-      "article_title": "<exact headline in ${targetLang}>",
-      "summary_of_perspective": "<2-3 sentences on centrist angle in ${targetLang}>",
-      "publication_date": "<YYYY-MM-DD or omit>",
-      "coverage_estimate": "<high|medium|low>"
-    },
-    "center_right": {
-      "source_name": "<outlet name, e.g. Welt>",
-      "source_domain": "<domain, e.g. welt.de>",
-      "article_title": "<exact headline in ${targetLang}>",
-      "summary_of_perspective": "<2-3 sentences on center-right angle in ${targetLang}>",
-      "publication_date": "<YYYY-MM-DD or omit>",
-      "coverage_estimate": "<high|medium|low>"
-    },
-    "right": {
-      "source_name": "<outlet name, e.g. Bild>",
-      "source_domain": "<domain, e.g. bild.de>",
-      "article_title": "<exact headline in ${targetLang}>",
-      "summary_of_perspective": "<2-3 sentences on right-wing angle in ${targetLang}>",
-      "publication_date": "<YYYY-MM-DD or omit>",
-      "coverage_estimate": "<high|medium|low>"
-    }
+    "left":         [{ "source_name": "taz", "source_domain": "taz.de", "article_title": "<exact headline in ${targetLang}>", "summary_of_perspective": "<1-2 sentences on far-left angle in ${targetLang}>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low>" }],
+    "center_left":  [{ "source_name": "Der Spiegel", "source_domain": "spiegel.de", "article_title": "<exact headline in ${targetLang}>", "summary_of_perspective": "<1-2 sentences on center-left angle in ${targetLang}>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low>" }],
+    "center":       [{ "source_name": "FAZ", "source_domain": "faz.net", "article_title": "<exact headline in ${targetLang}>", "summary_of_perspective": "<1-2 sentences on centrist angle in ${targetLang}>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low>" }],
+    "center_right": [{ "source_name": "Welt", "source_domain": "welt.de", "article_title": "<exact headline in ${targetLang}>", "summary_of_perspective": "<1-2 sentences on center-right angle in ${targetLang}>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low>" }],
+    "right":        [{ "source_name": "Bild", "source_domain": "bild.de", "article_title": "<exact headline in ${targetLang}>", "summary_of_perspective": "<1-2 sentences on right-wing angle in ${targetLang}>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low>" }]
   }
 }`;
 }
 
 function buildDeepAnalysisPrompt(analysis) {
   const ns = analysis.news_spectrum;
+  const first = s => Array.isArray(ns[s]) ? ns[s][0] : ns[s];
 
   return `Analyze how five German media outlets across the full political spectrum cover the same topic.
 
 TOPIC: "${analysis.analysis_topic}"
 
-LEFT (${ns.left.source_name}): ${ns.left.summary_of_perspective}
-CENTER_LEFT (${ns.center_left.source_name}): ${ns.center_left.summary_of_perspective}
-CENTER (${ns.center.source_name}): ${ns.center.summary_of_perspective}
-CENTER_RIGHT (${ns.center_right.source_name}): ${ns.center_right.summary_of_perspective}
-RIGHT (${ns.right.source_name}): ${ns.right.summary_of_perspective}
+LEFT (${first('left').source_name}): ${first('left').summary_of_perspective}
+CENTER_LEFT (${first('center_left').source_name}): ${first('center_left').summary_of_perspective}
+CENTER (${first('center').source_name}): ${first('center').summary_of_perspective}
+CENTER_RIGHT (${first('center_right').source_name}): ${first('center_right').summary_of_perspective}
+RIGHT (${first('right').source_name}): ${first('right').summary_of_perspective}
 
 OUTPUT RULES:
 - Output ONLY the JSON object. No markdown, no code fences, no preamble.
@@ -362,52 +317,52 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
       );
       console.log(`[Grounding] ${resolvedGroundingURLs.filter(Boolean).length} real URLs from grounding`);
 
-      // Match grounding URLs to spectrum sources by source_domain
+      // Match grounding URLs to spectrum sources by source_domain (arrays)
       for (const spectrum of SPECTRUMS) {
-        const source = analysis.news_spectrum[spectrum];
-        const domain = (source.source_domain || '').replace(/^www\./, '');
-        const matched = resolvedGroundingURLs.find(url => {
-          try { return new URL(url).hostname.replace(/^www\./, '').includes(domain); } catch { return false; }
-        });
-
-        if (matched) {
-          source.article_url = matched;
-          source.url_is_search_fallback = false;
-          console.log(`[Grounding] ${spectrum} → direct link: ${matched}`);
-        } else {
-          // Fallback: Google Search for this outlet + topic (always works)
-          const fallbackDomain = (domain && domain !== 'n/a') ? domain : null;
-          const q = encodeURIComponent(fallbackDomain ? `site:${fallbackDomain} ${topic}` : `${topic} deutsche medien`);
-          source.article_url = `https://www.google.com/search?q=${q}`;
-          source.url_is_search_fallback = true;
-          console.log(`[Grounding] ${spectrum} → search fallback for ${fallbackDomain || 'no domain'}`);
+        const articles = analysis.news_spectrum[spectrum];
+        for (const source of articles) {
+          const domain = (source.source_domain || '').replace(/^www\./, '');
+          const matched = resolvedGroundingURLs.find(url => {
+            try { return new URL(url).hostname.replace(/^www\./, '').includes(domain); } catch { return false; }
+          });
+          if (matched) {
+            source.article_url = matched;
+            source.url_is_search_fallback = false;
+            console.log(`[Grounding] ${spectrum}/${source.source_name} → direct link`);
+          } else {
+            const fallbackDomain = (domain && domain !== 'n/a') ? domain : null;
+            const q = encodeURIComponent(fallbackDomain ? `site:${fallbackDomain} ${topic}` : `${topic} deutsche medien`);
+            source.article_url = `https://www.google.com/search?q=${q}`;
+            source.url_is_search_fallback = true;
+          }
         }
       }
 
-      // Strip any fake/old dates — only keep dates within the 90-day window
+      // Strip fake/old dates
       for (const spectrum of SPECTRUMS) {
-        const source = analysis.news_spectrum[spectrum];
-        if (source.publication_date && !isRecentEnough(source.publication_date)) {
-          console.warn(`[Date] Dropping fake date "${source.publication_date}" for ${spectrum}`);
-          delete source.publication_date;
+        for (const source of analysis.news_spectrum[spectrum]) {
+          if (source.publication_date && !isRecentEnough(source.publication_date)) {
+            delete source.publication_date;
+          }
         }
       }
 
-      // Count how many sources got a direct grounding URL (not search fallback)
-      const directCount = SPECTRUMS.filter(
-        s => !analysis.news_spectrum[s].url_is_search_fallback
-      ).length;
-      console.log(`[Gemini] ${directCount}/${SPECTRUMS.length} sources have direct article links`);
+      const directCount = SPECTRUMS.reduce((acc, s) =>
+        acc + analysis.news_spectrum[s].filter(a => !a.url_is_search_fallback).length, 0);
+      const totalArticles = SPECTRUMS.reduce((acc, s) => acc + analysis.news_spectrum[s].length, 0);
+      console.log(`[Gemini] ${directCount}/${totalArticles} articles have direct links`);
 
-      // Build coverage_distribution from Gemini's coverage_estimate fields
+      // Build coverage_distribution from first article's coverage_estimate per spectrum
       const coverage_distribution = {};
       for (const spectrum of SPECTRUMS) {
-        const source = analysis.news_spectrum[spectrum];
-        const estimate = ['high', 'medium', 'low'].includes(source.coverage_estimate)
-          ? source.coverage_estimate
-          : 'medium';
+        const articles = analysis.news_spectrum[spectrum];
+        const firstArticle = articles[0];
+        const estimate = ['high', 'medium', 'low'].includes(firstArticle?.coverage_estimate)
+          ? firstArticle.coverage_estimate
+          : (articles.length >= 3 ? 'high' : articles.length === 2 ? 'medium' : 'low');
         coverage_distribution[spectrum] = { estimate, percent: coverageToPercent(estimate) };
-        delete source.coverage_estimate; // keep news_spectrum clean
+        // clean up coverage_estimate from all articles
+        for (const art of articles) delete art.coverage_estimate;
       }
       console.log(`[Coverage] ${JSON.stringify(coverage_distribution)}`);
 
@@ -434,7 +389,7 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
     analysis_topic: topic,
     response_language: 'de',
     overall_non_partisan_analysis: `Zu diesem Thema wurden keine aktuellen deutschen Medienberichte gefunden.`,
-    news_spectrum: Object.fromEntries(SPECTRUMS.map(s => [s, noResult()])),
+    news_spectrum: Object.fromEntries(SPECTRUMS.map(s => [s, [noResult()]])),
     coverage_distribution: Object.fromEntries(SPECTRUMS.map(s => [s, { estimate: 'low', percent: 5 }])),
   };
   return { analysis: emptyAnalysis, degraded: true };
@@ -681,6 +636,186 @@ app.get('/api/trending', async (req, res) => {
 app.get('/api/top-topics', (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 10, 50);
   res.json({ topics: getTopTopics(limit) });
+});
+
+// ── Stats (hype counter) ───────────────────────────────────────────────────────
+app.get('/api/stats', (req, res) => {
+  const topTopic = [...topicStats.values()].sort((a, b) => b.count - a.count)[0] || null;
+  res.json({
+    total_analyses: totalAnalyses,
+    unique_topics: topicStats.size,
+    top_topic: topTopic ? { topic: topTopic.topic, count: topTopic.count } : null,
+  });
+});
+
+// ── Daily News ────────────────────────────────────────────────────────────────
+function dailyNewsCacheKey() {
+  const d = new Date();
+  // Refresh every 2 hours
+  const hour2 = Math.floor(d.getUTCHours() / 2) * 2;
+  return `daily-news:${d.toISOString().split('T')[0]}:${hour2}`;
+}
+
+async function fetchDailyNewsFromGemini() {
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    tools: [{ googleSearch: {} }],
+  });
+  const today = new Date().toISOString().split('T')[0];
+
+  const prompt = `Use Google Search to find the TOP 6 breaking news stories in Germany TODAY (${today}).
+
+Focus on the most important stories published or updated in the last 24 hours.
+
+OUTPUT ONLY this JSON object (no markdown, no fences):
+{
+  "date": "${today}",
+  "stories": [
+    {
+      "headline_de": "<punchy German headline, max 10 words>",
+      "headline_en": "<English headline>",
+      "headline_ru": "<Russian headline>",
+      "summary_de": "<1 sentence in German: what happened>",
+      "summary_en": "<1 sentence in English: what happened>",
+      "summary_ru": "<1 sentence in Russian: what happened>",
+      "category": "<politics|economy|society|defense|environment|international|culture|justice>",
+      "source": "<primary source name, e.g. Spiegel, FAZ, ARD>",
+      "search_topic": "<2-4 word search topic for this story in German>"
+    }
+  ]
+}
+
+RULES:
+- Exactly 6 stories, most important first
+- Real stories from today, not older than 48h
+- search_topic must be useful for searching this story on this platform`;
+
+  const result = await Promise.race([
+    model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1 },
+    }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Daily news timeout')), 40000)),
+  ]);
+
+  const raw = result.response.text();
+  return extractJSON(raw);
+}
+
+app.get('/api/daily-news', async (req, res) => {
+  const key = dailyNewsCacheKey();
+  const cached = cache.get(key);
+  if (cached) {
+    console.log(`[DailyNews] Cache hit (${key})`);
+    return res.json(cached);
+  }
+
+  try {
+    console.log(`[DailyNews] Fetching live from Gemini...`);
+    const data = await fetchDailyNewsFromGemini();
+    if (!Array.isArray(data?.stories) || data.stories.length === 0) {
+      throw new Error('Empty daily news response');
+    }
+    cache.set(key, data, 7200); // 2-hour TTL
+    console.log(`[DailyNews] Got ${data.stories.length} stories, cached as ${key}`);
+    res.json(data);
+  } catch (err) {
+    console.error('[DailyNews] Failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Category News ─────────────────────────────────────────────────────────────
+const VALID_CATEGORIES = ['politics','economy','society','defense','environment','international','culture','justice'];
+
+function categoryNewsCacheKey(category) {
+  const d = new Date();
+  const hour4 = Math.floor(d.getUTCHours() / 4) * 4;
+  return `cat-news:${category}:${d.toISOString().split('T')[0]}:${hour4}`;
+}
+
+async function fetchCategoryNews(category) {
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    tools: [{ googleSearch: {} }],
+  });
+  const today = new Date().toISOString().split('T')[0];
+
+  const categoryLabels = {
+    politics: 'Politics / Innenpolitik',
+    economy: 'Economy / Wirtschaft',
+    society: 'Society / Gesellschaft',
+    defense: 'Defense / Verteidigung & Sicherheit',
+    environment: 'Environment / Umwelt & Klima',
+    international: 'International / Außenpolitik',
+    culture: 'Culture / Kultur',
+    justice: 'Justice / Justiz & Recht',
+  };
+
+  const prompt = `Use Google Search to find the TOP 8 news stories in Germany in the category "${categoryLabels[category]}" from the last 48 hours (today: ${today}).
+
+OUTPUT ONLY this JSON object (no markdown, no fences):
+{
+  "category": "${category}",
+  "date": "${today}",
+  "stories": [
+    {
+      "headline_de": "<punchy German headline, max 10 words>",
+      "headline_en": "<English headline>",
+      "headline_ru": "<Russian headline>",
+      "summary_de": "<1 sentence in German>",
+      "summary_en": "<1 sentence in English>",
+      "summary_ru": "<1 sentence in Russian>",
+      "source": "<source name>",
+      "search_topic": "<2-4 word German search query>"
+    }
+  ]
+}
+
+RULES:
+- Exactly 8 stories, most important first
+- Only stories from the "${categoryLabels[category]}" category
+- Real stories from the last 48 hours
+- search_topic must be concise and searchable`;
+
+  const result = await Promise.race([
+    model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1 },
+    }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Category news timeout')), 40000)),
+  ]);
+
+  const raw = result.response.text();
+  return extractJSON(raw);
+}
+
+app.get('/api/category-news', async (req, res) => {
+  const category = req.query.category;
+  if (!VALID_CATEGORIES.includes(category)) {
+    return res.status(400).json({ error: 'Invalid category' });
+  }
+
+  const key = categoryNewsCacheKey(category);
+  const cached = cache.get(key);
+  if (cached) {
+    console.log(`[CategoryNews] Cache hit (${key})`);
+    return res.json(cached);
+  }
+
+  try {
+    console.log(`[CategoryNews] Fetching ${category} from Gemini...`);
+    const data = await fetchCategoryNews(category);
+    if (!Array.isArray(data?.stories) || data.stories.length === 0) {
+      throw new Error('Empty category news response');
+    }
+    cache.set(key, data, 14400); // 4-hour TTL
+    console.log(`[CategoryNews] Got ${data.stories.length} stories for ${category}`);
+    res.json(data);
+  } catch (err) {
+    console.error(`[CategoryNews] Failed for ${category}:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/suggest-source', (req, res) => {

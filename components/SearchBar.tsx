@@ -22,31 +22,28 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, status, lang }) 
   const isLoading = status === 'loading';
 
   return (
-    <div className="w-full max-w-2xl mx-auto mb-12">
-      <form onSubmit={handleSubmit} className="relative group">
-        <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-          <svg className="w-5 h-5 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
-            <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
-          </svg>
+    <div className="w-full mb-8">
+      <form onSubmit={handleSubmit}>
+        <div className="flex border-2 border-[#1a1a1a]">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            disabled={isLoading}
+            className="flex-1 px-4 py-3.5 font-sans text-sm text-[#1a1a1a] bg-transparent placeholder-gray-400 focus:outline-none disabled:opacity-50"
+            placeholder={t.searchPlaceholder}
+            required
+          />
+          <button
+            type="submit"
+            disabled={isLoading || !query.trim()}
+            className="bg-rose-600 text-white px-6 py-3.5 font-sans text-xs font-bold uppercase tracking-widest hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          >
+            {isLoading ? t.searching : t.searchButton}
+          </button>
         </div>
-        <input 
-          type="text" 
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          disabled={isLoading}
-          className="block w-full p-4 pl-12 text-lg text-gray-900 border border-gray-300 rounded-full bg-white shadow-sm focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all outline-none disabled:bg-gray-100 placeholder-gray-400" 
-          placeholder={t.searchPlaceholder} 
-          required 
-        />
-        <button 
-          type="submit" 
-          disabled={isLoading || !query.trim()}
-          className="absolute right-2.5 bottom-2.5 text-white bg-slate-900 hover:bg-slate-800 focus:ring-4 focus:outline-none focus:ring-slate-300 font-medium rounded-full text-sm px-6 py-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? t.searching : t.searchButton}
-        </button>
       </form>
-      <p className="mt-3 text-sm text-gray-500 text-center">
+      <p className="mt-2 font-sans text-[10px] uppercase tracking-widest text-gray-400 text-center">
         {t.realtimeAnalysis}
       </p>
     </div>

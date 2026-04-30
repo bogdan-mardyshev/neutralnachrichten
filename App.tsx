@@ -14,6 +14,10 @@ import { AboutPage } from './components/AboutPage';
 import { MethodologyPage } from './components/MethodologyPage';
 import { SuggestPage } from './components/SuggestPage';
 import { TopCharts } from './components/TopCharts';
+import { ComparePage } from './components/ComparePage';
+import { DailyNews } from './components/DailyNews';
+import { CategoryBrowser } from './components/CategoryBrowser';
+import { DesignPreview } from './components/DesignPreview';
 
 import { analyzeTopic, fetchDeepAnalysis } from './services/geminiService';
 import { NewsAnalysisResult, FetchStatus } from './types';
@@ -155,6 +159,15 @@ function MainApp() {
     }
   };
 
+  const handleReset = () => {
+    setStatus('idle');
+    setData(null);
+    setError(null);
+    setDeepLoading(false);
+    setLastQuery(null);
+    setSearchParams({}, { replace: true });
+  };
+
   const handleLanguageSwitch = (newLang: Language) => {
     const oldLang = lang;
     setLang(newLang);
@@ -164,86 +177,139 @@ function MainApp() {
     }
   };
 
+  // Newspaper date string
+  const dateStr = new Date().toLocaleDateString(
+    lang === 'de' ? 'de-DE' : lang === 'ru' ? 'ru-RU' : 'en-GB',
+    { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
+  );
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+    <div className="min-h-screen bg-[#FFF8F0] text-[#1a1a1a] flex flex-col font-serif">
+
+      {/* Top info strip */}
+      <div className="bg-[#1a1a1a] text-white text-center py-1.5 font-sans text-[10px] uppercase tracking-widest">
+        {t.heroSub}
+      </div>
+
       {/* Navbar */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-slate-900 rounded flex items-center justify-center text-white font-serif font-bold text-xl">
-              {t.title.charAt(0)}
-            </div>
-            <span className="font-serif font-bold text-xl tracking-tight text-slate-900">
-              {t.title}
-            </span>
+      <nav className="bg-[#FFF8F0] border-b-2 border-[#1a1a1a] sticky top-0 z-50">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+          {/* Date */}
+          <span className="font-sans text-[10px] uppercase tracking-widest text-gray-500 hidden sm:block">{dateStr}</span>
+
+          {/* Logo — centered */}
+          <Link to="/" className="absolute left-1/2 -translate-x-1/2 font-serif font-black text-xl tracking-tight text-[#1a1a1a] whitespace-nowrap hover:opacity-80 transition-opacity">
+            {t.title}
           </Link>
-          
-          <div className="flex bg-gray-100 p-1 rounded-lg">
-            {(['de', 'en', 'ru'] as Language[]).map((l) => (
-              <button
-                key={l}
-                onClick={() => handleLanguageSwitch(l)}
-                className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
-                  lang === l ? 'bg-white text-slate-900 shadow-sm' : 'text-gray-500'
-                }`}
-              >
-                {l.toUpperCase()}
-              </button>
-            ))}
+
+          {/* Right controls */}
+          <div className="flex items-center gap-4 ml-auto">
+            <Link
+              to="/compare"
+              className="hidden sm:block font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] transition-colors"
+            >
+              ⚖ {t.nav.compare}
+            </Link>
+            <div className="flex gap-0 border border-[#1a1a1a]">
+              {(['de', 'en', 'ru'] as Language[]).map((l) => (
+                <button
+                  key={l}
+                  onClick={() => handleLanguageSwitch(l)}
+                  className={`px-2.5 py-1 font-sans text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                    lang === l ? 'bg-[#1a1a1a] text-white' : 'text-gray-600 hover:bg-[#1a1a1a] hover:text-white'
+                  }`}
+                >
+                  {l.toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </nav>
+      {/* Spectrum gradient strip under nav */}
+      <div className="h-[3px] flex">
+        <div className="flex-1 bg-rose-600" />
+        <div className="flex-1 bg-orange-400" />
+        <div className="flex-1 bg-slate-400" />
+        <div className="flex-1 bg-sky-500" />
+        <div className="flex-1 bg-blue-700" />
+      </div>
 
       {/* Main Content */}
-      <main className="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full">
+      <main className="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full">
         <Routes>
           <Route path="/" element={
             <>
               {status === 'idle' && (
-                <div className="text-center mb-10">
-                  <h1 className="serif text-3xl md:text-5xl font-bold text-slate-900 mb-4 leading-tight">
+                <div className="mb-10">
+                  <p className="font-sans text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-4">Medienanalyse</p>
+                  <h1 className="font-serif font-black text-4xl md:text-5xl text-[#1a1a1a] leading-[1.05] mb-5">
                     {t.subtitle}
                   </h1>
-                  <p className="text-xl text-gray-500 mb-2">{t.description}</p>
-                  <p className="text-sm text-gray-400 tracking-wide">{t.heroSub}</p>
+                  {/* Spectrum accent rule */}
+                  <div className="flex gap-0.5 mb-5">
+                    <div className="w-6 h-[3px] bg-rose-600" />
+                    <div className="w-6 h-[3px] bg-orange-400" />
+                    <div className="w-6 h-[3px] bg-slate-400" />
+                    <div className="w-6 h-[3px] bg-sky-500" />
+                    <div className="w-6 h-[3px] bg-blue-700" />
+                  </div>
+                  <p className="font-sans text-gray-500 text-base">{t.description}</p>
                 </div>
               )}
 
-              <SearchBar onSearch={handleSearch} status={status} lang={lang} />
+              {status === 'idle' ? (
+                <div className="flex gap-6 items-start">
+                  {/* Main column */}
+                  <div className="flex-1 min-w-0">
+                    <SearchBar onSearch={handleSearch} status={status} lang={lang} />
+                    <SearchHistory
+                      history={history}
+                      onSelect={(topic) => handleSearch(topic)}
+                      onClear={clearHistory}
+                      lang={lang}
+                    />
+                    <CategoryBrowser lang={lang} onSelect={(topic) => handleSearch(topic)} />
+                    <TrendingTopics lang={lang} onSelect={(topic) => handleSearch(topic)} />
+                    <TopCharts lang={lang} onSelect={(topic) => handleSearch(topic)} />
+                  </div>
 
-              <SearchHistory
-                history={history}
-                onSelect={(topic) => handleSearch(topic)}
-                onClear={clearHistory}
-                lang={lang}
-              />
-
-              {status === 'idle' && (
+                  {/* Sidebar */}
+                  <div className="hidden lg:block w-72 shrink-0 sticky top-24">
+                    <DailyNews lang={lang} onSelect={(topic) => handleSearch(topic)} />
+                  </div>
+                </div>
+              ) : (
                 <>
-                  <TrendingTopics lang={lang} onSelect={(topic) => handleSearch(topic)} />
-                  <TopCharts lang={lang} onSelect={(topic) => handleSearch(topic)} />
+                  <SearchBar onSearch={handleSearch} status={status} lang={lang} />
+                  <SearchHistory
+                    history={history}
+                    onSelect={(topic) => handleSearch(topic)}
+                    onClear={clearHistory}
+                    lang={lang}
+                  />
                 </>
               )}
 
               {status === 'loading' && (
                 <div className="flex flex-col items-center justify-center py-20 max-w-sm mx-auto w-full">
-                  {/* Spinner */}
-                  <div className="w-14 h-14 mb-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin"></div>
+                  {/* Newspaper-style spinner */}
+                  <div className="w-12 h-12 mb-8 border-2 border-[#1a1a1a] border-t-transparent rounded-full animate-spin" />
 
-                  {/* Stage text with fade */}
+                  {/* Stage text */}
                   <div className="h-7 mb-6 flex items-center justify-center">
                     <p
-                      className="text-slate-700 font-medium text-center transition-opacity duration-300"
+                      className="font-sans text-[#1a1a1a] text-sm text-center transition-opacity duration-300"
                       style={{ opacity: stageVisible ? 1 : 0 }}
                     >
                       {t.loadingStages[loadingStage]}
                     </p>
                   </div>
 
-                  {/* Progress bar */}
-                  <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4 overflow-hidden">
+                  {/* Progress bar — flat like a rule */}
+                  <div className="w-full bg-[#e8e0d5] h-0.5 mb-4 overflow-hidden">
                     <div
-                      className="bg-slate-900 h-1.5 rounded-full transition-all duration-200 ease-out"
+                      className="bg-[#1a1a1a] h-0.5 transition-all duration-200 ease-out"
                       style={{ width: `${loadingProgress}%` }}
                     />
                   </div>
@@ -253,11 +319,11 @@ function MainApp() {
                     {t.loadingStages.map((_, i) => (
                       <div
                         key={i}
-                        className="rounded-full transition-all duration-300"
+                        className="transition-all duration-300"
                         style={{
                           width: i === loadingStage ? '20px' : '6px',
-                          height: '6px',
-                          backgroundColor: i <= loadingStage ? '#0f172a' : '#e2e8f0',
+                          height: '3px',
+                          backgroundColor: i <= loadingStage ? '#1a1a1a' : '#d5ccbf',
                         }}
                       />
                     ))}
@@ -266,14 +332,24 @@ function MainApp() {
               )}
 
               {status === 'error' && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-lg text-center max-w-2xl mx-auto">
-                  <p className="font-bold mb-1">{t.errorTitle}</p>
-                  <p>{error}</p>
+                <div className="border-l-4 border-red-700 bg-red-50 px-6 py-4 max-w-2xl mx-auto">
+                  <p className="font-serif font-bold text-red-800 mb-1">{t.errorTitle}</p>
+                  <p className="font-sans text-sm text-red-600">{error}</p>
                 </div>
               )}
 
               {status === 'success' && data && (
-                <AnalysisDashboard data={data} lang={lang} deepLoading={deepLoading} />
+                <>
+                  <div className="mb-6">
+                    <button
+                      onClick={handleReset}
+                      className="font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] transition-colors flex items-center gap-2"
+                    >
+                      ← {t.backToHome}
+                    </button>
+                  </div>
+                  <AnalysisDashboard data={data} lang={lang} deepLoading={deepLoading} />
+                </>
               )}
             </>
           } />
@@ -283,23 +359,27 @@ function MainApp() {
           <Route path="/about" element={<AboutPage lang={lang} />} />
           <Route path="/methodology" element={<MethodologyPage lang={lang} />} />
           <Route path="/suggest" element={<SuggestPage lang={lang} />} />
+          <Route path="/compare" element={<ComparePage lang={lang} />} />
+          <Route path="/preview" element={<DesignPreview lang={lang} />} />
         </Routes>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 bg-white py-8 mt-auto">
+      <footer className="border-t-2 border-[#1a1a1a] bg-[#FFF8F0] py-8 mt-auto">
         <div className="max-w-5xl mx-auto px-4">
-          <div className="flex flex-col gap-4 text-sm text-gray-400">
-            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-              <Link to="/about" className="hover:text-slate-600">{t.nav.about}</Link>
-              <Link to="/methodology" className="hover:text-slate-600">{t.nav.methodology}</Link>
-              <Link to="/suggest" className="hover:text-slate-600">{t.nav.suggest}</Link>
-              <span className="text-gray-200">·</span>
-              <Link to="/imprint" className="hover:text-slate-600">{t.imprint}</Link>
-              <Link to="/privacy" className="hover:text-slate-600">{t.privacy}</Link>
-              <Link to="/terms" className="hover:text-slate-600">{t.terms}</Link>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 font-sans text-xs uppercase tracking-widest text-gray-500">
+              <Link to="/about" className="hover:text-[#1a1a1a] transition-colors">{t.nav.about}</Link>
+              <Link to="/methodology" className="hover:text-[#1a1a1a] transition-colors">{t.nav.methodology}</Link>
+              <Link to="/compare" className="hover:text-[#1a1a1a] transition-colors">{t.nav.compare}</Link>
+              <Link to="/suggest" className="hover:text-[#1a1a1a] transition-colors">{t.nav.suggest}</Link>
+              <span className="text-gray-300">·</span>
+              <Link to="/imprint" className="hover:text-[#1a1a1a] transition-colors">{t.imprint}</Link>
+              <Link to="/privacy" className="hover:text-[#1a1a1a] transition-colors">{t.privacy}</Link>
+              <Link to="/terms" className="hover:text-[#1a1a1a] transition-colors">{t.terms}</Link>
             </div>
-            <p className="text-center text-xs text-gray-300">
+            <div className="h-px bg-[#1a1a1a] opacity-10" />
+            <p className="text-center font-sans text-[10px] uppercase tracking-widest text-gray-400">
               &copy; {new Date().getFullYear()} {t.footerText}
             </p>
           </div>
