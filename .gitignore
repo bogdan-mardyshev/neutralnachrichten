@@ -45,3 +45,4 @@ venv/
 # Project specific
 check_models.js
 metadata.json
+.claude/
