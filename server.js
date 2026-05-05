@@ -16,7 +16,7 @@ import bcrypt from 'bcryptjs';
 import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
 import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
 import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
-import { initDB, isDBAvailable, cacheGet, cacheSet, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin } from './db.js';
+import { initDB, isDBAvailable, cacheGet, cacheSet, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier } from './db.js';
 
 dotenv.config();
 
@@ -548,9 +548,10 @@ app.post('/api/analyze', async (req, res) => {
     }
   } catch { /* anonymous */ }
 
-  // ── Daily limit check (bypass for admin key) ──────────────────────────────
+  // ── Daily limit check (bypass for admin key or unlimited users) ──────────────
   const isAdmin = ADMIN_KEY && adminKeyHeader === ADMIN_KEY;
-  if (!isAdmin) {
+  const isUnlimited = jwtUser?.daily_limit === -1;
+  if (!isAdmin && !isUnlimited) {
     const { allowed, remaining } = await checkDailyLimitDB(clientIP);
     res.set('X-RateLimit-Limit',     String(FREE_DAILY_LIMIT));
     res.set('X-RateLimit-Remaining', String(remaining));
@@ -1043,7 +1044,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await createUser(email.toLowerCase().trim(), passwordHash);
-    const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+    const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
 
     res.status(201).json({ token, user: { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit } });
   } catch (err) {
@@ -1065,7 +1066,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
 
     await updateLastLogin(user.id);
-    const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+    const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
 
     res.json({ token, user: { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit } });
   } catch (err) {
@@ -1087,12 +1088,16 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
 
 app.get('/api/auth/usage', requireAuth, async (req, res) => {
   try {
+    // Unlimited users (daily_limit = -1) never hit rate limits
+    if (req.user?.daily_limit === -1) {
+      return res.json({ used: 0, limit: -1, remaining: -1, unlimited: true });
+    }
     const clientIP = getClientIP(req);
     const { remaining } = await checkDailyLimitDB(clientIP);
     const used = Math.max(0, FREE_DAILY_LIMIT - remaining);
-    res.json({ used, limit: FREE_DAILY_LIMIT, remaining });
+    res.json({ used, limit: FREE_DAILY_LIMIT, remaining, unlimited: false });
   } catch (err) {
-    res.json({ used: 0, limit: FREE_DAILY_LIMIT, remaining: FREE_DAILY_LIMIT });
+    res.json({ used: 0, limit: FREE_DAILY_LIMIT, remaining: FREE_DAILY_LIMIT, unlimited: false });
   }
 });
 
@@ -1169,6 +1174,39 @@ app.get('/api/admin/stats', async (req, res) => {
   });
 });
 
+// ── Admin User Management ─────────────────────────────────────────────────────
+
+app.post('/api/admin/users/:id', async (req, res) => {
+  const key = req.headers['x-admin-key'] || req.query.key;
+  if (!ADMIN_KEY || key !== ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+
+  const userId = parseInt(req.params.id);
+  if (isNaN(userId)) return res.status(400).json({ error: 'Invalid user ID' });
+
+  const { tier, daily_limit } = req.body;
+  const validTiers = ['free', 'pro', 'enterprise'];
+  if (tier && !validTiers.includes(tier)) return res.status(400).json({ error: 'Invalid tier' });
+
+  // -1 = unlimited, must be integer
+  const newLimit = daily_limit !== undefined ? parseInt(daily_limit) : undefined;
+  if (newLimit !== undefined && isNaN(newLimit)) return res.status(400).json({ error: 'Invalid daily_limit' });
+
+  try {
+    const updated = await updateUserTier(
+      userId,
+      tier || 'free',
+      newLimit ?? FREE_DAILY_LIMIT
+    );
+    if (!updated) return res.status(404).json({ error: 'User not found' });
+    console.log(`[Admin] Updated user ${userId}: tier=${updated.tier}, daily_limit=${updated.daily_limit}`);
+    res.json({ ok: true, user: updated });
+  } catch (err) {
+    console.error('[Admin/updateUser]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Google OAuth ──────────────────────────────────────────────────────────────
 
 app.get('/api/auth/google', (req, res) => {
@@ -1223,7 +1261,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
     }
     await updateLastLogin(user.id);
 
-    const jwtToken = jwt.sign({ id: user.id, email: user.email, tier: user.tier }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+    const jwtToken = jwt.sign({ id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
     console.log(`[Auth/Google] ${email} signed in`);
 
     // Redirect frontend — picks up token from URL param

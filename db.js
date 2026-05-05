@@ -285,4 +285,14 @@ export async function getUsersAdmin(limit = 50) {
   return rows;
 }
 
-export default { initDB, isDBAvailable, cacheGet, cacheSet, logSearch, getTopTopicsDB, getAdminStats, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getUsersAdmin };
+export async function updateUserTier(id, tier, dailyLimit) {
+  if (!pool) throw new Error('DB not available');
+  const { rows } = await pool.query(
+    `UPDATE users SET tier = $1, daily_limit = $2 WHERE id = $3
+     RETURNING id, email, tier, daily_limit`,
+    [tier, dailyLimit, id]
+  );
+  return rows[0] || null;
+}
+
+export default { initDB, isDBAvailable, cacheGet, cacheSet, logSearch, getTopTopicsDB, getAdminStats, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getUsersAdmin, updateUserTier };
