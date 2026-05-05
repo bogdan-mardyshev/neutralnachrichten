@@ -11,11 +11,23 @@ import { dirname } from 'path';
 import * as Sentry from '@sentry/node';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
 import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
 import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
+import { initDB, isDBAvailable, cacheGet, cacheSet, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin } from './db.js';
 
 dotenv.config();
+
+// ── DB init (non-blocking — server starts even without DB) ────────────────────
+initDB().then(ok => {
+  if (ok) console.log('[Server] PostgreSQL ready');
+  else    console.warn('[Server] Running without PostgreSQL (in-memory only)');
+});
+
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-prod';
+const JWT_EXPIRES = '30d';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -146,6 +158,61 @@ function getTopTopics(limit = 10) {
   return [...topicStats.values()]
     .sort((a, b) => b.count - a.count)
     .slice(0, limit);
+}
+
+// ── JWT auth middleware ────────────────────────────────────────────────────────
+function requireAuth(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' });
+  try {
+    req.user = jwt.verify(header.slice(7), JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+}
+
+// ── DB-backed cache helpers (NodeCache = L1, PostgreSQL = L2) ─────────────────
+async function cacheGetLayered(key) {
+  const mem = cache.get(key);
+  if (mem !== undefined) return mem;
+  if (!isDBAvailable()) return undefined;
+  const row = await cacheGet(key);
+  if (!row || row.isStale) return undefined;
+  // Repopulate L1 with remaining TTL (or 1h)
+  const remainTTL = Math.max(60, row.ttl_seconds - row.ageSeconds);
+  cache.set(key, row.data, remainTTL);
+  console.log(`[Cache] DB→L1 restored "${key}" (${row.ageSeconds}s old)`);
+  return row.data;
+}
+
+async function cacheSetLayered(key, data, ttlSeconds) {
+  cache.set(key, data, ttlSeconds);
+  if (isDBAvailable()) {
+    await cacheSet(key, data, ttlSeconds).catch(e => console.error('[Cache] DB write error:', e.message));
+  }
+}
+
+// ── DB-backed usage tracking (falls back to in-memory if no DB) ───────────────
+async function getUsageForIP(ip) {
+  if (isDBAvailable()) {
+    const count = await getUsageDB(ip);
+    return count ?? getIPUsage(ip).count; // fallback to memory
+  }
+  return getIPUsage(ip).count;
+}
+
+async function incrementUsageForIP(ip) {
+  getIPUsage(ip).count++; // always update memory
+  getIPUsage(ip).tokensIn  += TOKENS_PER_ANALYSIS_INPUT;
+  getIPUsage(ip).tokensOut += TOKENS_PER_ANALYSIS_OUTPUT;
+  if (isDBAvailable()) await incrementUsageDB(ip).catch(() => {});
+}
+
+async function checkDailyLimitDB(ip) {
+  const count = await getUsageForIP(ip);
+  const remaining = Math.max(0, FREE_DAILY_LIMIT - count);
+  return { allowed: count < FREE_DAILY_LIMIT, remaining };
 }
 
 function extractJSON(rawText) {
@@ -469,10 +536,19 @@ app.post('/api/analyze', async (req, res) => {
   const clientIP = getClientIP(req);
   const adminKeyHeader = req.headers['x-admin-key'] || req.query.adminKey;
 
+  // ── JWT user extraction (optional — enriches DB log) ─────────────────────
+  let jwtUser = null;
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      jwtUser = jwt.verify(authHeader.slice(7), JWT_SECRET);
+    }
+  } catch { /* anonymous */ }
+
   // ── Daily limit check (bypass for admin key) ──────────────────────────────
   const isAdmin = ADMIN_KEY && adminKeyHeader === ADMIN_KEY;
   if (!isAdmin) {
-    const { allowed, remaining } = checkDailyLimit(clientIP);
+    const { allowed, remaining } = await checkDailyLimitDB(clientIP);
     res.set('X-RateLimit-Limit',     String(FREE_DAILY_LIMIT));
     res.set('X-RateLimit-Remaining', String(remaining));
     res.set('X-RateLimit-Reset',     'midnight UTC');
@@ -497,14 +573,15 @@ app.post('/api/analyze', async (req, res) => {
 
   // v4 cache — 5-spectrum format, deep_analysis fetched separately
   const cacheKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:v4`).digest('hex');
-  const cached = cache.get(cacheKey);
+  const cached = await cacheGetLayered(cacheKey);
   if (cached) {
     console.log(`[Cache] HIT for "${topic}" (${lang})`);
     serverStats.cacheHits++;
     // Still count as usage even on cache hit (reading data costs resources)
-    if (!isAdmin) recordAnalysis(clientIP);
-    const { allowed: remAfter, remaining } = checkDailyLimit(clientIP);
+    if (!isAdmin) await incrementUsageForIP(clientIP);
+    const { remaining } = await checkDailyLimitDB(clientIP);
     res.set('X-RateLimit-Remaining', String(remaining));
+    logSearch({ topic, lang, degraded: cached._meta?.degraded ?? false, cacheHit: true, userId: jwtUser?.id, ipHash: crypto.createHash('sha256').update(clientIP).digest('hex').slice(0, 16) }).catch(() => {});
     return res.json(cached);
   }
   serverStats.cacheMisses++;
@@ -526,7 +603,7 @@ app.post('/api/analyze', async (req, res) => {
     const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v4`).digest('hex');
     let germanAnalysis, degraded;
 
-    const cachedBase = cache.get(deKey);
+    const cachedBase = await cacheGetLayered(deKey);
     if (cachedBase) {
       console.log(`[Cache] HIT German base for "${topic}"`);
       ({ germanAnalysis, degraded } = cachedBase);
@@ -534,7 +611,7 @@ app.post('/api/analyze', async (req, res) => {
       ({ analysis: germanAnalysis, degraded } = await callGeminiWithRetry(topic, 'de', 1));
       // Always cache the German base so /api/deep-analysis can find it.
       // Degraded results use a short TTL (5 min) so the next request retries Gemini.
-      cache.set(deKey, { germanAnalysis, degraded }, degraded ? 300 : 86400);
+      await cacheSetLayered(deKey, { germanAnalysis, degraded }, degraded ? 300 : 86400);
     }
 
     // Step 2: Translate to user language (dynamic timeout = remaining budget - 1s)
@@ -568,13 +645,17 @@ app.post('/api/analyze', async (req, res) => {
 
     // Only cache if Gemini succeeded AND translation succeeded (avoid caching empty/German fallbacks)
     if (!degraded && translationSucceeded) {
-      cache.set(cacheKey, response, 86400);
+      await cacheSetLayered(cacheKey, response, 86400);
     }
 
     // Record usage AFTER successful Gemini call (not on cache hits — already counted above)
-    if (!isAdmin) recordAnalysis(clientIP);
-    const { remaining } = checkDailyLimit(clientIP);
+    if (!isAdmin) await incrementUsageForIP(clientIP);
+    const { remaining } = await checkDailyLimitDB(clientIP);
     res.set('X-RateLimit-Remaining', String(remaining));
+
+    // Log to DB analytics
+    const ipHash = crypto.createHash('sha256').update(clientIP).digest('hex').slice(0, 16);
+    logSearch({ topic, lang, degraded, cacheHit: false, userId: jwtUser?.id, ipHash }).catch(() => {});
 
     clearTimeout(timeoutHandle);
     if (!res.headersSent) res.json({ ...response, _usage: { remaining, limit: FREE_DAILY_LIMIT } });
@@ -595,13 +676,13 @@ app.post('/api/deep-analysis', async (req, res) => {
 
   // Separate cache for deep analysis results (independent of main analysis cache)
   const deepKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:v4`).digest('hex');
-  const cachedDeep = cache.get(deepKey);
+  const cachedDeep = await cacheGetLayered(deepKey);
   if (cachedDeep) {
     console.log(`[DeepAnalysis] Cache hit for "${topic}"`);
     // For non-DE: check if we have a translated version stored
     if (lang !== 'de') {
       const translatedKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:${lang}:v4`).digest('hex');
-      const translatedDeep = cache.get(translatedKey);
+      const translatedDeep = await cacheGetLayered(translatedKey);
       if (translatedDeep) return res.json({ deep_analysis: translatedDeep });
     } else {
       return res.json({ deep_analysis: cachedDeep });
@@ -610,7 +691,7 @@ app.post('/api/deep-analysis', async (req, res) => {
 
   // Fetch the German base analysis from cache (must run /api/analyze first)
   const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v4`).digest('hex');
-  const cachedBase = cache.get(deKey);
+  const cachedBase = await cacheGetLayered(deKey);
   if (!cachedBase?.germanAnalysis) {
     return res.status(404).json({ error: 'Base analysis not cached yet — run /api/analyze first' });
   }
@@ -623,7 +704,7 @@ app.post('/api/deep-analysis', async (req, res) => {
     console.log(`[DeepAnalysis] Done — ${deep.shared_facts.length} facts, ${deep.diverging_points.length} diverging, ${deep.silenced_topics.length} silenced`);
 
     // Cache German deep analysis
-    cache.set(deepKey, deep, 86400);
+    await cacheSetLayered(deepKey, deep, 86400);
 
     // Translate if needed, cache result separately
     // Pass only deep_analysis in a minimal wrapper — translating full spectrum JSON is too slow
@@ -642,7 +723,7 @@ app.post('/api/deep-analysis', async (req, res) => {
         ]);
         finalDeep = translated.deep_analysis ?? deep;
         const translatedKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:${lang}:v4`).digest('hex');
-        cache.set(translatedKey, finalDeep, 86400);
+        await cacheSetLayered(translatedKey, finalDeep, 86400);
       } catch (err) {
         console.warn('[DeepAnalysis] Translation failed, using German:', err.message);
       }
@@ -711,7 +792,7 @@ RULES:
 
 app.get('/api/trending', async (req, res) => {
   const key = trendingCacheKey();
-  const cached = cache.get(key);
+  const cached = await cacheGetLayered(key);
   if (cached) {
     console.log(`[Trending] Cache hit (${key})`);
     return res.json(cached);
@@ -723,7 +804,7 @@ app.get('/api/trending', async (req, res) => {
     if (!Array.isArray(data?.topics) || data.topics.length === 0) {
       throw new Error('Empty trending response');
     }
-    cache.set(key, data, 14400); // 4-hour TTL
+    await cacheSetLayered(key, data, 14400); // 4-hour TTL
     console.log(`[Trending] Got ${data.topics.length} topics, cached as ${key}`);
     res.json(data);
   } catch (err) {
@@ -803,7 +884,7 @@ RULES:
 
 app.get('/api/daily-news', async (req, res) => {
   const key = dailyNewsCacheKey();
-  const cached = cache.get(key);
+  const cached = await cacheGetLayered(key);
   if (cached) {
     console.log(`[DailyNews] Cache hit (${key})`);
     return res.json(cached);
@@ -815,7 +896,7 @@ app.get('/api/daily-news', async (req, res) => {
     if (!Array.isArray(data?.stories) || data.stories.length === 0) {
       throw new Error('Empty daily news response');
     }
-    cache.set(key, data, 7200); // 2-hour TTL
+    await cacheSetLayered(key, data, 7200); // 2-hour TTL
     console.log(`[DailyNews] Got ${data.stories.length} stories, cached as ${key}`);
     res.json(data);
   } catch (err) {
@@ -896,7 +977,7 @@ app.get('/api/category-news', async (req, res) => {
   }
 
   const key = categoryNewsCacheKey(category);
-  const cached = cache.get(key);
+  const cached = await cacheGetLayered(key);
   if (cached) {
     console.log(`[CategoryNews] Cache hit (${key})`);
     return res.json(cached);
@@ -908,7 +989,7 @@ app.get('/api/category-news', async (req, res) => {
     if (!Array.isArray(data?.stories) || data.stories.length === 0) {
       throw new Error('Empty category news response');
     }
-    cache.set(key, data, 14400); // 4-hour TTL
+    await cacheSetLayered(key, data, 14400); // 4-hour TTL
     console.log(`[CategoryNews] Got ${data.stories.length} stories for ${category}`);
     res.json(data);
   } catch (err) {
@@ -945,9 +1026,65 @@ app.post('/api/suggest-source', (req, res) => {
   }
 });
 
+// ── Auth Routes ───────────────────────────────────────────────────────────────
+
+app.post('/api/auth/register', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+
+  try {
+    const existing = await findUserByEmail(email);
+    if (existing) return res.status(409).json({ error: 'Email already registered' });
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const user = await createUser(email.toLowerCase().trim(), passwordHash);
+    const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+
+    res.status(201).json({ token, user: { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit } });
+  } catch (err) {
+    console.error('[Auth/register]', err.message);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+
+  try {
+    const user = await findUserByEmail(email);
+    if (!user || !user.is_active) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+
+    await updateLastLogin(user.id);
+    const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+
+    res.json({ token, user: { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit } });
+  } catch (err) {
+    console.error('[Auth/login]', err.message);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+  try {
+    const user = await findUserById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ user });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
 // ── Admin Dashboard API ───────────────────────────────────────────────────────
 // Protected by ADMIN_KEY env var. Returns full platform analytics.
-app.get('/api/admin/stats', (req, res) => {
+app.get('/api/admin/stats', async (req, res) => {
   const key = req.headers['x-admin-key'] || req.query.key;
   if (!ADMIN_KEY || key !== ADMIN_KEY) {
     return res.status(403).json({ error: 'Forbidden' });
@@ -972,6 +1109,13 @@ app.get('/api/admin/stats', (req, res) => {
     ? Math.round((serverStats.cacheHits / serverStats.totalRequests) * 100)
     : 0;
 
+  // DB stats (non-blocking)
+  const [dbStats, dbTopTopics, dbUsers] = await Promise.all([
+    getAdminStatsDB().catch(() => null),
+    getTopTopicsDB(20).catch(() => null),
+    getUsersAdmin(50).catch(() => []),
+  ]);
+
   res.json({
     server: {
       startedAt: serverStats.startedAt,
@@ -982,11 +1126,12 @@ app.get('/api/admin/stats', (req, res) => {
       cacheHitRate: `${cacheHitRate}%`,
       errors: serverStats.errors,
       cachedItems: cacheKeys.length,
+      dbAvailable: isDBAvailable(),
     },
     usage: {
       today,
-      totalAnalysesAllTime: totalAnalyses,
-      totalAnalysesToday,
+      totalAnalysesAllTime: dbStats?.totalSearches ?? totalAnalyses,
+      totalAnalysesToday: dbStats?.searchesToday ?? totalAnalysesToday,
       uniqueTopicsAllTime: topicStats.size,
       activeIPsToday: activeIPsToday.length,
       freeDailyLimit: FREE_DAILY_LIMIT,
@@ -998,12 +1143,15 @@ app.get('/api/admin/stats', (req, res) => {
       costPerAnalysis: `$${COST_PER_ANALYSIS}`,
       note: 'Estimates only. Includes Gemini tokens + Search Grounding.',
     },
-    topTopics,
+    topTopics: dbTopTopics ?? topTopics,
     topIPs: activeIPsToday.slice(0, 10).map(([ip, u]) => ({
       ip: ip.replace(/\.\d+$/, '.***'), // mask last octet
       count: u.count,
       tokensEstimate: u.tokensIn + u.tokensOut,
     })),
+    users: dbUsers,
+    db: dbStats,
+    hourlyLast24h: dbStats?.hourlyLast24h ?? [],
   });
 });
 

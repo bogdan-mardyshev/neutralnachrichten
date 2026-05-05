@@ -18,6 +18,8 @@ import { ComparePage } from './components/ComparePage';
 import { DailyNews } from './components/DailyNews';
 import { CategoryBrowser } from './components/CategoryBrowser';
 import { DesignPreview } from './components/DesignPreview';
+import AuthModal, { AuthUser } from './components/AuthModal';
+import AdminPage from './components/AdminPage';
 
 import { analyzeTopic, fetchDeepAnalysis } from './services/geminiService';
 import { NewsAnalysisResult, FetchStatus } from './types';
@@ -46,6 +48,14 @@ function MainApp() {
   const [loadingStage, setLoadingStage] = useState(0);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [stageVisible, setStageVisible] = useState(true);
+
+  // Auth state
+  const [authToken, setAuthToken] = useState<string | null>(() => localStorage.getItem('authToken'));
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
+    try { return JSON.parse(localStorage.getItem('authUser') || 'null'); } catch { return null; }
+  });
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
 
   const t = translations[lang];
   const { history, addToHistory, clearHistory } = useSearchHistory();
@@ -121,6 +131,21 @@ function MainApp() {
     setShowCookieBanner(false);
   };
 
+  const handleAuthSuccess = (token: string, user: AuthUser) => {
+    setAuthToken(token);
+    setAuthUser(user);
+    localStorage.setItem('authToken', token);
+    localStorage.setItem('authUser', JSON.stringify(user));
+    setShowAuthModal(false);
+  };
+
+  const handleLogout = () => {
+    setAuthToken(null);
+    setAuthUser(null);
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('authUser');
+  };
+
   const handleSearch = async (query: string, overrideLang?: Language) => {
     const activeLang = overrideLang ?? lang;
     setStatus('loading');
@@ -131,7 +156,7 @@ function MainApp() {
     posthog.capture('analysis_started', { topic: query, lang: activeLang });
 
     try {
-      const result = await analyzeTopic(query, activeLang);
+      const result = await analyzeTopic(query, activeLang, authToken ?? undefined);
       setData(result);
       setLastQuery(query);
       // Track daily remaining from server response
@@ -217,13 +242,36 @@ function MainApp() {
           </Link>
 
           {/* Right controls */}
-          <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-3 ml-auto">
             <Link
               to="/compare"
               className="hidden sm:block font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] transition-colors"
             >
               ⚖ {t.nav.compare}
             </Link>
+
+            {/* Auth */}
+            {authUser ? (
+              <div className="hidden sm:flex items-center gap-2">
+                <span className="font-sans text-[10px] text-gray-500 max-w-[120px] truncate" title={authUser.email}>
+                  {authUser.email.split('@')[0]}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="font-sans text-[10px] uppercase tracking-widest text-gray-400 hover:text-rose-600 transition-colors"
+                >
+                  ×
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setAuthModalMode('login'); setShowAuthModal(true); }}
+                className="hidden sm:block font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] border border-[#1a1a1a]/20 px-2.5 py-1 hover:border-[#1a1a1a] transition-colors"
+              >
+                Anmelden
+              </button>
+            )}
+
             <div className="flex gap-0 border border-[#1a1a1a]">
               {(['de', 'en', 'ru'] as Language[]).map((l) => (
                 <button
@@ -421,10 +469,18 @@ function MainApp() {
       </footer>
 
       {showCookieBanner && (
-        <CookieBanner 
-          lang={lang} 
-          onAccept={handleAcceptCookies} 
-          onEssential={handleEssentialCookies} 
+        <CookieBanner
+          lang={lang}
+          onAccept={handleAcceptCookies}
+          onEssential={handleEssentialCookies}
+        />
+      )}
+
+      {showAuthModal && (
+        <AuthModal
+          initialMode={authModalMode}
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={handleAuthSuccess}
         />
       )}
     </div>
@@ -434,7 +490,10 @@ function MainApp() {
 function App() {
   return (
     <Router>
-      <MainApp />
+      <Routes>
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/*" element={<MainApp />} />
+      </Routes>
     </Router>
   );
 }
