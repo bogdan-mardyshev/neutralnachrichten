@@ -78,6 +78,70 @@ function trackSearch(topic) {
   }
 }
 
+// ── Per-IP Usage Tracking & Daily Limits ─────────────────────────────────────
+// Free tier: FREE_DAILY_LIMIT analyses per IP per calendar day (UTC).
+// Tokens are estimated (no extra API call needed).
+// Admin key bypasses all limits.
+
+const FREE_DAILY_LIMIT = parseInt(process.env.FREE_DAILY_LIMIT || '10');
+const ADMIN_KEY        = process.env.ADMIN_KEY || '';
+
+// Estimated Gemini token costs per analysis (approximate):
+// - Input prompt:  ~4 000 tokens × $0.075/1M = $0.0003
+// - Output JSON:   ~3 000 tokens × $0.30/1M  = $0.0009
+// - Search grounding: $0.035 per request
+// Total per analysis ≈ $0.036
+const COST_PER_ANALYSIS = 0.036;
+const TOKENS_PER_ANALYSIS_INPUT  = 4000;
+const TOKENS_PER_ANALYSIS_OUTPUT = 3000;
+
+// ipUsage: ip → { date: 'YYYY-MM-DD', count, tokensIn, tokensOut }
+const ipUsage = new Map();
+
+// Daily server-wide stats (resets on redeploy)
+const serverStats = {
+  startedAt: new Date().toISOString(),
+  totalRequests: 0,
+  cacheHits: 0,
+  cacheMisses: 0,
+  errors: 0,
+};
+
+function todayUTC() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function getIPUsage(ip) {
+  const today = todayUTC();
+  const entry = ipUsage.get(ip);
+  // Reset if new day
+  if (!entry || entry.date !== today) {
+    const fresh = { date: today, count: 0, tokensIn: 0, tokensOut: 0 };
+    ipUsage.set(ip, fresh);
+    return fresh;
+  }
+  return entry;
+}
+
+function checkDailyLimit(ip) {
+  const usage = getIPUsage(ip);
+  return { allowed: usage.count < FREE_DAILY_LIMIT, remaining: Math.max(0, FREE_DAILY_LIMIT - usage.count), usage };
+}
+
+function recordAnalysis(ip) {
+  const usage = getIPUsage(ip);
+  usage.count++;
+  usage.tokensIn  += TOKENS_PER_ANALYSIS_INPUT;
+  usage.tokensOut += TOKENS_PER_ANALYSIS_OUTPUT;
+}
+
+// Middleware: extract real IP behind Railway / Nginx proxy
+function getClientIP(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return req.socket?.remoteAddress || 'unknown';
+}
+
 function getTopTopics(limit = 10) {
   return [...topicStats.values()]
     .sort((a, b) => b.count - a.count)
@@ -400,6 +464,29 @@ app.post('/api/analyze', async (req, res) => {
   if (!topic) return res.status(400).json({ error: 'Topic required' });
   if (!GEMINI_API_KEY) return res.status(500).json({ error: 'API Key Missing' });
 
+  serverStats.totalRequests++;
+
+  const clientIP = getClientIP(req);
+  const adminKeyHeader = req.headers['x-admin-key'] || req.query.adminKey;
+
+  // ── Daily limit check (bypass for admin key) ──────────────────────────────
+  const isAdmin = ADMIN_KEY && adminKeyHeader === ADMIN_KEY;
+  if (!isAdmin) {
+    const { allowed, remaining } = checkDailyLimit(clientIP);
+    res.set('X-RateLimit-Limit',     String(FREE_DAILY_LIMIT));
+    res.set('X-RateLimit-Remaining', String(remaining));
+    res.set('X-RateLimit-Reset',     'midnight UTC');
+    if (!allowed) {
+      console.warn(`[Limit] IP ${clientIP} exceeded daily limit (${FREE_DAILY_LIMIT}/day)`);
+      return res.status(429).json({
+        error: 'daily_limit_reached',
+        message: `Free tier allows ${FREE_DAILY_LIMIT} analyses per day. Resets at midnight UTC.`,
+        limit: FREE_DAILY_LIMIT,
+        remaining: 0,
+      });
+    }
+  }
+
   // ── Time budget breakdown (Railway hard-kills at ~60s) ─────────────────────
   // Main Gemini call (5 spectrum searches): ≤ 44s
   // Translation (non-DE):                  ≤ 10s
@@ -413,8 +500,14 @@ app.post('/api/analyze', async (req, res) => {
   const cached = cache.get(cacheKey);
   if (cached) {
     console.log(`[Cache] HIT for "${topic}" (${lang})`);
+    serverStats.cacheHits++;
+    // Still count as usage even on cache hit (reading data costs resources)
+    if (!isAdmin) recordAnalysis(clientIP);
+    const { allowed: remAfter, remaining } = checkDailyLimit(clientIP);
+    res.set('X-RateLimit-Remaining', String(remaining));
     return res.json(cached);
   }
+  serverStats.cacheMisses++;
 
   const timeoutHandle = setTimeout(() => {
     if (!res.headersSent) {
@@ -478,9 +571,15 @@ app.post('/api/analyze', async (req, res) => {
       cache.set(cacheKey, response, 86400);
     }
 
+    // Record usage AFTER successful Gemini call (not on cache hits — already counted above)
+    if (!isAdmin) recordAnalysis(clientIP);
+    const { remaining } = checkDailyLimit(clientIP);
+    res.set('X-RateLimit-Remaining', String(remaining));
+
     clearTimeout(timeoutHandle);
-    if (!res.headersSent) res.json(response);
+    if (!res.headersSent) res.json({ ...response, _usage: { remaining, limit: FREE_DAILY_LIMIT } });
   } catch (error) {
+    serverStats.errors++;
     clearTimeout(timeoutHandle);
     console.error('[Analyze Error]:', error.message);
     if (!res.headersSent) res.status(500).json({ error: 'Analysis failed', message: error.message });
@@ -844,6 +943,68 @@ app.post('/api/suggest-source', (req, res) => {
     console.error('[Suggest] Write error:', err.message);
     res.status(500).json({ error: 'storage error' });
   }
+});
+
+// ── Admin Dashboard API ───────────────────────────────────────────────────────
+// Protected by ADMIN_KEY env var. Returns full platform analytics.
+app.get('/api/admin/stats', (req, res) => {
+  const key = req.headers['x-admin-key'] || req.query.key;
+  if (!ADMIN_KEY || key !== ADMIN_KEY) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  const today = todayUTC();
+  const topTopics = getTopTopics(20);
+
+  // Aggregate IP usage stats
+  const activeIPsToday = [...ipUsage.entries()]
+    .filter(([, u]) => u.date === today)
+    .sort(([, a], [, b]) => b.count - a.count);
+
+  const totalAnalysesToday = activeIPsToday.reduce((s, [, u]) => s + u.count, 0);
+  const estimatedTokensToday = activeIPsToday.reduce((s, [, u]) => s + u.tokensIn + u.tokensOut, 0);
+  const estimatedCostToday = totalAnalysesToday * COST_PER_ANALYSIS;
+  const estimatedCostMonth = estimatedCostToday * 30;
+
+  // Cache stats
+  const cacheKeys = cache.keys();
+  const cacheHitRate = serverStats.totalRequests > 0
+    ? Math.round((serverStats.cacheHits / serverStats.totalRequests) * 100)
+    : 0;
+
+  res.json({
+    server: {
+      startedAt: serverStats.startedAt,
+      uptime_hours: Math.round((Date.now() - new Date(serverStats.startedAt).getTime()) / 3600000 * 10) / 10,
+      totalRequests: serverStats.totalRequests,
+      cacheHits: serverStats.cacheHits,
+      cacheMisses: serverStats.cacheMisses,
+      cacheHitRate: `${cacheHitRate}%`,
+      errors: serverStats.errors,
+      cachedItems: cacheKeys.length,
+    },
+    usage: {
+      today,
+      totalAnalysesAllTime: totalAnalyses,
+      totalAnalysesToday,
+      uniqueTopicsAllTime: topicStats.size,
+      activeIPsToday: activeIPsToday.length,
+      freeDailyLimit: FREE_DAILY_LIMIT,
+    },
+    costs: {
+      estimatedTokensToday,
+      estimatedCostToday: `$${estimatedCostToday.toFixed(3)}`,
+      estimatedCostMonth: `$${estimatedCostMonth.toFixed(2)}`,
+      costPerAnalysis: `$${COST_PER_ANALYSIS}`,
+      note: 'Estimates only. Includes Gemini tokens + Search Grounding.',
+    },
+    topTopics,
+    topIPs: activeIPsToday.slice(0, 10).map(([ip, u]) => ({
+      ip: ip.replace(/\.\d+$/, '.***'), // mask last octet
+      count: u.count,
+      tokensEstimate: u.tokensIn + u.tokensOut,
+    })),
+  });
 });
 
 const distPath = path.join(__dirname, 'dist');
