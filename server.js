@@ -26,8 +26,11 @@ initDB().then(ok => {
   else    console.warn('[Server] Running without PostgreSQL (in-memory only)');
 });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-prod';
+const JWT_SECRET  = process.env.JWT_SECRET  || 'dev-secret-change-in-prod';
 const JWT_EXPIRES = '30d';
+const BASE_URL    = process.env.BASE_URL    || 'http://localhost:5173';
+const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID     || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1155,8 +1158,192 @@ app.get('/api/admin/stats', async (req, res) => {
   });
 });
 
+// ── Google OAuth ──────────────────────────────────────────────────────────────
+
+app.get('/api/auth/google', (req, res) => {
+  if (!GOOGLE_CLIENT_ID) return res.status(501).json({ error: 'Google OAuth not configured' });
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: `${BASE_URL}/api/auth/google/callback`,
+    response_type: 'code',
+    scope: 'openid email profile',
+    access_type: 'online',
+    prompt: 'select_account',
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+app.get('/api/auth/google/callback', async (req, res) => {
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    return res.redirect(`${BASE_URL}/?auth_error=oauth_not_configured`);
+  }
+
+  const { code } = req.query;
+  if (!code) return res.redirect(`${BASE_URL}/?auth_error=no_code`);
+
+  try {
+    // Exchange code for tokens
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: `${BASE_URL}/api/auth/google/callback`,
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    const tokens = await tokenRes.json();
+    if (!tokens.id_token) throw new Error('No id_token from Google');
+
+    // Decode id_token (JWT payload — no signature verify needed, came directly from Google)
+    const payload = JSON.parse(Buffer.from(tokens.id_token.split('.')[1], 'base64url').toString());
+    const { email, name } = payload;
+    if (!email) throw new Error('No email in Google token');
+
+    // Find or create user
+    let user = await findUserByEmail(email);
+    if (!user) {
+      const randomPw = crypto.randomBytes(32).toString('hex');
+      const hash = await bcrypt.hash(randomPw, 10);
+      user = await createUser(email.toLowerCase().trim(), hash);
+    }
+    await updateLastLogin(user.id);
+
+    const jwtToken = jwt.sign({ id: user.id, email: user.email, tier: user.tier }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+    console.log(`[Auth/Google] ${email} signed in`);
+
+    // Redirect frontend — picks up token from URL param
+    res.redirect(`${BASE_URL}/?auth_token=${encodeURIComponent(jwtToken)}`);
+  } catch (err) {
+    console.error('[Auth/Google] Error:', err.message);
+    res.redirect(`${BASE_URL}/?auth_error=oauth_failed`);
+  }
+});
+
+// ── Dynamic OG image (/api/og-image?topic=...&lang=...) ───────────────────────
+// Returns an SVG card with the topic embedded — used by social crawlers.
+app.get('/api/og-image', (req, res) => {
+  const topic = (req.query.topic || 'NeutralNachrichten').toString().slice(0, 80);
+  const lang  = req.query.lang || 'de';
+
+  const subtitle = lang === 'en'
+    ? 'German media bias analysis'
+    : lang === 'ru'
+    ? 'Анализ немецких СМИ'
+    : 'Deutsche Medienanalyse';
+
+  // Simple clean SVG: 1200×630, newspaper style, topic as headline
+  const svg = `<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .serif { font-family: Georgia, 'Times New Roman', serif; }
+      .sans  { font-family: Arial, Helvetica, sans-serif; }
+    </style>
+  </defs>
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#FFF8F0"/>
+  <!-- Top black bar -->
+  <rect width="1200" height="80" fill="#1a1a1a"/>
+  <!-- Brand in top bar -->
+  <text x="60" y="52" class="serif" font-size="28" font-weight="900" fill="#FFF8F0">NeutralNachrichten</text>
+  <text x="1140" y="52" class="sans" font-size="13" fill="#FFF8F0" text-anchor="end" letter-spacing="2">MEDIENANALYSE</text>
+  <!-- Spectrum strip -->
+  <rect x="0"   y="80" width="240" height="8" fill="#e11d48"/>
+  <rect x="240" y="80" width="240" height="8" fill="#fb923c"/>
+  <rect x="480" y="80" width="240" height="8" fill="#94a3b8"/>
+  <rect x="720" y="80" width="240" height="8" fill="#0ea5e9"/>
+  <rect x="960" y="80" width="240" height="8" fill="#1d4ed8"/>
+  <!-- Subtitle label -->
+  <text x="60" y="145" class="sans" font-size="14" fill="#1a1a1a" opacity="0.5" letter-spacing="3">${subtitle.toUpperCase()}</text>
+  <!-- Topic headline — wrap long topics -->
+  <text x="60" y="240" class="serif" font-size="${topic.length > 40 ? '52' : topic.length > 25 ? '62' : '72'}" font-weight="900" fill="#1a1a1a">${topic.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</text>
+  <!-- Spectrum labels -->
+  <text x="60"  y="440" class="sans" font-size="13" fill="#e11d48" font-weight="700">LINKS</text>
+  <text x="240" y="440" class="sans" font-size="13" fill="#fb923c" font-weight="700">MITTE-LINKS</text>
+  <text x="490" y="440" class="sans" font-size="13" fill="#94a3b8" font-weight="700">MITTE</text>
+  <text x="690" y="440" class="sans" font-size="13" fill="#0ea5e9" font-weight="700">MITTE-RECHTS</text>
+  <text x="950" y="440" class="sans" font-size="13" fill="#1d4ed8" font-weight="700">RECHTS</text>
+  <!-- Spectrum bars (decoration) -->
+  <rect x="60"  y="455" width="140" height="6" fill="#e11d48" opacity="0.3"/>
+  <rect x="240" y="455" width="200" height="6" fill="#fb923c" opacity="0.3"/>
+  <rect x="490" y="455" width="160" height="6" fill="#94a3b8" opacity="0.3"/>
+  <rect x="690" y="455" width="220" height="6" fill="#0ea5e9" opacity="0.3"/>
+  <rect x="950" y="455" width="190" height="6" fill="#1d4ed8" opacity="0.3"/>
+  <!-- Bottom rule -->
+  <rect x="0" y="580" width="1200" height="2" fill="#1a1a1a" opacity="0.1"/>
+  <text x="60" y="612" class="sans" font-size="13" fill="#1a1a1a" opacity="0.4">neutralnachrichten.de</text>
+</svg>`;
+
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.send(svg);
+});
+
+// ── Bot detection: dynamic OG meta tags for social crawlers ──────────────────
+// When Twitter, Telegram, WhatsApp etc. fetch a shared URL, they need
+// topic-specific OG tags — but SPA sends generic index.html to everyone.
+// Solution: detect bot UA → serve minimal HTML with correct meta tags.
+const BOT_UA = /Twitterbot|facebookexternalhit|TelegramBot|WhatsApp|LinkedInBot|Slackbot|Googlebot|bingbot|DuckDuckBot|Applebot|vkShare|Discordbot/i;
+
+function buildOGHtml(topic, lang, baseUrl) {
+  const safeTopicAttr = topic.replace(/"/g, '&quot;');
+  const safeTopicText = topic.replace(/&/g, '&amp;');
+  const descriptions = {
+    de: `Wie berichten taz, Spiegel, FAZ, Welt und Bild über „${safeTopicText}"? Fünf politische Perspektiven im Vergleich.`,
+    en: `How do German media from left to right cover "${safeTopicText}"? Five political perspectives compared.`,
+    ru: `Как немецкие СМИ освещают «${safeTopicText}»? Пять политических перспектив в сравнении.`,
+  };
+  const titles = {
+    de: `${safeTopicText} — NeutralNachrichten Medienanalyse`,
+    en: `${safeTopicText} — NeutralNews Media Analysis`,
+    ru: `${safeTopicText} — НейтральныеНовости Медиаанализ`,
+  };
+  const desc = descriptions[lang] || descriptions.de;
+  const title = titles[lang] || titles.de;
+  const imgUrl = `${baseUrl}/api/og-image?topic=${encodeURIComponent(topic)}&lang=${lang}`;
+  const pageUrl = `${baseUrl}/?topic=${encodeURIComponent(topic)}&lang=${lang}`;
+
+  return `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  <meta charset="UTF-8"/>
+  <title>${title}</title>
+  <meta property="og:type" content="article"/>
+  <meta property="og:url" content="${pageUrl}"/>
+  <meta property="og:title" content="${safeTopicAttr}"/>
+  <meta property="og:description" content="${desc.replace(/"/g, '&quot;')}"/>
+  <meta property="og:image" content="${imgUrl}"/>
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+  <meta property="og:site_name" content="NeutralNachrichten"/>
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="${safeTopicAttr}"/>
+  <meta name="twitter:description" content="${desc.replace(/"/g, '&quot;')}"/>
+  <meta name="twitter:image" content="${imgUrl}"/>
+  <meta http-equiv="refresh" content="0; url=${pageUrl}"/>
+</head>
+<body><p>Redirecting…</p></body>
+</html>`;
+}
+
 const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath));
-app.get(/^(?!\/api\/).*$/, (req, res) => res.sendFile('index.html', { root: distPath }));
+app.get(/^(?!\/api\/).*$/, (req, res) => {
+  const ua = req.headers['user-agent'] || '';
+  const topic = req.query.topic;
+  const lang = (req.query.lang === 'en' || req.query.lang === 'ru') ? req.query.lang : 'de';
+
+  // Social crawlers + topic present → serve dynamic OG HTML
+  if (topic && BOT_UA.test(ua)) {
+    const serverBase = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    console.log(`[OG] Bot "${ua.slice(0, 40)}" requested topic="${topic}"`);
+    return res.send(buildOGHtml(topic, lang, serverBase));
+  }
+
+  res.sendFile('index.html', { root: distPath });
+});
 
 app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));

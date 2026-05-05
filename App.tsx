@@ -35,7 +35,9 @@ function MainApp() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [lang, setLang] = useState<Language>(() => {
     const p = searchParams.get('lang');
-    return (p === 'en' || p === 'ru' || p === 'de') ? p : 'de';
+    if (p === 'en' || p === 'ru' || p === 'de') return p;
+    const saved = localStorage.getItem('lang') as Language | null;
+    return (saved === 'en' || saved === 'ru' || saved === 'de') ? saved : 'de';
   });
   const [status, setStatus] = useState<FetchStatus>('idle');
   const [data, setData] = useState<NewsAnalysisResult | null>(null);
@@ -61,7 +63,28 @@ function MainApp() {
   const { history, addToHistory, clearHistory } = useSearchHistory();
 
   // Auto-trigger analysis from shared URL (?topic=...&lang=...)
+  // Also handle Google OAuth callback (?auth_token=...)
   useEffect(() => {
+    // Google OAuth: pick up token from URL and clear it
+    const authTokenParam = searchParams.get('auth_token');
+    if (authTokenParam) {
+      try {
+        // Decode payload to get user info (no verify needed — server already verified with Google)
+        const payload = JSON.parse(atob(authTokenParam.split('.')[1]));
+        const user: AuthUser = { id: payload.id, email: payload.email, tier: payload.tier ?? 'free', daily_limit: payload.daily_limit ?? 10 };
+        handleAuthSuccess(authTokenParam, user);
+      } catch { /* malformed token — ignore */ }
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
+    const authErrorParam = searchParams.get('auth_error');
+    if (authErrorParam) {
+      setError(lang === 'de' ? 'Google-Anmeldung fehlgeschlagen. Bitte versuche es erneut.' : 'Google sign-in failed. Please try again.');
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
     const topicParam = searchParams.get('topic');
     if (topicParam) {
       handleSearch(topicParam, lang);
@@ -210,6 +233,7 @@ function MainApp() {
   const handleLanguageSwitch = (newLang: Language) => {
     const oldLang = lang;
     setLang(newLang);
+    localStorage.setItem('lang', newLang);
     posthog.capture('language_switched', { from: oldLang, to: newLang });
     if (lastQuery && status === 'success') {
       handleSearch(lastQuery, newLang);
@@ -268,7 +292,7 @@ function MainApp() {
                 onClick={() => { setAuthModalMode('login'); setShowAuthModal(true); }}
                 className="hidden sm:block font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] border border-[#1a1a1a]/20 px-2.5 py-1 hover:border-[#1a1a1a] transition-colors"
               >
-                Anmelden
+                {t.auth.loginBtn}
               </button>
             )}
 
@@ -481,6 +505,7 @@ function MainApp() {
           initialMode={authModalMode}
           onClose={() => setShowAuthModal(false)}
           onSuccess={handleAuthSuccess}
+          lang={lang}
         />
       )}
     </div>

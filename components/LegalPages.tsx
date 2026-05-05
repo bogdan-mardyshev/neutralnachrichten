@@ -61,109 +61,165 @@ export const PrivacyPage: React.FC<Props> = ({ lang }) => (
         <li>— IP-Adresse des anfragenden Geräts (anonymisiert nach 7 Tagen)</li>
         <li>— Datum und Uhrzeit des Zugriffs</li>
         <li>— Name und URL der abgerufenen Datei</li>
-        <li>— HTTP-Statuscode</li>
-        <li>— Übertragene Datenmenge</li>
+        <li>— HTTP-Statuscode, übertragene Datenmenge</li>
         <li>— Browser-Typ und Betriebssystem (User-Agent)</li>
       </ul>
       <p>Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an IT-Sicherheit).</p>
 
       <p><strong>2.2 Suchanfragen & Nutzungsstatistiken</strong></p>
       <p>
-        Wenn Sie eine Medienanalyse durchführen, wird das eingegebene Thema sowie die Uhrzeit
-        der Anfrage serverseitig in aggregierter Form erfasst, um Plattformstatistiken zu erstellen
-        (z.B. meistgesuchte Themen). Personenbezogene Daten werden dabei nicht gespeichert.
+        Wenn Sie eine Medienanalyse durchführen, werden das Suchthema, Sprache, Zeitstempel
+        und ein anonymisierter IP-Hash (SHA-256, gekürzt auf 16 Zeichen) in unserer Datenbank
+        gespeichert. Diese dienen ausschließlich der Plattformstatistik (meistgesuchte Themen,
+        Cache-Effizienz). Eine Rückführung auf einzelne Personen ist technisch ausgeschlossen.
       </p>
       <p>
         Zur Durchsetzung des täglichen Nutzungslimits wird die IP-Adresse des anfragenden Geräts
-        im Arbeitsspeicher des Servers für die Dauer eines Kalendertages (UTC) gespeichert.
-        Diese Daten werden nicht dauerhaft persistiert und bei Neustart des Servers gelöscht.
+        tagesweise (UTC-Kalendertag) in unserer Datenbank gespeichert und danach überschrieben.
       </p>
       <p>Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an Missbrauchsschutz).</p>
 
-      <p><strong>2.3 Kein Nutzerkonto, keine dauerhafte Profilbildung</strong></p>
+      <p><strong>2.3 Nutzerkonten (freiwillige Registrierung)</strong></p>
       <p>
-        Wir erstellen keine dauerhaften Nutzerprofile. Der lokale Suchverlauf wird ausschließlich
-        im localStorage Ihres Browsers gespeichert und verlässt Ihr Gerät nicht.
+        Wenn Sie ein Konto erstellen, verarbeiten wir folgende Daten:
       </p>
+      <ul className="list-none space-y-1 font-sans text-xs text-gray-600">
+        <li>— <strong>E-Mail-Adresse</strong> — zur Identifikation und optionalen Kommunikation</li>
+        <li>— <strong>Passwort-Hash</strong> — gespeichert als bcrypt-Hash (Klartextpasswort verlässt Ihr Gerät nicht)</li>
+        <li>— <strong>Kontoebene</strong> (free / pro / enterprise) und tägliches Nutzungslimit</li>
+        <li>— <strong>Erstellungsdatum</strong> und Zeitstempel des letzten Logins</li>
+        <li>— <strong>Suchverlauf</strong> — verknüpfte Suchanfragen werden Ihrer Nutzer-ID zugeordnet</li>
+      </ul>
+      <p>
+        Die Registrierung ist freiwillig. Ohne Konto ist die Nutzung der Kernfunktionen
+        im Rahmen des täglichen Gratis-Limits weiterhin möglich.
+      </p>
+      <p>Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung).</p>
+
+      <p><strong>2.4 Authentifizierungstoken (JWT)</strong></p>
+      <p>
+        Nach dem Login erhalten Sie ein signiertes JSON Web Token (JWT), das in Ihrem
+        Browser-localStorage gespeichert wird. Es enthält Ihre Nutzer-ID, E-Mail und
+        Kontoebene — verschlüsselt mit einem serverseitigen Schlüssel.
+        Das Token ist 30 Tage gültig und verlässt Ihren Browser nur bei API-Anfragen
+        an unsere eigene Server-Infrastruktur.
+      </p>
+      <p>Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung).</p>
     </Section>
 
-    <Section title="3. Drittanbieter & Datenübermittlung">
-      <p><strong>3.1 Google Gemini API / Google Search Grounding</strong></p>
+    <Section title="3. Google Sign-In (OAuth 2.0)">
+      <p>
+        Wir bieten die Möglichkeit, sich mit Ihrem Google-Konto anzumelden.
+        Wenn Sie diese Funktion nutzen, leiten wir Sie zu Googles OAuth-Dienst weiter.
+        Nach Ihrer Zustimmung übermittelt Google uns folgende Daten:
+      </p>
+      <ul className="list-none space-y-1 font-sans text-xs text-gray-600">
+        <li>— <strong>E-Mail-Adresse</strong> des Google-Kontos</li>
+        <li>— <strong>Anzeigename</strong> (optional, nur zur Anzeige)</li>
+        <li>— Google-interne Nutzer-ID (wird von uns nicht gespeichert)</li>
+      </ul>
+      <p>
+        Wir speichern kein Google-Passwort, keinen Refresh-Token und haben keinen
+        dauerhaften Zugriff auf Ihr Google-Konto. Die OAuth-Verbindung dient
+        ausschließlich der einmaligen Identitätsverifizierung.
+      </p>
+      <p>
+        Datenschutzerklärung Google: <span className="text-sky-600">policies.google.com/privacy</span>
+      </p>
+      <p>Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung) i.V.m. Art. 6 Abs. 1 lit. a DSGVO (Einwilligung).</p>
+    </Section>
+
+    <Section title="4. Drittanbieter & Datenübermittlung">
+      <p><strong>4.1 Google Gemini API / Google Search Grounding</strong></p>
       <p>
         Zur Analyse von Medienberichten nutzen wir die Google Gemini API mit aktiviertem
         Search Grounding. Hierbei werden Suchanfragen (Themen) an Googles Server übertragen.
-        Die Verarbeitung erfolgt gemäß Googles Datenschutzrichtlinien.
         Weitere Informationen: <span className="text-sky-600">policies.google.com/privacy</span>
       </p>
 
-      <p><strong>3.2 Railway (Hosting)</strong></p>
+      <p><strong>4.2 Railway (Hosting) & PostgreSQL (Datenbank)</strong></p>
       <p>
-        Unsere Anwendung wird auf Railway (railway.app) gehostet. Server-Logs können
-        vorübergehend durch Railway verarbeitet werden.
+        Unsere Anwendung und Datenbank laufen auf Railway (railway.app) auf Servern in
+        den USA (mit EU-Datenschutzgarantien). Nutzerkonten und Analysedaten werden
+        in unserer PostgreSQL-Datenbank auf Railway-Infrastruktur gespeichert.
         Weitere Informationen: <span className="text-sky-600">railway.app/legal/privacy</span>
       </p>
 
-      <p><strong>3.3 Sentry (Fehlermonitoring)</strong></p>
+      <p><strong>4.3 Sentry (Fehlermonitoring)</strong></p>
       <p>
         Zur Erkennung technischer Fehler setzen wir Sentry ein. Im Fehlerfall können
         technische Informationen (Fehlermeldung, Browser-Typ, anonymisierte IP) übertragen werden.
-        Keine dauerhaften Nutzerprofile werden erstellt.
         Weitere Informationen: <span className="text-sky-600">sentry.io/privacy</span>
       </p>
 
-      <p><strong>3.4 PostHog (Produktanalyse)</strong></p>
+      <p><strong>4.4 PostHog (Produktanalyse)</strong></p>
       <p>
-        Wir nutzen PostHog zur Analyse von Nutzungsmustern (Seitenaufrufe, Feature-Nutzung).
-        Die Daten werden pseudonymisiert erhoben. IP-Adressen werden vor der Speicherung gekürzt.
+        Wir nutzen PostHog EU zur Analyse von Nutzungsmustern (Seitenaufrufe, Feature-Nutzung).
+        Die Daten werden pseudonymisiert erhoben, IP-Adressen vor der Speicherung gekürzt.
         Weitere Informationen: <span className="text-sky-600">posthog.com/privacy</span>
       </p>
     </Section>
 
-    <Section title="4. Cookies & localStorage">
+    <Section title="5. Cookies & localStorage">
       <p>
         Diese Website setzt keine Tracking-Cookies ein. Wir nutzen ausschließlich technisch
         notwendige Browser-Mechanismen:
       </p>
       <ul className="list-none space-y-1 font-sans text-xs text-gray-600">
-        <li>— <strong>localStorage:</strong> Speicherung des Suchverlaufs und der Spracheinstellung (lokal auf Ihrem Gerät)</li>
-        <li>— <strong>sessionStorage:</strong> Temporäre Session-Daten</li>
+        <li>— <strong>localStorage (authToken):</strong> JWT-Authentifizierungstoken nach Login</li>
+        <li>— <strong>localStorage (lang):</strong> Gewählte Sprache (de/en/ru)</li>
+        <li>— <strong>localStorage (searchHistory):</strong> Lokale Suchhistorie (verlässt Ihr Gerät nicht)</li>
+        <li>— <strong>localStorage (cookie-consent):</strong> Ihre Cookie-Einwilligung</li>
       </ul>
       <p>
-        Analysetools (PostHog, Sentry) können technische Cookies setzen. Diese dienen
-        ausschließlich der Unterscheidung von Sessions und enthalten keine personenbezogenen Daten.
+        Analysetools (PostHog, Sentry) können technische Cookies setzen.
+        Diese dienen ausschließlich der Session-Unterscheidung und enthalten keine personenbezogenen Daten.
       </p>
     </Section>
 
-    <Section title="5. Ihre Rechte (DSGVO Art. 15–22)">
+    <Section title="6. Datenlöschung & Aufbewahrungsfristen">
+      <ul className="list-none space-y-1 font-sans text-xs text-gray-600">
+        <li>— <strong>Server-Logs:</strong> automatische Löschung nach 7 Tagen</li>
+        <li>— <strong>IP-Nutzungszähler:</strong> täglicher Reset (UTC-Mitternacht)</li>
+        <li>— <strong>Anonymisierte Suchlogs:</strong> Aufbewahrung bis zu 12 Monate für Statistikzwecke</li>
+        <li>— <strong>Nutzerkonten:</strong> bis zur Löschungsanfrage oder 2 Jahre Inaktivität</li>
+        <li>— <strong>JWT-Token:</strong> Ablauf nach 30 Tagen; sofortige Invalidierung bei Schlüsseländerung</li>
+      </ul>
+      <p>
+        Zur Löschung Ihres Kontos schreiben Sie an: <strong>feedback@neutralnachrichten.com</strong>
+      </p>
+    </Section>
+
+    <Section title="7. Ihre Rechte (DSGVO Art. 15–22)">
       <p>Sie haben folgende Rechte gegenüber uns:</p>
       <ul className="list-none space-y-1 font-sans text-xs text-gray-600">
-        <li>— <strong>Auskunft (Art. 15):</strong> Recht auf Information über gespeicherte Daten</li>
+        <li>— <strong>Auskunft (Art. 15):</strong> Welche Daten wir über Sie speichern</li>
         <li>— <strong>Berichtigung (Art. 16):</strong> Korrektur unrichtiger Daten</li>
-        <li>— <strong>Löschung (Art. 17):</strong> Recht auf Löschung ("Recht auf Vergessenwerden")</li>
+        <li>— <strong>Löschung (Art. 17):</strong> „Recht auf Vergessenwerden" — Kontolöschung auf Anfrage</li>
         <li>— <strong>Einschränkung (Art. 18):</strong> Einschränkung der Verarbeitung</li>
-        <li>— <strong>Widerspruch (Art. 21):</strong> Widerspruch gegen Verarbeitung auf Basis von berechtigtem Interesse</li>
-        <li>— <strong>Beschwerde:</strong> Recht auf Beschwerde bei der zuständigen Datenschutzaufsichtsbehörde</li>
+        <li>— <strong>Datenportabilität (Art. 20):</strong> Export Ihrer Daten in maschinenlesbarem Format</li>
+        <li>— <strong>Widerspruch (Art. 21):</strong> Gegen Verarbeitung auf Basis berechtigten Interesses</li>
+        <li>— <strong>Widerruf der Einwilligung</strong> (Google Sign-In) jederzeit möglich</li>
+        <li>— <strong>Beschwerde:</strong> Bei der Berliner Beauftragten für Datenschutz und Informationsfreiheit</li>
       </ul>
+      <p>Kontakt: <strong>feedback@neutralnachrichten.com</strong></p>
+    </Section>
+
+    <Section title="8. Datensicherheit">
       <p>
-        Zur Ausübung Ihrer Rechte wenden Sie sich bitte an:
-        <strong> feedback@neutralnachrichten.com</strong>
+        Alle Übertragungen erfolgen verschlüsselt via HTTPS (TLS 1.3).
+        Passwörter werden ausschließlich als bcrypt-Hash (12 Runden) gespeichert.
+        JWT-Token werden mit HMAC-SHA256 signiert. Datenbankzugriff erfolgt
+        ausschließlich über authentifizierte, verschlüsselte Verbindungen.
       </p>
     </Section>
 
-    <Section title="6. Datensicherheit">
+    <Section title="9. Änderungen dieser Datenschutzerklärung">
       <p>
-        Wir setzen technische und organisatorische Maßnahmen zum Schutz Ihrer Daten ein.
-        Die Übertragung erfolgt verschlüsselt via HTTPS (TLS).
-        Unsere Server befinden sich in EU-Rechenzentren.
+        Wir passen diese Erklärung bei Änderungen unserer Dienste oder gesetzlichen
+        Anforderungen an. Die jeweils aktuelle Version ist auf dieser Seite abrufbar.
       </p>
-    </Section>
-
-    <Section title="7. Änderungen dieser Datenschutzerklärung">
-      <p>
-        Wir behalten uns vor, diese Datenschutzerklärung bei Änderungen unserer Dienste
-        oder gesetzlichen Anforderungen anzupassen. Die jeweils aktuelle Version ist auf
-        dieser Seite abrufbar. Stand: Mai 2025.
-      </p>
+      <p className="font-sans text-[10px] text-gray-400">Stand: Mai 2025 · Version 2.0</p>
     </Section>
 
   </LegalShell>
@@ -186,8 +242,8 @@ export const TermsPage: React.FC<Props> = ({ lang }) => (
     <Section title="2. Leistungsbeschreibung">
       <p>
         NeutraleNachrichten ist eine KI-gestützte Informationsplattform, die mithilfe von
-        Google Gemini und Google Search Grounding aktuelle Medienberichte aus verschiedenen
-        politischen Spektren des deutschen Mediensystems analysiert und vergleicht.
+        Google Gemini 2.5 Flash und Google Search Grounding aktuelle Medienberichte aus
+        fünf politischen Spektren des deutschen Mediensystems analysiert und vergleicht.
       </p>
       <p>
         Die Plattform stellt <strong>keine journalistische Redaktion</strong> dar und gibt
@@ -196,22 +252,63 @@ export const TermsPage: React.FC<Props> = ({ lang }) => (
       </p>
     </Section>
 
-    <Section title="3. Nutzungslimits & Zugangsbeschränkungen">
+    <Section title="3. Nutzerkonten">
+      <p><strong>3.1 Registrierung</strong></p>
       <p>
-        Die kostenlose Nutzung ist auf <strong>10 Analysen pro Tag und IP-Adresse</strong> begrenzt.
-        Dieses Limit dient dem Schutz vor Missbrauch und der Sicherstellung der Verfügbarkeit
-        für alle Nutzer.
+        Die Registrierung ist freiwillig und ab 16 Jahren möglich. Sie können sich per
+        E-Mail/Passwort oder über Google Sign-In (OAuth 2.0) registrieren.
+        Bei der Registrierung akzeptieren Sie diese Nutzungsbedingungen und unsere
+        Datenschutzerklärung.
+      </p>
+
+      <p><strong>3.2 Kontosicherheit</strong></p>
+      <p>
+        Sie sind für die Sicherheit Ihrer Zugangsdaten verantwortlich. Wählen Sie ein
+        starkes Passwort (min. 8 Zeichen) und geben Sie es nicht weiter.
+        Bei Verdacht auf unbefugten Zugriff informieren Sie uns umgehend.
+      </p>
+
+      <p><strong>3.3 Kontolöschung</strong></p>
+      <p>
+        Sie können Ihr Konto jederzeit durch Anfrage an feedback@neutralnachrichten.com löschen.
+        Wir löschen alle zugehörigen personenbezogenen Daten binnen 30 Tagen.
+        Anonymisierte Nutzungsstatistiken (ohne Personenbezug) können für Analysezwecke erhalten bleiben.
+      </p>
+    </Section>
+
+    <Section title="4. Nutzungslimits & Zugangsstufen">
+      <p>Die Plattform ist in folgenden Stufen verfügbar:</p>
+      <ul className="list-none space-y-1 font-sans text-xs text-gray-600">
+        <li>— <strong>Free (ohne Konto):</strong> 10 Analysen pro Tag und IP-Adresse</li>
+        <li>— <strong>Free (mit Konto):</strong> 10 Analysen pro Tag, geräteübergreifende Suchhistorie</li>
+        <li>— <strong>Pro:</strong> erhöhtes Tageslimit, Prioritäts-Analyse (geplant)</li>
+        <li>— <strong>Enterprise:</strong> API-Zugang, unbegrenzte Analysen (auf Anfrage)</li>
+      </ul>
+      <p>
+        Das tägliche Limit dient dem Schutz vor Missbrauch und der Sicherstellung der
+        Verfügbarkeit für alle Nutzer. Es wird täglich um Mitternacht UTC zurückgesetzt.
       </p>
       <p>Folgende Handlungen sind untersagt:</p>
       <ul className="list-none space-y-1 font-sans text-xs text-gray-600">
         <li>— Automatisierte Massenanfragen (Scraping, Bots) ohne ausdrückliche Genehmigung</li>
-        <li>— Umgehung von Nutzungslimits durch IP-Rotation oder ähnliche Methoden</li>
+        <li>— Umgehung von Nutzungslimits durch IP-Rotation, VPN-Wechsel oder mehrere Konten</li>
+        <li>— Weitergabe von Zugangsdaten oder API-Tokens an Dritte</li>
         <li>— Weiterverkauf oder kommerzielle Nutzung der Analyseergebnisse ohne Lizenz</li>
         <li>— Verbreitung der Ergebnisse ohne Quellenangabe (neutralnachrichten.com)</li>
       </ul>
     </Section>
 
-    <Section title="4. Haftungsausschluss & Genauigkeit der Inhalte">
+    <Section title="5. Google Sign-In">
+      <p>
+        Wenn Sie sich über Google anmelden, stimmen Sie zu, dass wir Ihre E-Mail-Adresse
+        von Google erhalten und für die Kontoerstellung nutzen.
+        Wir erhalten kein Google-Passwort und keinen dauerhaften Zugriff auf Ihr Google-Konto.
+        Sie können die Verknüpfung jederzeit in Ihrem Google-Konto unter
+        „Drittanbieter-Apps" widerrufen.
+      </p>
+    </Section>
+
+    <Section title="6. Haftungsausschluss & Genauigkeit der Inhalte">
       <p>
         Die durch KI generierten Analysen sind automatisiert und können Fehler,
         Unvollständigkeiten oder Verzerrungen enthalten.
@@ -221,50 +318,40 @@ export const TermsPage: React.FC<Props> = ({ lang }) => (
       <p>
         Die Plattform dient ausschließlich zur allgemeinen Information und Medienkompetenz-Förderung.
         Sie ersetzt keine professionelle journalistische, rechtliche oder politische Beratung.
-      </p>
-      <p>
         Für externe Links und die Inhalte verlinkter Websites übernehmen wir keine Haftung.
       </p>
     </Section>
 
-    <Section title="5. Urheberrecht & Nutzungsrechte">
+    <Section title="7. Urheberrecht & Nutzungsrechte">
       <p>
         Das Design, die Software und die Strukturierung der Plattform sind urheberrechtlich
-        geschützt. Die durch Gemini generierten Analysetexte basieren auf öffentlich
-        zugänglichen Medieninhalten und werden im Rahmen des Zitatrechts und der
-        automatisierten Informationsverarbeitung genutzt.
-      </p>
-      <p>
-        Nutzer dürfen Analyseergebnisse für private und nicht-kommerzielle Zwecke verwenden
-        und teilen, sofern die Quelle (neutralnachrichten.com) angegeben wird.
+        geschützt. Nutzer dürfen Analyseergebnisse für private und nicht-kommerzielle Zwecke
+        verwenden und teilen, sofern die Quelle (neutralnachrichten.com) angegeben wird.
       </p>
     </Section>
 
-    <Section title="6. Verfügbarkeit & Änderungen">
+    <Section title="8. Verfügbarkeit & Änderungen">
       <p>
-        Wir bemühen uns um eine hohe Verfügbarkeit der Plattform, übernehmen jedoch
-        keine Garantie für ununterbrochenen Zugang. Wartungsarbeiten und Updates
-        können zu temporären Einschränkungen führen.
-      </p>
-      <p>
-        Wir behalten uns vor, das Angebot jederzeit zu ändern, zu erweitern oder einzustellen.
+        Wir bemühen uns um hohe Verfügbarkeit, übernehmen jedoch keine Garantie für
+        ununterbrochenen Zugang. Wir behalten uns vor, das Angebot oder Nutzungsbedingungen
+        jederzeit zu ändern. Registrierte Nutzer werden über wesentliche Änderungen
+        per E-Mail informiert.
       </p>
     </Section>
 
-    <Section title="7. Anwendbares Recht">
+    <Section title="9. Anwendbares Recht">
       <p>
         Es gilt das Recht der Bundesrepublik Deutschland.
-        Gerichtsstand für alle Streitigkeiten aus diesem Vertragsverhältnis ist,
-        soweit gesetzlich zulässig, Berlin.
+        Gerichtsstand für alle Streitigkeiten ist, soweit gesetzlich zulässig, Berlin.
       </p>
     </Section>
 
-    <Section title="8. Kontakt">
+    <Section title="10. Kontakt">
       <p>
         Fragen zu diesen Nutzungsbedingungen richten Sie bitte an:<br />
         <strong>feedback@neutralnachrichten.com</strong>
       </p>
-      <p className="font-sans text-[10px] text-gray-400">Stand: Mai 2025</p>
+      <p className="font-sans text-[10px] text-gray-400">Stand: Mai 2025 · Version 2.0</p>
     </Section>
 
   </LegalShell>
