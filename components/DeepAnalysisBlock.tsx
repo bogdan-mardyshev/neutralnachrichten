@@ -202,21 +202,23 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
               </div>
             </div>
 
-            {/* Summary numbers */}
-            <div className="grid grid-cols-5 gap-2 border-t border-b border-[#e0d8cf] py-4">
-              {SPECTRUM_ORDER.map(s => {
-                const cv = data.coverage_volume![s];
-                const pct = totalWeek > 0 ? Math.round((cv.week / totalWeek) * 100) : 0;
-                return (
-                  <div key={s} className="text-center">
-                    <div className={`font-sans text-[9px] font-bold uppercase tracking-widest mb-1 ${SPECTRUM_STYLE[s].text}`}>
-                      {leaningLabel[s]}
+            {/* Summary numbers — scrollable on mobile */}
+            <div className="overflow-x-auto -mx-5 px-5">
+              <div className="grid grid-cols-5 gap-2 border-t border-b border-[#e0d8cf] py-4 min-w-[320px]">
+                {SPECTRUM_ORDER.map(s => {
+                  const cv = data.coverage_volume![s];
+                  const pct = totalWeek > 0 ? Math.round((cv.week / totalWeek) * 100) : 0;
+                  return (
+                    <div key={s} className="text-center">
+                      <div className={`font-sans text-[9px] font-bold uppercase tracking-widest mb-1 ${SPECTRUM_STYLE[s].text}`}>
+                        {leaningLabel[s]}
+                      </div>
+                      <div className="font-serif font-black text-2xl text-[#1a1a1a]">{pct}%</div>
+                      <div className="font-sans text-[10px] text-gray-400 mt-0.5">{cv.week} {da.coverageWeek}</div>
                     </div>
-                    <div className="font-serif font-black text-2xl text-[#1a1a1a]">{pct}%</div>
-                    <div className="font-sans text-[10px] text-gray-400 mt-0.5">{cv.week} {da.coverageWeek}</div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
             {/* Row bars */}
@@ -225,16 +227,16 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
                 const cv = data.coverage_volume![s];
                 const pct = totalWeek > 0 ? Math.round((cv.week / totalWeek) * 100) : 0;
                 return (
-                  <div key={s} className="flex items-center gap-3">
+                  <div key={s} className="flex items-center gap-2 sm:gap-3">
                     <div className={`w-2 h-2 rounded-full shrink-0 ${SPECTRUM_STYLE[s].dot}`} />
-                    <span className={`font-sans text-[10px] uppercase tracking-wider w-24 shrink-0 ${SPECTRUM_STYLE[s].text}`}>
+                    <span className={`font-sans text-[10px] uppercase tracking-wider w-16 sm:w-24 shrink-0 ${SPECTRUM_STYLE[s].text}`}>
                       {leaningLabel[s]}
                     </span>
                     <div className="flex-1 bg-[#e8e0d5] h-1.5 overflow-hidden">
                       <div className={`h-full ${SPECTRUM_STYLE[s].bar} transition-all duration-700`} style={{ width: `${pct}%` }} />
                     </div>
-                    <span className="font-sans text-xs font-bold text-[#1a1a1a] w-10 text-right shrink-0">{pct}%</span>
-                    <span className="font-sans text-[10px] text-gray-400 w-12 text-right shrink-0">{cv.week} {da.coverageWeek}</span>
+                    <span className="font-sans text-xs font-bold text-[#1a1a1a] w-8 sm:w-10 text-right shrink-0">{pct}%</span>
+                    <span className="font-sans text-[10px] text-gray-400 w-10 sm:w-12 text-right shrink-0">{cv.week}</span>
                   </div>
                 );
               })}
@@ -251,22 +253,24 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
           accent="text-pink-600" accentBar="bg-pink-500"
         >
           <div className="px-5 py-5 space-y-4">
-            <div className="grid grid-cols-5 gap-2">
-              {SPECTRUM_ORDER.map(s => {
-                const sent: Sentiment = (data.sentiment![s] as Sentiment) ?? 'neutral';
-                const cfg = SENTIMENT_CONFIG[sent];
-                return (
-                  <div key={s} className="text-center border border-[#e0d8cf] py-3">
-                    <div className={`font-sans text-[9px] font-bold uppercase tracking-widest mb-2 ${SPECTRUM_STYLE[s].text}`}>
-                      {leaningLabel[s]}
+            <div className="overflow-x-auto -mx-5 px-5">
+              <div className="grid grid-cols-5 gap-2 min-w-[300px]">
+                {SPECTRUM_ORDER.map(s => {
+                  const sent: Sentiment = (data.sentiment![s] as Sentiment) ?? 'neutral';
+                  const cfg = SENTIMENT_CONFIG[sent];
+                  return (
+                    <div key={s} className="text-center border border-[#e0d8cf] py-3">
+                      <div className={`font-sans text-[9px] font-bold uppercase tracking-widest mb-2 ${SPECTRUM_STYLE[s].text}`}>
+                        {leaningLabel[s]}
+                      </div>
+                      <div className="font-serif font-bold text-2xl text-[#1a1a1a] mb-1">{cfg.icon}</div>
+                      <span className="font-sans text-[9px] uppercase tracking-wider text-gray-500">
+                        {(da as any)[cfg.label]}
+                      </span>
                     </div>
-                    <div className="font-serif font-bold text-2xl text-[#1a1a1a] mb-1">{cfg.icon}</div>
-                    <span className="font-sans text-[9px] uppercase tracking-wider text-gray-500">
-                      {(da as any)[cfg.label]}
-                    </span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
             {/* Sentiment stacked bar */}
             <div className="flex h-2 gap-px overflow-hidden">

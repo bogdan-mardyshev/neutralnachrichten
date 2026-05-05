@@ -91,15 +91,15 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
       {/* ── Header + Fact Check ── */}
       <div className="border-2 border-[#1a1a1a] overflow-hidden">
         {/* Black header with topic */}
-        <div className="bg-[#1a1a1a] px-6 py-5">
+        <div className="bg-[#1a1a1a] px-4 sm:px-6 py-4 sm:py-5">
           <p className="font-sans text-[10px] uppercase tracking-[0.25em] text-white/50 mb-1">{t.topic}</p>
-          <h2 className="font-serif font-black text-2xl md:text-3xl text-white capitalize leading-tight">
+          <h2 className="font-serif font-black text-xl sm:text-2xl md:text-3xl text-white capitalize leading-tight">
             {analysis_topic}
           </h2>
         </div>
 
         {/* Fact check */}
-        <div className="px-6 py-5">
+        <div className="px-4 sm:px-6 py-4 sm:py-5">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-1 h-4 bg-emerald-500" />
             <p className="font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-600">{t.factCheck}</p>
