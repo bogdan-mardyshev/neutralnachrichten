@@ -64,6 +64,169 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+// ── User management section with inline tier editor ──────────────────────────
+interface UserRowProps {
+  u: AdminStats['users'][0];
+  adminKey: string;
+  onSaved: () => void;
+}
+
+function UserRow({ u, adminKey, onSaved }: UserRowProps) {
+  const [editing, setEditing] = useState(false);
+  const [tier, setTier] = useState(u.tier);
+  const [limit, setLimit] = useState(String(u.daily_limit));
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function save() {
+    setSaving(true); setErr('');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/users/${u.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ tier, daily_limit: parseInt(limit) }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'Fehler'); return; }
+      setEditing(false);
+      onSaved();
+    } catch { setErr('Netzwerkfehler'); }
+    finally { setSaving(false); }
+  }
+
+  const tierCls = (t: string) =>
+    t === 'pro' ? 'border-amber-500 text-amber-700 bg-amber-50' :
+    t === 'enterprise' ? 'border-blue-500 text-blue-700 bg-blue-50' :
+    'border-[#1a1a1a]/20 text-[#1a1a1a]/60';
+
+  const isUnlimited = parseInt(limit) === -1;
+
+  return (
+    <tr className="hover:bg-[#e8e0d5]/50 transition-colors align-top">
+      <td className="py-2.5 pr-3 font-mono text-xs text-[#1a1a1a]/40 whitespace-nowrap">{u.id}</td>
+      <td className="py-2.5 pr-3 font-serif text-sm text-[#1a1a1a]">{u.email}</td>
+
+      <td className="py-2.5 pr-3">
+        {editing ? (
+          <select
+            value={tier}
+            onChange={e => setTier(e.target.value)}
+            className="font-sans text-[10px] border border-[#1a1a1a] px-1.5 py-0.5 bg-white"
+          >
+            <option value="free">free</option>
+            <option value="pro">pro</option>
+            <option value="enterprise">enterprise</option>
+          </select>
+        ) : (
+          <span className={`font-sans text-[10px] uppercase tracking-widest px-2 py-0.5 border ${tierCls(u.tier)}`}>
+            {u.tier}
+          </span>
+        )}
+      </td>
+
+      <td className="py-2.5 pr-3 font-serif text-sm text-[#1a1a1a]">{u.search_count}</td>
+
+      <td className="py-2.5 pr-3">
+        {editing ? (
+          <div className="space-y-1">
+            <input
+              type="number"
+              value={limit}
+              onChange={e => setLimit(e.target.value)}
+              className="font-sans text-xs border border-[#1a1a1a] px-1.5 py-0.5 w-20 bg-white"
+              placeholder="10"
+            />
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isUnlimited}
+                onChange={e => setLimit(e.target.checked ? '-1' : '10')}
+                className="w-3 h-3"
+              />
+              <span className="font-sans text-[9px] text-sky-600 uppercase tracking-widest">∞ Unbegrenzt</span>
+            </label>
+          </div>
+        ) : (
+          <span className={`font-serif text-sm ${parseInt(String(u.daily_limit)) === -1 ? 'text-sky-600 font-bold' : 'text-[#1a1a1a]/60'}`}>
+            {parseInt(String(u.daily_limit)) === -1 ? '∞' : u.daily_limit}
+          </span>
+        )}
+      </td>
+
+      <td className="py-2.5 pr-3 font-sans text-xs text-[#1a1a1a]/50 whitespace-nowrap">
+        {new Date(u.created_at).toLocaleDateString('de-DE')}
+      </td>
+      <td className="py-2.5 pr-3 font-sans text-xs text-[#1a1a1a]/50 whitespace-nowrap">
+        {u.last_login ? new Date(u.last_login).toLocaleDateString('de-DE') : '—'}
+      </td>
+
+      <td className="py-2.5">
+        {editing ? (
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="font-sans text-[9px] uppercase tracking-widest border border-emerald-500 text-emerald-700 px-2 py-0.5 hover:bg-emerald-50 disabled:opacity-40"
+            >
+              {saving ? '…' : '✓ Speichern'}
+            </button>
+            <button
+              onClick={() => { setEditing(false); setTier(u.tier); setLimit(String(u.daily_limit)); setErr(''); }}
+              className="font-sans text-[9px] uppercase tracking-widest text-[#1a1a1a]/40 hover:text-rose-600"
+            >
+              ×
+            </button>
+            {err && <span className="font-sans text-[9px] text-rose-600">{err}</span>}
+          </div>
+        ) : (
+          <button
+            onClick={() => setEditing(true)}
+            className="font-sans text-[9px] uppercase tracking-widest border border-[#1a1a1a]/20 text-[#1a1a1a]/50 px-2 py-0.5 hover:border-[#1a1a1a] hover:text-[#1a1a1a] transition-colors"
+          >
+            Bearbeiten
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function UserManagementSection({
+  users,
+  adminKey,
+  onRefresh,
+}: {
+  users: AdminStats['users'];
+  adminKey: string;
+  onRefresh: () => void;
+}) {
+  return (
+    <Section title={`Registrierte Nutzer (${users.length}) — Tier & Limit verwalten`}>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b-2 border-[#1a1a1a]">
+              {['ID', 'E-Mail', 'Tier', 'Suchen', 'Limit/Tag', 'Registriert', 'Login', ''].map(h => (
+                <th key={h} className="text-left py-2 pr-3 font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#e0d8cf]">
+            {users.map(u => (
+              <UserRow key={u.id} u={u} adminKey={adminKey} onSaved={onRefresh} />
+            ))}
+          </tbody>
+        </table>
+        <p className="font-sans text-[9px] uppercase tracking-widest text-[#1a1a1a]/30 mt-3">
+          Limit -1 = unbegrenzte Analysen · Tier-Änderungen werden sofort aktiv (nach erneutem Login)
+        </p>
+      </div>
+    </Section>
+  );
+}
+
 export default function AdminPage() {
   const [adminKey, setAdminKey] = useState(() => localStorage.getItem('adminKey') || '');
   const [keyInput, setKeyInput] = useState('');
@@ -335,46 +498,7 @@ export default function AdminPage() {
 
         {/* Users */}
         {users && users.length > 0 && (
-          <Section title={`Registrierte Nutzer (${users.length})`}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b-2 border-[#1a1a1a]">
-                    {['ID', 'E-Mail', 'Tier', 'Suchen', 'Limit/Tag', 'Registriert', 'Letzter Login'].map(h => (
-                      <th key={h} className="text-left py-2 pr-4 font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#e0d8cf]">
-                  {users.map(u => (
-                    <tr key={u.id} className="hover:bg-[#e8e0d5]/50 transition-colors">
-                      <td className="py-2 pr-4 font-mono text-xs text-[#1a1a1a]/40">{u.id}</td>
-                      <td className="py-2 pr-4 font-serif text-[#1a1a1a]">{u.email}</td>
-                      <td className="py-2 pr-4">
-                        <span className={`font-sans text-[10px] uppercase tracking-widest px-2 py-0.5 border ${
-                          u.tier === 'pro' ? 'border-amber-500 text-amber-700 bg-amber-50' :
-                          u.tier === 'enterprise' ? 'border-blue-500 text-blue-700 bg-blue-50' :
-                          'border-[#1a1a1a]/20 text-[#1a1a1a]/60'
-                        }`}>
-                          {u.tier}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-4 font-serif text-[#1a1a1a]">{u.search_count}</td>
-                      <td className="py-2 pr-4 font-serif text-[#1a1a1a]/60">{u.daily_limit}</td>
-                      <td className="py-2 pr-4 font-sans text-xs text-[#1a1a1a]/50">
-                        {new Date(u.created_at).toLocaleDateString('de-DE')}
-                      </td>
-                      <td className="py-2 font-sans text-xs text-[#1a1a1a]/50">
-                        {u.last_login ? new Date(u.last_login).toLocaleDateString('de-DE') : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Section>
+          <UserManagementSection users={users} adminKey={adminKey} onRefresh={() => fetchStats(adminKey)} />
         )}
 
         {/* Server info */}

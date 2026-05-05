@@ -326,8 +326,9 @@ function MainApp() {
             ) : (
               <button
                 onClick={() => { setAuthModalMode('login'); setShowAuthModal(true); }}
-                className="hidden sm:block font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] border border-[#1a1a1a]/20 px-2.5 py-1 hover:border-[#1a1a1a] transition-colors"
+                className="hidden sm:flex items-center gap-1.5 font-sans text-[10px] font-bold uppercase tracking-widest bg-rose-600 text-white px-3 py-1.5 hover:bg-rose-700 transition-colors"
               >
+                <span className="text-[9px]">↗</span>
                 {t.auth.loginBtn}
               </button>
             )}
@@ -376,9 +377,9 @@ function MainApp() {
               <div className="py-3">
                 <button
                   onClick={() => { setAuthModalMode('login'); setShowAuthModal(true); setMobileMenuOpen(false); }}
-                  className="w-full font-sans text-[10px] uppercase tracking-widest border border-[#1a1a1a] px-4 py-2.5 text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-white transition-colors"
+                  className="w-full font-sans text-[10px] font-bold uppercase tracking-widest bg-rose-600 text-white px-4 py-3 hover:bg-rose-700 transition-colors"
                 >
-                  {t.auth.loginBtn}
+                  ↗ {t.auth.loginBtn}
                 </button>
               </div>
             )}
