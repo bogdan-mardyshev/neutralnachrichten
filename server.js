@@ -1085,6 +1085,17 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/auth/usage', requireAuth, async (req, res) => {
+  try {
+    const clientIP = getClientIP(req);
+    const { remaining } = await checkDailyLimitDB(clientIP);
+    const used = Math.max(0, FREE_DAILY_LIMIT - remaining);
+    res.json({ used, limit: FREE_DAILY_LIMIT, remaining });
+  } catch (err) {
+    res.json({ used: 0, limit: FREE_DAILY_LIMIT, remaining: FREE_DAILY_LIMIT });
+  }
+});
+
 // ── Admin Dashboard API ───────────────────────────────────────────────────────
 // Protected by ADMIN_KEY env var. Returns full platform analytics.
 app.get('/api/admin/stats', async (req, res) => {
