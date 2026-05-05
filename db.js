@@ -21,11 +21,11 @@ export async function initDB() {
   }
 
   try {
+    const dbUrl = process.env.DATABASE_URL;
+    const needsSsl = !dbUrl.includes('localhost') && !dbUrl.includes('127.0.0.1');
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_URL.includes('railway') || process.env.DATABASE_URL.includes('amazonaws')
-        ? { rejectUnauthorized: false }
-        : false,
+      connectionString: dbUrl,
+      ssl: needsSsl ? { rejectUnauthorized: false } : false,
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
