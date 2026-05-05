@@ -38,7 +38,8 @@ export async function initDB() {
     await runMigrations();
     return true;
   } catch (err) {
-    console.error('[DB] Connection failed:', err.message);
+    console.error('[DB] Connection failed:', err.message || err.code || JSON.stringify(err));
+    console.error('[DB] Error detail:', { code: err.code, errno: err.errno, syscall: err.syscall, address: err.address, port: err.port });
     pool = null;
     return false;
   }
