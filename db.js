@@ -15,14 +15,21 @@ export function isDBAvailable() {
 }
 
 export async function initDB() {
-  if (!process.env.DATABASE_URL) {
-    console.warn('[DB] DATABASE_URL not set — running without PostgreSQL. Cache will be in-memory only.');
+  // Prefer internal Railway URL (faster, no egress), fall back to public URL
+  const dbUrl = process.env.DATABASE_PRIVATE_URL || process.env.DATABASE_URL;
+  if (!dbUrl) {
+    console.warn('[DB] No DATABASE_URL set — running without PostgreSQL. Cache will be in-memory only.');
     return false;
   }
 
   try {
-    const dbUrl = process.env.DATABASE_URL;
     const needsSsl = !dbUrl.includes('localhost') && !dbUrl.includes('127.0.0.1');
+    // Log host for debugging (strip password)
+    try {
+      const u = new URL(dbUrl);
+      console.log(`[DB] Connecting to ${u.hostname}:${u.port || 5432} db=${u.pathname.slice(1)} ssl=${needsSsl}`);
+    } catch { console.log('[DB] Connecting (URL parse failed)'); }
+
     pool = new Pool({
       connectionString: dbUrl,
       ssl: needsSsl ? { rejectUnauthorized: false } : false,
