@@ -1,12 +1,15 @@
 import { NewsAnalysisResult, DeepAnalysis } from "../types";
 
-export const analyzeTopic = async (topic: string, lang: string = 'de'): Promise<NewsAnalysisResult> => {
+export const analyzeTopic = async (topic: string, lang: string = 'de', token?: string): Promise<NewsAnalysisResult> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'accept-language-app': lang,
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const response = await fetch('/api/analyze', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'accept-language-app': lang
-    },
+    headers,
     body: JSON.stringify({ topic, lang }),
   });
 
