@@ -1,31 +1,110 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .serif { font-family: Georgia, 'Times New Roman', serif; }
+      .sans  { font-family: 'Arial', 'Helvetica Neue', sans-serif; }
+    </style>
+  </defs>
+
   <!-- Background -->
-  <rect width="1200" height="630" fill="#0f172a"/>
+  <rect width="1200" height="630" fill="#FFF8F0"/>
 
-  <!-- Left accent bar -->
-  <rect x="0" y="0" width="8" height="630" fill="#ef4444"/>
-  <!-- Right accent bar -->
-  <rect x="1192" y="0" width="8" height="630" fill="#3b82f6"/>
+  <!-- Outer border -->
+  <rect x="0" y="0" width="1200" height="630" fill="none" stroke="#1a1a1a" stroke-width="6"/>
 
-  <!-- Logo mark -->
-  <rect x="80" y="200" width="64" height="64" rx="8" fill="#ffffff"/>
-  <text x="112" y="248" font-family="Georgia, serif" font-size="42" font-weight="bold" fill="#0f172a" text-anchor="middle">N</text>
+  <!-- Top spectrum bar -->
+  <rect x="0"   y="0"  width="240" height="8" fill="#e11d48"/>
+  <rect x="240" y="0"  width="240" height="8" fill="#fb923c"/>
+  <rect x="480" y="0"  width="240" height="8" fill="#94a3b8"/>
+  <rect x="720" y="0"  width="240" height="8" fill="#0ea5e9"/>
+  <rect x="960" y="0"  width="240" height="8" fill="#1d4ed8"/>
 
-  <!-- Title -->
-  <text x="80" y="320" font-family="Georgia, serif" font-size="56" font-weight="bold" fill="#ffffff">NeutraleNachrichten</text>
+  <!-- Date / edition strip -->
+  <rect x="0" y="8" width="1200" height="36" fill="#1a1a1a"/>
+  <text x="600" y="31" class="sans" font-size="11" font-weight="700"
+        fill="white" text-anchor="middle" letter-spacing="5">DEUTSCHLAND · MEDIENANALYSE IN ECHTZEIT · UNABHÄNGIG</text>
 
-  <!-- Tagline -->
-  <text x="80" y="385" font-family="Arial, sans-serif" font-size="28" fill="#94a3b8">So berichten deutsche Medien über dasselbe Thema</text>
-  <text x="80" y="425" font-family="Arial, sans-serif" font-size="28" fill="#94a3b8">unterschiedlich. Von taz bis Welt.</text>
+  <!-- Horizontal rule -->
+  <rect x="0" y="44" width="1200" height="2" fill="#1a1a1a"/>
 
-  <!-- Spectrum indicator -->
-  <rect x="80" y="490" width="180" height="6" rx="3" fill="#ef4444"/>
-  <rect x="272" y="490" width="180" height="6" rx="3" fill="#64748b"/>
-  <rect x="464" y="490" width="180" height="6" rx="3" fill="#3b82f6"/>
-  <text x="80" y="520" font-family="Arial, sans-serif" font-size="14" fill="#64748b">LINKS</text>
-  <text x="272" y="520" font-family="Arial, sans-serif" font-size="14" fill="#64748b">MITTE</text>
-  <text x="464" y="520" font-family="Arial, sans-serif" font-size="14" fill="#64748b">RECHTS</text>
+  <!-- ── LEFT COLUMN ── -->
+  <!-- Logo block -->
+  <rect x="48" y="72" width="72" height="72" fill="#1a1a1a"/>
+  <text x="84" y="128" class="serif" font-size="50" font-weight="900"
+        fill="#FFF8F0" text-anchor="middle">N</text>
 
-  <!-- Badge -->
-  <text x="1120" y="560" font-family="Arial, sans-serif" font-size="14" fill="#475569" text-anchor="end">In Echtzeit · 3 Sprachen · Unabhängig</text>
+  <!-- Site name -->
+  <text x="136" y="100" class="serif" font-size="26" font-weight="400" fill="#1a1a1a">Neutrale</text>
+  <text x="136" y="130" class="serif" font-size="26" font-weight="900" fill="#1a1a1a">Nachrichten</text>
+
+  <!-- Thin rule after header -->
+  <rect x="48" y="162" width="500" height="2" fill="#1a1a1a"/>
+
+  <!-- Main headline -->
+  <text x="48" y="230" class="serif" font-size="52" font-weight="900" fill="#1a1a1a">Wie berichten</text>
+  <text x="48" y="294" class="serif" font-size="52" font-weight="900" fill="#1a1a1a">deutsche Medien</text>
+  <text x="48" y="358" class="serif" font-size="52" font-weight="900" fill="#e11d48">wirklich?</text>
+
+  <!-- Sub-text -->
+  <text x="48" y="410" class="sans" font-size="18" fill="#64748b">Dieselbe Nachricht.</text>
+  <text x="48" y="434" class="sans" font-size="18" fill="#64748b">Fünf politische Perspektiven.</text>
+  <text x="48" y="458" class="sans" font-size="18" fill="#64748b">Auf einen Blick.</text>
+
+  <!-- ── DIVIDER ── -->
+  <rect x="592" y="44" width="2" height="578" fill="#e0d8cf"/>
+
+  <!-- ── RIGHT COLUMN — spectrum showcase ── -->
+  <!-- Column header -->
+  <text x="636" y="90" class="sans" font-size="11" font-weight="700"
+        fill="#94a3b8" letter-spacing="4">POLITISCHES SPEKTRUM</text>
+  <rect x="636" y="98" width="516" height="2" fill="#1a1a1a"/>
+
+  <!-- Spectrum rows -->
+  <!-- LINKS -->
+  <rect x="636" y="120" width="6" height="64" fill="#e11d48"/>
+  <text x="656" y="143" class="sans" font-size="10" font-weight="700"
+        fill="#e11d48" letter-spacing="3">LINKS</text>
+  <text x="656" y="163" class="serif" font-size="16" font-weight="700" fill="#1a1a1a">taz · junge Welt · nd</text>
+  <rect x="636" y="184" width="516" height="1" fill="#e0d8cf"/>
+
+  <!-- MITTE-LINKS -->
+  <rect x="636" y="200" width="6" height="64" fill="#fb923c"/>
+  <text x="656" y="223" class="sans" font-size="10" font-weight="700"
+        fill="#fb923c" letter-spacing="3">MITTE-LINKS</text>
+  <text x="656" y="243" class="serif" font-size="16" font-weight="700" fill="#1a1a1a">Spiegel · Süddeutsche · Zeit</text>
+  <rect x="636" y="264" width="516" height="1" fill="#e0d8cf"/>
+
+  <!-- MITTE -->
+  <rect x="636" y="280" width="6" height="64" fill="#94a3b8"/>
+  <text x="656" y="303" class="sans" font-size="10" font-weight="700"
+        fill="#64748b" letter-spacing="3">MITTE</text>
+  <text x="656" y="323" class="serif" font-size="16" font-weight="700" fill="#1a1a1a">Tagesschau · ZDF · Stern</text>
+  <rect x="636" y="344" width="516" height="1" fill="#e0d8cf"/>
+
+  <!-- MITTE-RECHTS -->
+  <rect x="636" y="360" width="6" height="64" fill="#0ea5e9"/>
+  <text x="656" y="383" class="sans" font-size="10" font-weight="700"
+        fill="#0ea5e9" letter-spacing="3">MITTE-RECHTS</text>
+  <text x="656" y="403" class="serif" font-size="16" font-weight="700" fill="#1a1a1a">FAZ · Welt · Focus</text>
+  <rect x="636" y="424" width="516" height="1" fill="#e0d8cf"/>
+
+  <!-- RECHTS -->
+  <rect x="636" y="440" width="6" height="64" fill="#1d4ed8"/>
+  <text x="656" y="463" class="sans" font-size="10" font-weight="700"
+        fill="#1d4ed8" letter-spacing="3">RECHTS</text>
+  <text x="656" y="483" class="serif" font-size="16" font-weight="700" fill="#1a1a1a">Junge Freiheit · Cicero</text>
+
+  <!-- Bottom rule -->
+  <rect x="0" y="540" width="1200" height="2" fill="#1a1a1a"/>
+
+  <!-- Footer strip -->
+  <text x="48"  y="568" class="sans" font-size="12" fill="#94a3b8">neutralnachrichten.com</text>
+  <text x="1152" y="568" class="sans" font-size="12" fill="#94a3b8" text-anchor="end">Powered by Gemini 2.5 Flash · Google Search</text>
+
+  <!-- Bottom spectrum bar -->
+  <rect x="0"   y="578" width="240" height="8" fill="#e11d48"/>
+  <rect x="240" y="578" width="240" height="8" fill="#fb923c"/>
+  <rect x="480" y="578" width="240" height="8" fill="#94a3b8"/>
+  <rect x="720" y="578" width="240" height="8" fill="#0ea5e9"/>
+  <rect x="960" y="578" width="240" height="8" fill="#1d4ed8"/>
 </svg>

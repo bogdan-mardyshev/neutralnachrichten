@@ -41,6 +41,8 @@ function MainApp() {
   const [showCookieBanner, setShowCookieBanner] = useState(false);
   const [lastQuery, setLastQuery] = useState<string | null>(null);
   const [deepLoading, setDeepLoading] = useState(false);
+  const [dailyRemaining, setDailyRemaining] = useState<number | null>(null);
+  const DAILY_LIMIT = 10;
   const [loadingStage, setLoadingStage] = useState(0);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [stageVisible, setStageVisible] = useState(true);
@@ -132,6 +134,10 @@ function MainApp() {
       const result = await analyzeTopic(query, activeLang);
       setData(result);
       setLastQuery(query);
+      // Track daily remaining from server response
+      if (typeof result._usage?.remaining === 'number') {
+        setDailyRemaining(result._usage.remaining);
+      }
       setStatus('success');
       setSearchParams({ topic: query, lang: activeLang }, { replace: true });
       addToHistory(query, activeLang);
@@ -152,7 +158,15 @@ function MainApp() {
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || t.errorDefault);
+      // Handle daily limit error
+      if (err.status === 429 || err.message?.includes('daily_limit')) {
+        setDailyRemaining(0);
+        setError(lang === 'de'
+          ? `Tageslimit erreicht. Du hast heute ${DAILY_LIMIT} Analysen genutzt. Das Limit wird um Mitternacht (UTC) zurückgesetzt.`
+          : `Daily limit reached. You've used ${DAILY_LIMIT} analyses today. Resets at midnight UTC.`);
+      } else {
+        setError(err.message || t.errorDefault);
+      }
       setStatus('error');
       posthog.capture('analysis_failed', { topic: query, error: err.message });
       Sentry.captureException(err);
@@ -263,6 +277,26 @@ function MainApp() {
                   {/* Main column */}
                   <div className="flex-1 min-w-0">
                     <SearchBar onSearch={handleSearch} status={status} lang={lang} />
+
+                    {/* Daily usage indicator */}
+                    {dailyRemaining !== null && (
+                      <div className={`mt-2 flex items-center gap-2 px-1 ${dailyRemaining === 0 ? 'text-rose-600' : 'text-gray-400'}`}>
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: DAILY_LIMIT }).map((_, i) => (
+                            <div
+                              key={i}
+                              className={`w-2.5 h-1.5 ${i < (DAILY_LIMIT - dailyRemaining) ? 'bg-[#1a1a1a]' : 'bg-[#e0d8cf]'}`}
+                            />
+                          ))}
+                        </div>
+                        <span className="font-sans text-[9px] uppercase tracking-widest">
+                          {dailyRemaining === 0
+                            ? (lang === 'de' ? 'Tageslimit erreicht — Reset um Mitternacht UTC' : 'Daily limit reached — resets midnight UTC')
+                            : (lang === 'de' ? `${dailyRemaining} von ${DAILY_LIMIT} Analysen heute verbleibend` : `${dailyRemaining} of ${DAILY_LIMIT} analyses remaining today`)}
+                        </span>
+                      </div>
+                    )}
+
                     <SearchHistory
                       history={history}
                       onSelect={(topic) => handleSearch(topic)}
