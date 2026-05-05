@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useSearchParams } from 'react-router-dom';
 import * as Sentry from "@sentry/react";
 import posthog from 'posthog-js';
@@ -20,6 +20,7 @@ import { CategoryBrowser } from './components/CategoryBrowser';
 import { DesignPreview } from './components/DesignPreview';
 import AuthModal, { AuthUser } from './components/AuthModal';
 import AdminPage from './components/AdminPage';
+import UserProfilePage from './components/UserProfilePage';
 
 import { analyzeTopic, fetchDeepAnalysis } from './services/geminiService';
 import { NewsAnalysisResult, FetchStatus } from './types';
@@ -51,6 +52,10 @@ function MainApp() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [stageVisible, setStageVisible] = useState(true);
 
+  // Mobile menu
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLElement>(null);
+
   // Auth state
   const [authToken, setAuthToken] = useState<string | null>(() => localStorage.getItem('authToken'));
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
@@ -61,6 +66,18 @@ function MainApp() {
 
   const t = translations[lang];
   const { history, addToHistory, clearHistory } = useSearchHistory();
+
+  // Close mobile menu on outside click
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [mobileMenuOpen]);
 
   // Auto-trigger analysis from shared URL (?topic=...&lang=...)
   // Also handle Google OAuth callback (?auth_token=...)
@@ -255,18 +272,32 @@ function MainApp() {
       </div>
 
       {/* Navbar */}
-      <nav className="bg-[#FFF8F0] border-b-2 border-[#1a1a1a] sticky top-0 z-50">
+      <nav className="bg-[#FFF8F0] border-b-2 border-[#1a1a1a] sticky top-0 z-50" ref={menuRef}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          {/* Date */}
-          <span className="font-sans text-[10px] uppercase tracking-widest text-gray-500 hidden sm:block">{dateStr}</span>
+
+          {/* Left: hamburger (mobile) / date (desktop) */}
+          <div className="flex items-center gap-3 w-28 sm:w-auto">
+            {/* Hamburger — mobile only */}
+            <button
+              className="sm:hidden flex flex-col justify-center gap-[5px] w-6 h-6 shrink-0"
+              onClick={() => setMobileMenuOpen(o => !o)}
+              aria-label="Menu"
+            >
+              <span className={`block h-0.5 bg-[#1a1a1a] transition-all duration-200 ${mobileMenuOpen ? 'rotate-45 translate-y-[7px]' : ''}`} />
+              <span className={`block h-0.5 bg-[#1a1a1a] transition-all duration-200 ${mobileMenuOpen ? 'opacity-0' : ''}`} />
+              <span className={`block h-0.5 bg-[#1a1a1a] transition-all duration-200 ${mobileMenuOpen ? '-rotate-45 -translate-y-[7px]' : ''}`} />
+            </button>
+            {/* Date — desktop only */}
+            <span className="font-sans text-[10px] uppercase tracking-widest text-gray-500 hidden sm:block">{dateStr}</span>
+          </div>
 
           {/* Logo — centered */}
-          <Link to="/" className="absolute left-1/2 -translate-x-1/2 font-serif font-black text-xl tracking-tight text-[#1a1a1a] whitespace-nowrap hover:opacity-80 transition-opacity">
+          <Link to="/" onClick={() => setMobileMenuOpen(false)} className="absolute left-1/2 -translate-x-1/2 font-serif font-black text-xl tracking-tight text-[#1a1a1a] whitespace-nowrap hover:opacity-80 transition-opacity">
             {t.title}
           </Link>
 
           {/* Right controls */}
-          <div className="flex items-center gap-3 ml-auto">
+          <div className="flex items-center gap-2 sm:gap-3 ml-auto">
             <Link
               to="/compare"
               className="hidden sm:block font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] transition-colors"
@@ -274,15 +305,20 @@ function MainApp() {
               ⚖ {t.nav.compare}
             </Link>
 
-            {/* Auth */}
+            {/* Auth — desktop only */}
             {authUser ? (
-              <div className="hidden sm:flex items-center gap-2">
-                <span className="font-sans text-[10px] text-gray-500 max-w-[120px] truncate" title={authUser.email}>
+              <div className="hidden sm:flex items-center gap-1.5">
+                <Link
+                  to="/profile"
+                  className="font-sans text-[10px] text-gray-500 hover:text-[#1a1a1a] transition-colors max-w-[100px] truncate"
+                  title={authUser.email}
+                >
                   {authUser.email.split('@')[0]}
-                </span>
+                </Link>
                 <button
                   onClick={handleLogout}
-                  className="font-sans text-[10px] uppercase tracking-widest text-gray-400 hover:text-rose-600 transition-colors"
+                  className="font-sans text-[10px] uppercase tracking-widest text-gray-400 hover:text-rose-600 transition-colors leading-none"
+                  title={t.auth.logoutBtn}
                 >
                   ×
                 </button>
@@ -296,12 +332,13 @@ function MainApp() {
               </button>
             )}
 
+            {/* Language switcher — always visible */}
             <div className="flex gap-0 border border-[#1a1a1a]">
               {(['de', 'en', 'ru'] as Language[]).map((l) => (
                 <button
                   key={l}
                   onClick={() => handleLanguageSwitch(l)}
-                  className={`px-2.5 py-1 font-sans text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                  className={`px-2 sm:px-2.5 py-1 font-sans text-[10px] font-bold uppercase tracking-wide transition-colors ${
                     lang === l ? 'bg-[#1a1a1a] text-white' : 'text-gray-600 hover:bg-[#1a1a1a] hover:text-white'
                   }`}
                 >
@@ -311,6 +348,59 @@ function MainApp() {
             </div>
           </div>
         </div>
+
+        {/* Mobile drawer */}
+        {mobileMenuOpen && (
+          <div className="sm:hidden border-t-2 border-[#1a1a1a] bg-[#FFF8F0] px-4 py-4 space-y-0 divide-y divide-[#e0d8cf]">
+            <div className="pb-3">
+              <p className="font-sans text-[9px] uppercase tracking-widest text-gray-300 mb-2">{dateStr}</p>
+            </div>
+            {authUser ? (
+              <div className="py-3 space-y-2">
+                <Link
+                  to="/profile"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-2 font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  {authUser.email.split('@')[0]}
+                </Link>
+                <button
+                  onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
+                  className="font-sans text-[10px] uppercase tracking-widest text-rose-600 pl-3.5"
+                >
+                  {t.auth.logoutBtn}
+                </button>
+              </div>
+            ) : (
+              <div className="py-3">
+                <button
+                  onClick={() => { setAuthModalMode('login'); setShowAuthModal(true); setMobileMenuOpen(false); }}
+                  className="w-full font-sans text-[10px] uppercase tracking-widest border border-[#1a1a1a] px-4 py-2.5 text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-white transition-colors"
+                >
+                  {t.auth.loginBtn}
+                </button>
+              </div>
+            )}
+            <div className="pt-3 space-y-2.5">
+              {[
+                { to: '/compare', label: `⚖ ${t.nav.compare}` },
+                { to: '/about', label: t.nav.about },
+                { to: '/methodology', label: t.nav.methodology },
+                { to: '/suggest', label: t.nav.suggest },
+              ].map(({ to, label }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] transition-colors"
+                >
+                  {label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </nav>
       {/* Spectrum gradient strip under nav */}
       <div className="h-[3px] flex">
@@ -322,14 +412,14 @@ function MainApp() {
       </div>
 
       {/* Main Content */}
-      <main className="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full">
+      <main className="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 w-full">
         <Routes>
           <Route path="/" element={
             <>
               {status === 'idle' && (
                 <div className="mb-10">
                   <p className="font-sans text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-4">Medienanalyse</p>
-                  <h1 className="font-serif font-black text-4xl md:text-5xl text-[#1a1a1a] leading-[1.05] mb-5">
+                  <h1 className="font-serif font-black text-3xl sm:text-4xl md:text-5xl text-[#1a1a1a] leading-[1.05] mb-5">
                     {t.subtitle}
                   </h1>
                   {/* Spectrum accent rule */}
@@ -467,6 +557,14 @@ function MainApp() {
           <Route path="/suggest" element={<SuggestPage lang={lang} />} />
           <Route path="/compare" element={<ComparePage lang={lang} />} />
           <Route path="/preview" element={<DesignPreview lang={lang} />} />
+          <Route path="/profile" element={
+            <UserProfilePage
+              lang={lang}
+              authToken={authToken}
+              authUser={authUser}
+              onLogout={handleLogout}
+            />
+          } />
         </Routes>
       </main>
 
