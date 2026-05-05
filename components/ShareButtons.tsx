@@ -29,19 +29,21 @@ export const ShareButtons: React.FC<ShareButtonsProps> = ({ topic, lang }) => {
   const s = t.share;
   const [copied, setCopied] = useState(false);
 
-  const pageUrl = window.location.href;
-  const shareText = s.text(topic, pageUrl);
+  // Canonical share URL — always with ?topic= and ?lang= so bots get dynamic OG tags
+  const origin = window.location.origin;
+  const shareUrl = `${origin}/?topic=${encodeURIComponent(topic)}&lang=${lang}`;
+  const shareText = s.text(topic, shareUrl);
 
   const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
-  const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(pageUrl)}&text=${encodeURIComponent(s.text(topic, ''))}`;
+  const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(s.text(topic, ''))}`;
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(pageUrl);
+      await navigator.clipboard.writeText(shareUrl);
     } catch {
       const el = document.createElement('textarea');
-      el.value = pageUrl;
+      el.value = shareUrl;
       document.body.appendChild(el);
       el.select();
       document.execCommand('copy');
@@ -51,11 +53,11 @@ export const ShareButtons: React.FC<ShareButtonsProps> = ({ topic, lang }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const btnCls = 'flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium text-slate-600 hover:border-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-all duration-150';
+  const btnCls = 'flex items-center gap-2 px-3 py-2 border-2 border-[#1a1a1a] text-sm font-sans text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-[#FFF8F0] transition-colors';
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-2">
-      <span className="text-xs font-bold uppercase tracking-widest text-slate-400 sm:mr-1 whitespace-nowrap">
+      <span className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 sm:mr-1 whitespace-nowrap">
         {s.label}
       </span>
       <div className="flex flex-wrap gap-2">
@@ -73,7 +75,7 @@ export const ShareButtons: React.FC<ShareButtonsProps> = ({ topic, lang }) => {
         </a>
         <button onClick={handleCopy} className={btnCls}>
           {copied
-            ? <><Check className="w-4 h-4 text-emerald-500" /><span className="hidden sm:inline text-emerald-600">{s.copied}</span></>
+            ? <><Check className="w-4 h-4" /><span className="hidden sm:inline">{s.copied}</span></>
             : <><Link2 className="w-4 h-4" /><span className="hidden sm:inline">{s.copy}</span></>
           }
         </button>
