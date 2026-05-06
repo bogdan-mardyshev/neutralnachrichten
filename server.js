@@ -16,7 +16,7 @@ import bcrypt from 'bcryptjs';
 import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
 import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
 import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
-import { initDB, isDBAvailable, cacheGet, cacheSet, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier } from './db.js';
+import { initDB, isDBAvailable, cacheGet, cacheSet, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch } from './db.js';
 
 dotenv.config();
 
@@ -1098,6 +1098,40 @@ app.get('/api/auth/usage', requireAuth, async (req, res) => {
     res.json({ used, limit: FREE_DAILY_LIMIT, remaining, unlimited: false });
   } catch (err) {
     res.json({ used: 0, limit: FREE_DAILY_LIMIT, remaining: FREE_DAILY_LIMIT, unlimited: false });
+  }
+});
+
+// ── User Search History API ───────────────────────────────────────────────────
+
+app.get('/api/history', requireAuth, async (req, res) => {
+  try {
+    const history = await getUserSearchHistory(req.user.id, 100);
+    res.json({ history });
+  } catch (err) {
+    console.error('[history] GET error:', err.message);
+    res.json({ history: [] });
+  }
+});
+
+app.post('/api/history', requireAuth, async (req, res) => {
+  const { topic, lang, coverage } = req.body;
+  if (!topic) return res.status(400).json({ error: 'topic required' });
+  try {
+    const entry = await saveUserSearch(req.user.id, topic, lang || 'de', coverage || null);
+    res.json({ ok: true, entry });
+  } catch (err) {
+    console.error('[history] POST error:', err.message);
+    res.json({ ok: false });
+  }
+});
+
+app.delete('/api/history/:id', requireAuth, async (req, res) => {
+  try {
+    await deleteUserSearch(req.user.id, parseInt(req.params.id, 10));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[history] DELETE error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
