@@ -206,6 +206,15 @@ function MainApp() {
       setStatus('success');
       setSearchParams({ topic: query, lang: activeLang }, { replace: true });
       addToHistory(query, activeLang);
+
+      // Persist to server history if logged in
+      if (authToken && result.coverage_distribution) {
+        fetch(`${import.meta.env.VITE_API_BASE || ''}/api/history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ topic: query, lang: activeLang, coverage: result.coverage_distribution }),
+        }).catch(() => {});
+      }
       posthog.capture('analysis_completed', {
         topic: query,
         duration: Date.now() - startTime

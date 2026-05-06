@@ -97,6 +97,17 @@ async function runMigrations() {
       updated_at  TIMESTAMPTZ DEFAULT now(),
       PRIMARY KEY (identifier, date)
     );
+
+    CREATE TABLE IF NOT EXISTS user_searches (
+      id            BIGSERIAL PRIMARY KEY,
+      user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      topic         TEXT NOT NULL,
+      lang          VARCHAR(5) DEFAULT 'de',
+      coverage_json JSONB,
+      created_at    TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS user_searches_user_id ON user_searches(user_id);
+    CREATE INDEX IF NOT EXISTS user_searches_created  ON user_searches(created_at DESC);
   `);
   console.log('[DB] Migrations done ✓');
 }
@@ -295,4 +306,36 @@ export async function updateUserTier(id, tier, dailyLimit) {
   return rows[0] || null;
 }
 
-export default { initDB, isDBAvailable, cacheGet, cacheSet, logSearch, getTopTopicsDB, getAdminStats, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getUsersAdmin, updateUserTier };
+// ── User Search History ───────────────────────────────────────────────────────
+
+export async function saveUserSearch(userId, topic, lang, coverageJson) {
+  if (!pool) throw new Error('DB not available');
+  const { rows } = await pool.query(
+    `INSERT INTO user_searches (user_id, topic, lang, coverage_json)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, topic, lang, coverage_json, created_at`,
+    [userId, topic, lang, JSON.stringify(coverageJson || null)]
+  );
+  return rows[0];
+}
+
+export async function getUserSearchHistory(userId, limit = 100) {
+  if (!pool) return [];
+  const { rows } = await pool.query(
+    `SELECT id, topic, lang, coverage_json, created_at
+     FROM user_searches WHERE user_id = $1
+     ORDER BY created_at DESC LIMIT $2`,
+    [userId, limit]
+  );
+  return rows;
+}
+
+export async function deleteUserSearch(userId, searchId) {
+  if (!pool) return;
+  await pool.query(
+    `DELETE FROM user_searches WHERE id = $1 AND user_id = $2`,
+    [searchId, userId]
+  );
+}
+
+export default { initDB, isDBAvailable, cacheGet, cacheSet, logSearch, getTopTopicsDB, getAdminStats, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch };
