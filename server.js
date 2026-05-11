@@ -16,14 +16,19 @@ import bcrypt from 'bcryptjs';
 import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
 import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
 import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
-import { initDB, isDBAvailable, cacheGet, cacheSet, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch } from './db.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch } from './db.js';
+import { initRedis, isRedisAvailable, closeRedis, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
 dotenv.config();
 
-// ── DB init (non-blocking — server starts even without DB) ────────────────────
+// ── DB + Redis init (non-blocking — server starts even without either) ────────
 initDB().then(ok => {
   if (ok) console.log('[Server] PostgreSQL ready');
   else    console.warn('[Server] Running without PostgreSQL (in-memory only)');
+});
+initRedis().then(ok => {
+  if (ok) console.log('[Server] Redis ready');
+  else    console.warn('[Server] Running without Redis (NodeCache + DB fallback)');
 });
 
 const JWT_SECRET  = process.env.JWT_SECRET  || 'dev-secret-change-in-prod';
@@ -63,6 +68,20 @@ app.use(helmet({
 app.use(cors());
 app.use(express.json({ limit: '1kb' }));
 
+// ── Health check (Railway uses this for zero-downtime deploys) ────────────────
+app.get('/api/health', (req, res) => {
+  res.json({
+    status:        'ok',
+    uptime:        Math.round(process.uptime()),
+    db:            isDBAvailable(),
+    redis:         isRedisAvailable(),
+    gemini_active: geminiSemaphore.active,
+    gemini_queue:  geminiSemaphore.waiting,
+    gemini_limit:  geminiSemaphore.max,
+    timestamp:     new Date().toISOString(),
+  });
+});
+
 // Default 24h TTL; overridden per-item for degraded results
 const cache = new NodeCache({ stdTTL: 86400 });
 
@@ -75,10 +94,40 @@ function validateAnalysisStructure(data) {
   return SPECTRUMS.every(key => Array.isArray(data.news_spectrum?.[key]) && data.news_spectrum[key].length > 0);
 }
 
+// ── Gemini Concurrency Limiter ────────────────────────────────────────────────
+// Semaphore prevents thundering-herd: at most MAX_CONCURRENT_GEMINI simultaneous
+// Gemini API calls (search + translation combined). Excess requests wait in queue.
+class Semaphore {
+  constructor(max) {
+    this.max    = max;
+    this._active = 0;
+    this._queue  = [];
+  }
+  acquire() {
+    return new Promise((resolve) => {
+      if (this._active < this.max) { this._active++; resolve(); }
+      else this._queue.push(resolve);
+    });
+  }
+  release() {
+    if (this._queue.length > 0) {
+      const next = this._queue.shift();
+      next(); // transfer slot directly — _active stays the same
+    } else {
+      this._active--;
+    }
+  }
+  get active()  { return this._active; }
+  get waiting() { return this._queue.length; }
+}
+
+const MAX_CONCURRENT_GEMINI = parseInt(process.env.MAX_CONCURRENT_GEMINI || '6');
+const geminiSemaphore = new Semaphore(MAX_CONCURRENT_GEMINI);
+
 // ── Analytics ─────────────────────────────────────────────────────────────────
-// In-memory topic counts. Resets on redeploy — acceptable for MVP.
+// In-memory topic counts. Resets on redeploy — Redis stores persistent counts.
 const topicStats = new Map(); // topic_lower → { topic, count, firstSeen, lastSeen }
-let totalAnalyses = 0; // global counter across all topics
+let totalAnalyses = 0; // in-memory fallback counter
 
 function trackSearch(topic) {
   totalAnalyses++;
@@ -91,6 +140,8 @@ function trackSearch(topic) {
   } else {
     topicStats.set(key, { topic, count: 1, firstSeen: now, lastSeen: now });
   }
+  // Persist to Redis (fire-and-forget — never blocks a request)
+  rTrackSearch(topic).catch(() => {});
 }
 
 // ── Per-IP Usage Tracking & Daily Limits ─────────────────────────────────────
@@ -175,41 +226,68 @@ function requireAuth(req, res, next) {
   }
 }
 
-// ── DB-backed cache helpers (NodeCache = L1, PostgreSQL = L2) ─────────────────
+// ── 3-layer cache: NodeCache (L1, 0ms) → Redis (L2, ~10ms) → PostgreSQL (L3) ──
 async function cacheGetLayered(key) {
+  // L1: NodeCache — in-process, zero latency
   const mem = cache.get(key);
   if (mem !== undefined) return mem;
+
+  // L2: Redis — distributed, survives server restarts
+  if (isRedisAvailable()) {
+    const redisData = await rGet(key);
+    if (redisData !== null) {
+      cache.set(key, redisData, 3600); // warm L1 for 1h
+      console.log(`[Cache] Redis→L1 restored "${key}"`);
+      return redisData;
+    }
+  }
+
+  // L3: PostgreSQL — persistent fallback
   if (!isDBAvailable()) return undefined;
   const row = await cacheGet(key);
   if (!row || row.isStale) return undefined;
-  // Repopulate L1 with remaining TTL (or 1h)
   const remainTTL = Math.max(60, row.ttl_seconds - row.ageSeconds);
   cache.set(key, row.data, remainTTL);
+  // Warm Redis from DB so the next restart doesn't need DB lookup
+  if (isRedisAvailable()) rSet(key, row.data, remainTTL).catch(() => {});
   console.log(`[Cache] DB→L1 restored "${key}" (${row.ageSeconds}s old)`);
   return row.data;
 }
 
 async function cacheSetLayered(key, data, ttlSeconds) {
+  // Write to all available layers in parallel
   cache.set(key, data, ttlSeconds);
-  if (isDBAvailable()) {
-    await cacheSet(key, data, ttlSeconds).catch(e => console.error('[Cache] DB write error:', e.message));
-  }
+  await Promise.allSettled([
+    isRedisAvailable() ? rSet(key, data, ttlSeconds)     : Promise.resolve(),
+    isDBAvailable()    ? cacheSet(key, data, ttlSeconds) : Promise.resolve(),
+  ]).then(([r, d]) => {
+    if (r.status === 'rejected') console.error('[Cache] Redis write error:', r.reason?.message);
+    if (d.status === 'rejected') console.error('[Cache] DB write error:',    d.reason?.message);
+  });
 }
 
-// ── DB-backed usage tracking (falls back to in-memory if no DB) ───────────────
+// ── DB/Redis-backed usage tracking (Redis → PostgreSQL → in-memory fallback) ──
 async function getUsageForIP(ip) {
+  // Redis is fastest and survives restarts (most accurate for rate-limiting)
+  if (isRedisAvailable()) {
+    const count = await rGetUsage(ip);
+    if (count !== null) return count;
+  }
+  // PostgreSQL fallback
   if (isDBAvailable()) {
     const count = await getUsageDB(ip);
-    return count ?? getIPUsage(ip).count; // fallback to memory
+    return count ?? getIPUsage(ip).count;
   }
   return getIPUsage(ip).count;
 }
 
 async function incrementUsageForIP(ip) {
-  getIPUsage(ip).count++; // always update memory
+  getIPUsage(ip).count++; // always update memory for fast in-process reads
   getIPUsage(ip).tokensIn  += TOKENS_PER_ANALYSIS_INPUT;
   getIPUsage(ip).tokensOut += TOKENS_PER_ANALYSIS_OUTPUT;
-  if (isDBAvailable()) await incrementUsageDB(ip).catch(() => {});
+  // Persist to Redis + PostgreSQL in parallel (fire-and-forget)
+  if (isRedisAvailable()) rIncrUsage(ip).catch(() => {});
+  if (isDBAvailable())    incrementUsageDB(ip).catch(() => {});
 }
 
 async function checkDailyLimitDB(ip) {
@@ -612,7 +690,14 @@ app.post('/api/analyze', async (req, res) => {
       console.log(`[Cache] HIT German base for "${topic}"`);
       ({ germanAnalysis, degraded } = cachedBase);
     } else {
-      ({ analysis: germanAnalysis, degraded } = await callGeminiWithRetry(topic, 'de', 1));
+      // Throttle concurrent Gemini calls — wait for a slot, then call
+      console.log(`[Gemini] Waiting for slot (active=${geminiSemaphore.active}, queue=${geminiSemaphore.waiting})`);
+      await geminiSemaphore.acquire();
+      try {
+        ({ analysis: germanAnalysis, degraded } = await callGeminiWithRetry(topic, 'de', 1));
+      } finally {
+        geminiSemaphore.release();
+      }
       // Always cache the German base so /api/deep-analysis can find it.
       // Degraded results use a short TTL (5 min) so the next request retries Gemini.
       await cacheSetLayered(deKey, { germanAnalysis, degraded }, degraded ? 300 : 86400);
@@ -629,6 +714,7 @@ app.post('/api/analyze', async (req, res) => {
       console.log(`[Translate] Budget: ${translTimeout}ms (elapsed: ${elapsed}ms)`);
       // Strip deep_analysis before translation — it's fetched separately and makes JSON much larger
       const { deep_analysis: _stripped, ...analysisForTranslation } = germanAnalysis;
+      await geminiSemaphore.acquire();
       try {
         finalAnalysis = await Promise.race([
           translateAnalysis(analysisForTranslation, lang, genAI),
@@ -641,6 +727,8 @@ app.post('/api/analyze', async (req, res) => {
       } catch (err) {
         console.error('[Translate] Falling back to German:', err.message);
         finalAnalysis = germanAnalysis;
+      } finally {
+        geminiSemaphore.release();
       }
     }
 
@@ -703,8 +791,15 @@ app.post('/api/deep-analysis', async (req, res) => {
   const { germanAnalysis } = cachedBase;
 
   try {
-    // Run deep analysis on the German base (45s budget — this request has its own Railway window)
-    const deep = await callDeepAnalysis(germanAnalysis, 45000);
+    // Run deep analysis — throttled by semaphore (45s budget, own Railway window)
+    console.log(`[DeepAnalysis] Waiting for slot (active=${geminiSemaphore.active}, queue=${geminiSemaphore.waiting})`);
+    await geminiSemaphore.acquire();
+    let deep;
+    try {
+      deep = await callDeepAnalysis(germanAnalysis, 45000);
+    } finally {
+      geminiSemaphore.release();
+    }
     console.log(`[DeepAnalysis] Done — ${deep.shared_facts.length} facts, ${deep.diverging_points.length} diverging, ${deep.silenced_topics.length} silenced`);
 
     // Cache German deep analysis
@@ -714,6 +809,7 @@ app.post('/api/deep-analysis', async (req, res) => {
     // Pass only deep_analysis in a minimal wrapper — translating full spectrum JSON is too slow
     let finalDeep = deep;
     if (lang !== 'de') {
+      await geminiSemaphore.acquire();
       try {
         // Use a ':deep' suffix so translate.js cache doesn't collide with main analysis cache
         const minimalForTranslation = {
@@ -730,6 +826,8 @@ app.post('/api/deep-analysis', async (req, res) => {
         await cacheSetLayered(translatedKey, finalDeep, 86400);
       } catch (err) {
         console.warn('[DeepAnalysis] Translation failed, using German:', err.message);
+      } finally {
+        geminiSemaphore.release();
       }
     }
 
@@ -823,12 +921,20 @@ app.get('/api/top-topics', (req, res) => {
 });
 
 // ── Stats (hype counter) ───────────────────────────────────────────────────────
-app.get('/api/stats', (req, res) => {
-  const topTopic = [...topicStats.values()].sort((a, b) => b.count - a.count)[0] || null;
+app.get('/api/stats', async (req, res) => {
+  const memTopTopic = [...topicStats.values()].sort((a, b) => b.count - a.count)[0] || null;
+
+  // Try Redis for persistent numbers (survive restarts)
+  const [redisTotal, redisTopics, redisUnique] = await Promise.all([
+    rGetTotalAnalyses().catch(() => null),
+    rGetTopTopics(1).catch(() => null),
+    rGetUniqueTopics().catch(() => null),
+  ]);
+
   res.json({
-    total_analyses: totalAnalyses,
-    unique_topics: topicStats.size,
-    top_topic: topTopic ? { topic: topTopic.topic, count: topTopic.count } : null,
+    total_analyses: redisTotal ?? totalAnalyses,
+    unique_topics:  redisUnique ?? topicStats.size,
+    top_topic: redisTopics?.[0] ?? (memTopTopic ? { topic: memTopTopic.topic, count: memTopTopic.count } : null),
   });
 });
 
@@ -1162,32 +1268,37 @@ app.get('/api/admin/stats', async (req, res) => {
     ? Math.round((serverStats.cacheHits / serverStats.totalRequests) * 100)
     : 0;
 
-  // DB stats (non-blocking)
-  const [dbStats, dbTopTopics, dbUsers] = await Promise.all([
+  // DB + Redis stats (non-blocking)
+  const [dbStats, dbTopTopics, dbUsers, redisTopics, redisTotal, rStats] = await Promise.all([
     getAdminStatsDB().catch(() => null),
     getTopTopicsDB(20).catch(() => null),
     getUsersAdmin(50).catch(() => []),
+    rGetTopTopics(20).catch(() => null),
+    rGetTotalAnalyses().catch(() => null),
+    rGetStats().catch(() => null),
   ]);
 
   res.json({
     server: {
-      startedAt: serverStats.startedAt,
+      startedAt:    serverStats.startedAt,
       uptime_hours: Math.round((Date.now() - new Date(serverStats.startedAt).getTime()) / 3600000 * 10) / 10,
-      totalRequests: serverStats.totalRequests,
-      cacheHits: serverStats.cacheHits,
-      cacheMisses: serverStats.cacheMisses,
+      totalRequests: rStats?.totalRequests ?? serverStats.totalRequests,
+      cacheHits:     rStats?.cacheHits    ?? serverStats.cacheHits,
+      cacheMisses:   rStats?.cacheMisses  ?? serverStats.cacheMisses,
       cacheHitRate: `${cacheHitRate}%`,
-      errors: serverStats.errors,
-      cachedItems: cacheKeys.length,
-      dbAvailable: isDBAvailable(),
+      errors:        rStats?.errors       ?? serverStats.errors,
+      cachedItems:  cacheKeys.length,
+      dbAvailable:  isDBAvailable(),
+      redisAvailable: isRedisAvailable(),
+      gemini: { active: geminiSemaphore.active, queued: geminiSemaphore.waiting, limit: geminiSemaphore.max },
     },
     usage: {
       today,
-      totalAnalysesAllTime: dbStats?.totalSearches ?? totalAnalyses,
-      totalAnalysesToday: dbStats?.searchesToday ?? totalAnalysesToday,
-      uniqueTopicsAllTime: topicStats.size,
-      activeIPsToday: activeIPsToday.length,
-      freeDailyLimit: FREE_DAILY_LIMIT,
+      totalAnalysesAllTime: dbStats?.totalSearches ?? redisTotal ?? totalAnalyses,
+      totalAnalysesToday:   dbStats?.searchesToday ?? totalAnalysesToday,
+      uniqueTopicsAllTime:  topicStats.size,
+      activeIPsToday:       activeIPsToday.length,
+      freeDailyLimit:       FREE_DAILY_LIMIT,
     },
     costs: {
       estimatedTokensToday,
@@ -1196,7 +1307,7 @@ app.get('/api/admin/stats', async (req, res) => {
       costPerAnalysis: `$${COST_PER_ANALYSIS}`,
       note: 'Estimates only. Includes Gemini tokens + Search Grounding.',
     },
-    topTopics: dbTopTopics ?? topTopics,
+    topTopics: dbTopTopics ?? redisTopics ?? topTopics,
     topIPs: activeIPsToday.slice(0, 10).map(([ip, u]) => ({
       ip: ip.replace(/\.\d+$/, '.***'), // mask last octet
       count: u.count,
@@ -1490,10 +1601,10 @@ async function runWarmup() {
   await warmCategories();
 }
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`[Server] Listening on port ${PORT} (env=${IS_PRODUCTION ? 'production' : 'dev'})`);
 
-  // Initial warmup — delayed 8 s to let the server finish startup first
+  // Initial warmup — delayed 8 s to let DB/Redis finish connecting
   setTimeout(runWarmup, 8000);
 
   // Rolling refresh: daily-news every 2 h, trending + categories every 4 h
@@ -1501,3 +1612,30 @@ app.listen(PORT, '0.0.0.0', () => {
   setInterval(warmTrending,    4 * 60 * 60 * 1000);
   setInterval(warmCategories,  4 * 60 * 60 * 1000);
 });
+
+// ── Graceful Shutdown ─────────────────────────────────────────────────────────
+// Railway sends SIGTERM before killing the container. We stop accepting new
+// connections, let in-flight requests finish (up to 30 s), then exit cleanly.
+async function shutdown(signal) {
+  console.log(`[Server] ${signal} — starting graceful shutdown`);
+
+  // Stop new connections immediately
+  server.close(async () => {
+    console.log('[Server] HTTP server closed — draining connections');
+    try {
+      await Promise.allSettled([closeRedis(), closeDB()]);
+    } catch {}
+    console.log('[Server] All connections closed — exiting with code 0');
+    process.exit(0);
+  });
+
+  // Hard kill after 30 s in case in-flight requests stall
+  const forceExit = setTimeout(() => {
+    console.error('[Server] Graceful shutdown timed out — forcing exit');
+    process.exit(1);
+  }, 30_000);
+  forceExit.unref(); // don't let this timer prevent natural exit
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
