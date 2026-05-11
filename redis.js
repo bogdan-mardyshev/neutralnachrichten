@@ -32,6 +32,11 @@ export async function initRedis() {
       retryStrategy: (times) => (times > 3 ? null : Math.min(times * 200, 2000)),
     });
 
+    // Suppress ioredis "Unhandled error event" logs — errors are caught via try/catch
+    client.on('error', (err) => {
+      if (client) console.warn('[Redis] Connection error:', err.message);
+    });
+
     await client.ping();
     console.log('[Redis] Connected ✓');
     return true;
