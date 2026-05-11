@@ -40,36 +40,51 @@ const SENTIMENT_CONFIG: Record<Sentiment, { icon: string; bar: string; label: st
 const Section: React.FC<{
   open: boolean;
   onToggle: () => void;
+  label: string;     // short loud editorial tag e.g. "FAKTEN"
   title: string;
   desc: string;
   count?: number;
-  accent: string;   // Tailwind text color, e.g. 'text-emerald-600'
-  accentBar: string; // Tailwind bg color, e.g. 'bg-emerald-500'
+  accent: string;    // Tailwind text color
+  accentBar: string; // Tailwind bg color
   children: React.ReactNode;
-}> = ({ open, onToggle, title, desc, count, accent, accentBar, children }) => (
+}> = ({ open, onToggle, label, title, desc, count, accent, accentBar, children }) => (
   <div className="border-b border-[#e0d8cf] last:border-0">
     <button
       onClick={onToggle}
-      className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-[#f0e8dc] transition-colors"
+      className={`w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors ${open ? 'bg-[#1a1a1a]' : 'hover:bg-[#f0e8dc]'}`}
     >
-      <div className="flex items-center gap-3">
-        <div className={`w-0.5 h-8 ${accentBar} shrink-0`} />
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className="font-serif font-bold text-sm text-[#1a1a1a]">{title}</span>
+      <div className="flex items-center gap-3 min-w-0">
+        {/* Loud editorial label */}
+        <span className={`font-sans text-[9px] font-black uppercase tracking-[0.2em] px-2 py-1 shrink-0 transition-colors ${
+          open ? `${accentBar} text-white` : `${accent} border border-current`
+        }`}>
+          {label}
+        </span>
+
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+            <span className={`font-serif font-bold text-sm leading-tight transition-colors ${open ? 'text-white' : 'text-[#1a1a1a]'}`}>
+              {title}
+            </span>
             {count !== undefined && (
-              <span className={`font-sans text-[10px] font-bold text-white px-1.5 py-0.5 min-w-[18px] text-center ${accentBar}`}>
+              <span className={`font-sans text-[10px] font-bold px-1.5 py-0.5 min-w-[18px] text-center shrink-0 transition-colors ${
+                open ? 'bg-white/20 text-white' : `${accentBar} text-white`
+              }`}>
                 {count}
               </span>
             )}
           </div>
-          <span className="font-sans text-[10px] text-gray-400 uppercase tracking-wider">{desc}</span>
+          <span className={`font-sans text-[10px] uppercase tracking-wider transition-colors ${open ? 'text-white/40' : 'text-gray-400'}`}>
+            {desc}
+          </span>
         </div>
       </div>
-      <span className={`font-sans text-gray-400 text-lg leading-none transition-transform duration-200 shrink-0 ml-3 ${open ? 'rotate-180' : ''}`}>
+
+      <span className={`font-sans text-lg leading-none transition-all duration-200 shrink-0 ml-3 ${open ? 'text-white rotate-180' : 'text-gray-400'}`}>
         ∨
       </span>
     </button>
+
     {open && (
       <div className="border-t border-[#e0d8cf] bg-[#FFF8F0]">
         {children}
@@ -105,9 +120,10 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
         <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{da.title}</p>
       </div>
 
-      {/* ── 1. SHARED FACTS / Проверка фактов ─── */}
+      {/* ── 1. SHARED FACTS ─── */}
       <Section
         open={open === 'facts'} onToggle={() => toggle('facts')}
+        label={lang === 'ru' ? 'Факты' : 'Fakten'}
         title={da.sharedFactsTitle} desc={da.sharedFactsDesc}
         count={data.shared_facts.length}
         accent="text-emerald-600" accentBar="bg-emerald-500"
@@ -125,6 +141,7 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
       {/* ── 2. DIVERGING POINTS ─── */}
       <Section
         open={open === 'diverging'} onToggle={() => toggle('diverging')}
+        label={lang === 'ru' ? 'Расхождения' : 'Divergenz'}
         title={da.divergingTitle} desc={da.divergingDesc}
         count={data.diverging_points.length}
         accent="text-amber-600" accentBar="bg-amber-400"
@@ -157,6 +174,7 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
       {/* ── 3. SILENCED TOPICS ─── */}
       <Section
         open={open === 'silenced'} onToggle={() => toggle('silenced')}
+        label={lang === 'ru' ? 'Молчание' : lang === 'en' ? 'Silence' : 'Blindspot'}
         title={da.silencedTitle} desc={da.silencedDesc}
         count={data.silenced_topics.length}
         accent="text-red-600" accentBar="bg-red-500"
@@ -183,6 +201,7 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
       {hasCoverageVolume && (
         <Section
           open={open === 'coverage'} onToggle={() => toggle('coverage')}
+          label={lang === 'ru' ? 'Объём' : 'Volumen'}
           title={da.coverageTitle} desc={da.coverageDesc}
           count={totalWeek}
           accent="text-violet-600" accentBar="bg-violet-500"
@@ -249,6 +268,7 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
       {hasSentiment && (
         <Section
           open={open === 'sentiment'} onToggle={() => toggle('sentiment')}
+          label={lang === 'ru' ? 'Тональность' : 'Sentiment'}
           title={da.sentimentTitle} desc={da.sentimentDesc}
           accent="text-pink-600" accentBar="bg-pink-500"
         >
@@ -287,6 +307,7 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
       {hasKeywords && (
         <Section
           open={open === 'keywords'} onToggle={() => toggle('keywords')}
+          label={lang === 'ru' ? 'Слова' : 'Keywords'}
           title={da.keywordsTitle} desc={da.keywordsDesc}
           accent="text-teal-600" accentBar="bg-teal-500"
         >
@@ -322,6 +343,7 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
       {hasExperts && (
         <Section
           open={open === 'experts'} onToggle={() => toggle('experts')}
+          label={lang === 'ru' ? 'Эксперты' : 'Experten'}
           title={da.expertsTitle} desc={da.expertsDesc}
           accent="text-indigo-600" accentBar="bg-indigo-500"
         >

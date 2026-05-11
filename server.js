@@ -1429,4 +1429,75 @@ app.get(/^(?!\/api\/).*$/, (req, res) => {
   res.sendFile('index.html', { root: distPath });
 });
 
-app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+// ── Cache Warmup ──────────────────────────────────────────────────────────────
+// Pre-fetch trending, daily news, and top categories so the first user never
+// waits. Runs once on startup, then on a rolling schedule matching each TTL.
+
+async function warmTrending() {
+  const key = trendingCacheKey();
+  const cached = await cacheGetLayered(key);
+  if (cached) { console.log('[Warmup] trending: cache hit, skip'); return; }
+  try {
+    console.log('[Warmup] trending: fetching…');
+    const data = await fetchTrendingFromGemini();
+    if (Array.isArray(data?.topics) && data.topics.length > 0) {
+      await cacheSetLayered(key, data, 14400);
+      console.log(`[Warmup] trending: cached ${data.topics.length} topics`);
+    }
+  } catch (e) { console.error('[Warmup] trending failed:', e.message); }
+}
+
+async function warmDailyNews() {
+  const key = dailyNewsCacheKey();
+  const cached = await cacheGetLayered(key);
+  if (cached) { console.log('[Warmup] daily-news: cache hit, skip'); return; }
+  try {
+    console.log('[Warmup] daily-news: fetching…');
+    const data = await fetchDailyNewsFromGemini();
+    if (Array.isArray(data?.stories) && data.stories.length > 0) {
+      await cacheSetLayered(key, data, 7200);
+      console.log(`[Warmup] daily-news: cached ${data.stories.length} stories`);
+    }
+  } catch (e) { console.error('[Warmup] daily-news failed:', e.message); }
+}
+
+async function warmCategories() {
+  // Warm the 4 most-visited categories; others warm on first request
+  const priority = ['politics', 'economy', 'international', 'society'];
+  for (const cat of priority) {
+    const key = categoryNewsCacheKey(cat);
+    const cached = await cacheGetLayered(key);
+    if (cached) { console.log(`[Warmup] cat-${cat}: cache hit, skip`); continue; }
+    try {
+      console.log(`[Warmup] cat-${cat}: fetching…`);
+      const data = await fetchCategoryNews(cat);
+      if (Array.isArray(data?.stories) && data.stories.length > 0) {
+        await cacheSetLayered(key, data, 14400);
+        console.log(`[Warmup] cat-${cat}: cached ${data.stories.length} stories`);
+      }
+    } catch (e) { console.error(`[Warmup] cat-${cat} failed:`, e.message); }
+    // Small pause between Gemini calls to avoid rate-limit bursts
+    await new Promise(r => setTimeout(r, 3000));
+  }
+}
+
+async function runWarmup() {
+  // Stagger the three warmup jobs so they don't all hit Gemini simultaneously
+  await warmDailyNews();
+  await new Promise(r => setTimeout(r, 4000));
+  await warmTrending();
+  await new Promise(r => setTimeout(r, 4000));
+  await warmCategories();
+}
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+
+  // Initial warmup — delayed 8 s to let the server finish startup first
+  setTimeout(runWarmup, 8000);
+
+  // Rolling refresh: daily-news every 2 h, trending + categories every 4 h
+  setInterval(warmDailyNews,   2 * 60 * 60 * 1000);
+  setInterval(warmTrending,    4 * 60 * 60 * 1000);
+  setInterval(warmCategories,  4 * 60 * 60 * 1000);
+});
