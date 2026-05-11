@@ -132,6 +132,7 @@ export async function cacheGet(key) {
       degraded: row.degraded,
       isStale: ageSeconds > row.ttl_seconds,
       ageSeconds: Math.round(ageSeconds),
+      ttl_seconds: row.ttl_seconds,   // needed by cacheGetLayered to compute remainTTL
     };
   } catch (err) {
     console.error('[DB:cacheGet]', err.message);
