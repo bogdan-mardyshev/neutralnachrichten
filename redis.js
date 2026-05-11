@@ -71,8 +71,10 @@ export async function rGet(key) {
 
 export async function rSet(key, data, ttlSeconds) {
   if (!client) return;
+  // Redis SETEX requires a positive integer — guard against NaN/float/undefined
+  const ttl = Math.max(1, Math.round(Number(ttlSeconds) || 3600));
   try {
-    await client.setex(`nn:${key}`, ttlSeconds, JSON.stringify(data));
+    await client.setex(`nn:${key}`, ttl, JSON.stringify(data));
   } catch (err) {
     console.error('[Redis:set]', err.message);
   }
