@@ -33,9 +33,12 @@ export async function initDB() {
     pool = new Pool({
       connectionString: dbUrl,
       ssl: needsSsl ? { rejectUnauthorized: false } : false,
-      max: 10,
+      max: 20,                          // up from 10 for concurrent Gemini traffic
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
+      allowExitOnIdle: false,           // keep pool alive across SIGTERM window
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 0,
     });
 
     // Test connection
@@ -338,4 +341,12 @@ export async function deleteUserSearch(userId, searchId) {
   );
 }
 
-export default { initDB, isDBAvailable, cacheGet, cacheSet, logSearch, getTopTopicsDB, getAdminStats, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch };
+export async function closeDB() {
+  if (pool) {
+    await pool.end().catch(e => console.error('[DB] pool.end error:', e.message));
+    pool = null;
+    console.log('[DB] Pool closed');
+  }
+}
+
+export default { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, logSearch, getTopTopicsDB, getAdminStats, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch };
