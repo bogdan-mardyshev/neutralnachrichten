@@ -83,6 +83,13 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
   return (
     <div className="animate-fade-in space-y-8">
 
+      {/* Running progress bar — visible while AI analysis is in progress */}
+      {analysisLoading && (
+        <div className="relative h-[3px] bg-emerald-100 overflow-hidden -mt-2 rounded-full">
+          <div className="absolute inset-y-0 left-0 w-1/3 bg-emerald-400 rounded-full animate-scan" />
+        </div>
+      )}
+
       {/* Degraded warning — newspaper style */}
       {data._meta?.degraded && (
         <div className="border-l-4 border-amber-600 bg-amber-50 px-5 py-3">
@@ -143,7 +150,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
       </div>
 
       {/* ── Spectrum Grid ── */}
-      <SpectrumGrid spectrum={news_spectrum} rssSpectra={data._rss?.spectra} lang={lang} />
+      <SpectrumGrid spectrum={news_spectrum} rssSpectra={data._rss?.spectra} lang={lang} analysisLoading={analysisLoading} />
 
       {/* ── Hype Counter ── */}
       {data.coverage_distribution && (
