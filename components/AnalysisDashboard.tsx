@@ -72,9 +72,11 @@ interface AnalysisDashboardProps {
   data: NewsAnalysisResult;
   lang: Language;
   deepLoading?: boolean;
+  /** True while waiting for the Gemini AI result (RSS phase already shown) */
+  analysisLoading?: boolean;
 }
 
-export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang, deepLoading }) => {
+export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang, deepLoading, analysisLoading }) => {
   const t = translations[lang];
   const { news_spectrum, overall_non_partisan_analysis, analysis_topic } = data;
 
@@ -114,15 +116,29 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
           </div>
         </div>
 
-        {/* Fact check */}
+        {/* Fact check / AI analysis */}
         <div className="px-4 sm:px-6 py-4 sm:py-5">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-1 h-4 bg-emerald-500" />
             <p className="font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-600">{t.factCheck}</p>
+            {analysisLoading && (
+              <span className="font-sans text-[9px] uppercase tracking-widest text-emerald-500/60 animate-pulse ml-1">
+                KI analysiert…
+              </span>
+            )}
           </div>
-          <p className="font-serif text-base text-[#1a1a1a] leading-relaxed border-l-2 border-emerald-400 pl-4">
-            {overall_non_partisan_analysis}
-          </p>
+          {analysisLoading && !overall_non_partisan_analysis ? (
+            /* Skeleton while waiting for AI analysis */
+            <div className="border-l-2 border-emerald-400 pl-4 space-y-2 animate-pulse">
+              <div className="h-3 bg-[#e8e0d5] rounded w-full" />
+              <div className="h-3 bg-[#e8e0d5] rounded w-5/6" />
+              <div className="h-3 bg-[#e8e0d5] rounded w-4/5" />
+            </div>
+          ) : (
+            <p className="font-serif text-base text-[#1a1a1a] leading-relaxed border-l-2 border-emerald-400 pl-4">
+              {overall_non_partisan_analysis}
+            </p>
+          )}
         </div>
       </div>
 
