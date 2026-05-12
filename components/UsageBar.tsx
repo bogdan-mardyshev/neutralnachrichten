@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Language } from '../translations';
 
 interface Props {
@@ -23,11 +22,7 @@ function useCountdownToMidnightUTC() {
   useEffect(() => {
     const id = setInterval(() => {
       setSeconds(s => {
-        if (s <= 1) {
-          // Reload page when limit resets
-          window.location.reload();
-          return 0;
-        }
+        if (s <= 1) { window.location.reload(); return 0; }
         return s - 1;
       });
     }, 1000);
@@ -40,34 +35,73 @@ function useCountdownToMidnightUTC() {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-// ── Translations ──────────────────────────────────────────────────────────────
+// ── Brand spectrum strip ──────────────────────────────────────────────────────
+const SpectrumStrip = () => (
+  <div className="h-[3px] flex w-full">
+    <div className="flex-1 bg-rose-600" />
+    <div className="flex-1 bg-orange-400" />
+    <div className="flex-1 bg-slate-400" />
+    <div className="flex-1 bg-sky-500" />
+    <div className="flex-1 bg-blue-700" />
+  </div>
+);
+
+// ── Spectrum progress bar (fills left→right across 5 colors) ─────────────────
+const SpectrumProgress = ({ pct }: { pct: number }) => (
+  <div className="relative w-full h-[5px] bg-[#e0d8cf] overflow-hidden">
+    <div
+      className="absolute inset-y-0 left-0 transition-all duration-700"
+      style={{
+        width: `${pct}%`,
+        background: 'linear-gradient(to right, #e11d48, #fb923c, #94a3b8, #0ea5e9, #1d4ed8)',
+      }}
+    />
+  </div>
+);
+
+// ── Copy ──────────────────────────────────────────────────────────────────────
 const T = {
   de: {
-    remaining:   (n: number, limit: number) => `${n} von ${limit} Analysen heute`,
-    limitHit:    'Tageslimit erreicht',
-    resetsIn:    'Reset in',
-    proTeaser:   'Mit Pro unbegrenzt analysieren',
-    proBtn:      '→ Pro freischalten',
-    lowTeaser:   (n: number) => `Noch ${n} Analyse${n === 1 ? '' : 'n'} übrig`,
-    lowSub:      'Pro gibt dir unbegrenzte Analysen',
+    remaining:  (n: number, limit: number) => `${n} von ${limit} Analysen heute`,
+    limitHit:   'Tageslimit erreicht',
+    resetsIn:   'Neue Analysen in',
+    proHead:    'Unbegrenzt analysieren',
+    proBenefits: ['Kein Tageslimit', 'Priorität', 'Tiefenanalyse+'],
+    proBtn:     'Jetzt Pro werden — kostenlos testen',
+    lowHead:    (n: number) => `Nur noch ${n} Analyse${n === 1 ? '' : 'n'}`,
+    lowSub:     'Mit Pro analysierst du ohne Unterbrechung',
+    lowBtn:     'Pro freischalten',
+    freeLabel:  'Kostenloses Kontingent',
+    upgradeNudge: 'Mit Pro: kein Limit, mehr Tiefe.',
+    upgradeBtn: 'Upgrade — lohnt sich',
   },
   en: {
-    remaining:   (n: number, limit: number) => `${n} of ${limit} analyses today`,
-    limitHit:    'Daily limit reached',
-    resetsIn:    'Resets in',
-    proTeaser:   'Get unlimited analyses with Pro',
-    proBtn:      '→ Upgrade to Pro',
-    lowTeaser:   (n: number) => `${n} analysis${n === 1 ? '' : 'es'} left`,
-    lowSub:      'Pro gives you unlimited analyses',
+    remaining:  (n: number, limit: number) => `${n} of ${limit} analyses today`,
+    limitHit:   'Daily limit reached',
+    resetsIn:   'New analyses in',
+    proHead:    'Unlimited analyses',
+    proBenefits: ['No daily limit', 'Priority', 'Deep analysis+'],
+    proBtn:     'Go Pro — try for free',
+    lowHead:    (n: number) => `Only ${n} left`,
+    lowSub:     'Pro lets you keep going without interruption',
+    lowBtn:     'Unlock Pro',
+    freeLabel:  'Free daily quota',
+    upgradeNudge: 'Pro: no limits, deeper insights.',
+    upgradeBtn: 'Upgrade — worth it',
   },
   ru: {
-    remaining:   (n: number, limit: number) => `${n} из ${limit} анализов сегодня`,
-    limitHit:    'Дневной лимит исчерпан',
-    resetsIn:    'Сброс через',
-    proTeaser:   'Pro — без ограничений',
-    proBtn:      '→ Перейти на Pro',
-    lowTeaser:   (n: number) => `Осталось ${n} анализ${n === 1 ? '' : n < 5 ? 'а' : 'ов'}`,
-    lowSub:      'Pro снимает все лимиты',
+    remaining:  (n: number, limit: number) => `${n} из ${limit} анализов сегодня`,
+    limitHit:   'Дневной лимит исчерпан',
+    resetsIn:   'Новые анализы через',
+    proHead:    'Анализы без ограничений',
+    proBenefits: ['Без лимитов', 'Приоритет', 'Глубокий анализ+'],
+    proBtn:     'Перейти на Pro — попробовать бесплатно',
+    lowHead:    (n: number) => `Осталось ${n} ${n === 1 ? 'анализ' : n < 5 ? 'анализа' : 'анализов'}`,
+    lowSub:     'Pro — анализируй без остановок',
+    lowBtn:     'Открыть Pro',
+    freeLabel:  'Бесплатный лимит',
+    upgradeNudge: 'Pro: без лимитов, глубже.',
+    upgradeBtn: 'Апгрейд — стоит того',
   },
 };
 
@@ -78,126 +112,131 @@ export function UsageBar({ remaining, limit, lang, tier, onUpgradeClick }: Props
   const pct  = Math.min(100, (used / limit) * 100);
   const low  = remaining <= 2 && remaining > 0;
   const out  = remaining === 0;
-  const isPro = tier === 'pro' || tier === 'enterprise';
 
-  // Pro/Enterprise users: don't show the bar
-  if (isPro) return null;
+  if (tier === 'pro' || tier === 'enterprise') return null;
 
-  // ── Limit reached ──────────────────────────────────────────────────────────
+  // ── LIMIT REACHED ─────────────────────────────────────────────────────────
   if (out) {
     return (
-      <div className="mt-3 border-2 border-rose-600 bg-rose-50 px-4 py-3">
-        {/* Top row */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-rose-600 animate-pulse" />
-            <span className="font-sans text-[10px] uppercase tracking-widest font-bold text-rose-700">
-              {t.limitHit}
-            </span>
+      <div className="mt-3 border-2 border-[#1a1a1a] bg-[#FFF8F0] overflow-hidden">
+        <SpectrumStrip />
+        <div className="px-4 pt-3 pb-4">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-rose-600 animate-pulse" />
+              <span className="font-sans text-[10px] uppercase tracking-widest font-bold text-[#1a1a1a]">
+                {t.limitHit}
+              </span>
+            </div>
+            <div className="font-sans text-[11px] text-gray-500 tabular-nums">
+              {t.resetsIn}{' '}
+              <span className="font-black text-[#1a1a1a] font-mono">{countdown}</span>
+            </div>
           </div>
-          <div className="font-sans text-[10px] text-rose-500 tabular-nums">
-            {t.resetsIn} <span className="font-bold text-rose-700">{countdown}</span>
-          </div>
-        </div>
 
-        {/* Progress bar — full red */}
-        <div className="w-full bg-rose-200 h-1.5 mb-3">
-          <div className="bg-rose-600 h-1.5 w-full" />
-        </div>
+          {/* Full spectrum bar */}
+          <SpectrumProgress pct={100} />
 
-        {/* Pro upsell */}
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="font-serif font-bold text-sm text-rose-800">{t.proTeaser}</p>
-            <p className="font-sans text-[10px] text-rose-500 mt-0.5">
-              {lang === 'de' ? 'Kein Warten, kein Limit, sofort.' :
-               lang === 'ru' ? 'Без ожидания, без лимитов.' :
-               'No waiting, no limits, right now.'}
-            </p>
+          {/* Pro upsell block */}
+          <div className="mt-4 flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="font-serif font-black text-base text-[#1a1a1a] leading-tight mb-1">
+                {t.proHead}
+              </p>
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                {t.proBenefits.map(b => (
+                  <span key={b} className="font-sans text-[10px] text-gray-500 flex items-center gap-1">
+                    <span className="text-rose-500">✦</span> {b}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={onUpgradeClick}
+              className="shrink-0 bg-[#1a1a1a] text-[#FFF8F0] font-sans text-[10px] uppercase tracking-widest px-4 py-2.5 hover:bg-rose-600 transition-colors whitespace-nowrap border-2 border-transparent hover:border-rose-600"
+            >
+              {t.proBtn}
+            </button>
           </div>
-          <button
-            onClick={onUpgradeClick}
-            className="shrink-0 bg-rose-600 text-white font-sans text-[10px] uppercase tracking-widest px-4 py-2 hover:bg-rose-700 transition-colors whitespace-nowrap"
-          >
-            {t.proBtn}
-          </button>
         </div>
       </div>
     );
   }
 
-  // ── Low remaining (≤ 2) ────────────────────────────────────────────────────
+  // ── LOW (≤ 2 remaining) ───────────────────────────────────────────────────
   if (low) {
     return (
-      <div className="mt-3 border border-amber-400 bg-amber-50 px-3 py-2.5">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="font-sans text-[10px] uppercase tracking-widest font-bold text-amber-700">
-              ⚠ {t.lowTeaser(remaining)}
+      <div className="mt-3 border-2 border-orange-400 bg-[#FFF8F0] overflow-hidden">
+        <SpectrumStrip />
+        <div className="px-4 pt-3 pb-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-serif font-black text-sm text-[#1a1a1a]">
+              {t.lowHead(remaining)}
+            </span>
+            <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400">
+              {t.remaining(remaining, limit)}
             </span>
           </div>
-          <span className="font-sans text-[9px] text-amber-500 uppercase tracking-widest">{t.remaining(remaining, limit)}</span>
-        </div>
 
-        {/* Progress bar */}
-        <div className="w-full bg-amber-200 h-1 mb-2.5">
-          <div className="bg-amber-500 h-1 transition-all duration-500" style={{ width: `${pct}%` }} />
-        </div>
+          <SpectrumProgress pct={pct} />
 
-        <div className="flex items-center justify-between">
-          <p className="font-sans text-[10px] text-amber-600">{t.lowSub}</p>
-          <button
-            onClick={onUpgradeClick}
-            className="font-sans text-[10px] uppercase tracking-widest text-amber-700 underline hover:no-underline transition-colors"
-          >
-            {t.proBtn}
-          </button>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <p className="font-sans text-[11px] text-gray-500">{t.lowSub}</p>
+            <button
+              onClick={onUpgradeClick}
+              className="shrink-0 bg-orange-400 text-white font-sans text-[10px] uppercase tracking-widest px-3 py-2 hover:bg-orange-500 transition-colors whitespace-nowrap"
+            >
+              {t.lowBtn} ↗
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  // ── Normal ─────────────────────────────────────────────────────────────────
+  // ── NORMAL ────────────────────────────────────────────────────────────────
   return (
-    <div className="mt-3 border border-[#e0d8cf] bg-[#fdf9f5] px-4 py-3">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <div className="flex gap-[3px]">
-            {Array.from({ length: limit }).map((_, i) => (
-              <div
-                key={i}
-                className={`w-2 h-2 rounded-sm transition-all duration-300 ${
-                  i < used ? 'bg-[#1a1a1a]' : 'bg-[#e0d8cf]'
-                }`}
-              />
-            ))}
-          </div>
+    <div className="mt-3 border border-[#1a1a1a] bg-[#FFF8F0] overflow-hidden">
+      <SpectrumStrip />
+      <div className="px-4 pt-3 pb-3">
+        {/* Count + label */}
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-sans text-[10px] uppercase tracking-widest font-bold text-[#1a1a1a]">
+            {t.remaining(remaining, limit)}
+          </span>
+          <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400">
+            {t.freeLabel}
+          </span>
         </div>
-        <span className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a] font-bold">
-          {t.remaining(remaining, limit)}
-        </span>
-      </div>
 
-      {/* Progress bar */}
-      <div className="w-full bg-[#e0d8cf] h-1 mb-3">
-        <div
-          className="bg-[#1a1a1a] h-1 transition-all duration-500"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+        {/* Spectrum progress */}
+        <SpectrumProgress pct={pct} />
 
-      <div className="flex items-center justify-between">
-        <p className="font-sans text-[10px] text-gray-400">
-          {lang === 'de' ? 'Kostenlose Analysen pro Tag' :
-           lang === 'ru' ? 'Бесплатных анализов в день' :
-           'Free analyses per day'}
-        </p>
-        <button
-          onClick={onUpgradeClick}
-          className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a] underline hover:no-underline transition-colors"
-        >
-          {t.proBtn}
-        </button>
+        {/* Dot grid */}
+        <div className="flex gap-[3px] mt-2 mb-3">
+          {Array.from({ length: limit }).map((_, i) => (
+            <div
+              key={i}
+              className={`flex-1 h-1.5 transition-all duration-300 ${
+                i < used
+                  ? 'bg-[#1a1a1a]'
+                  : 'bg-[#e0d8cf]'
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* Upgrade nudge */}
+        <div className="flex items-center justify-between gap-3 border-t border-[#e0d8cf] pt-2.5">
+          <p className="font-sans text-[10px] text-gray-400">{t.upgradeNudge}</p>
+          <button
+            onClick={onUpgradeClick}
+            className="shrink-0 bg-[#1a1a1a] text-[#FFF8F0] font-sans text-[10px] uppercase tracking-widest px-3 py-1.5 hover:bg-rose-600 transition-colors whitespace-nowrap"
+          >
+            {t.upgradeBtn} ↗
+          </button>
+        </div>
       </div>
     </div>
   );
