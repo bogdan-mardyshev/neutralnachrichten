@@ -19,6 +19,7 @@ import { DailyNews } from './components/DailyNews';
 import { CategoryBrowser } from './components/CategoryBrowser';
 import { DesignPreview } from './components/DesignPreview';
 import AuthModal, { AuthUser } from './components/AuthModal';
+import { UsageBar } from './components/UsageBar';
 import AdminPage from './components/AdminPage';
 import UserProfilePage from './components/UserProfilePage';
 import VerifyEmailPage from './components/VerifyEmailPage';
@@ -234,12 +235,10 @@ function MainApp() {
       }
     } catch (err: any) {
       console.error(err);
-      // Handle daily limit error
+      // Handle daily limit error — UsageBar shows the countdown, no separate error needed
       if (err.status === 429 || err.message?.includes('daily_limit')) {
         setDailyRemaining(0);
-        setError(lang === 'de'
-          ? `Tageslimit erreicht. Du hast heute ${DAILY_LIMIT} Analysen genutzt. Das Limit wird um Mitternacht (UTC) zurückgesetzt.`
-          : `Daily limit reached. You've used ${DAILY_LIMIT} analyses today. Resets at midnight UTC.`);
+        setError(''); // UsageBar already shows the limit-reached UI with countdown
       } else {
         setError(err.message || t.errorDefault);
       }
@@ -454,21 +453,13 @@ function MainApp() {
 
                     {/* Daily usage indicator */}
                     {dailyRemaining !== null && (
-                      <div className={`mt-2 flex items-center gap-2 px-1 ${dailyRemaining === 0 ? 'text-rose-600' : 'text-gray-400'}`}>
-                        <div className="flex gap-0.5">
-                          {Array.from({ length: DAILY_LIMIT }).map((_, i) => (
-                            <div
-                              key={i}
-                              className={`w-2.5 h-1.5 ${i < (DAILY_LIMIT - dailyRemaining) ? 'bg-[#1a1a1a]' : 'bg-[#e0d8cf]'}`}
-                            />
-                          ))}
-                        </div>
-                        <span className="font-sans text-[9px] uppercase tracking-widest">
-                          {dailyRemaining === 0
-                            ? (lang === 'de' ? 'Tageslimit erreicht — Reset um Mitternacht UTC' : 'Daily limit reached — resets midnight UTC')
-                            : (lang === 'de' ? `${dailyRemaining} von ${DAILY_LIMIT} Analysen heute verbleibend` : `${dailyRemaining} of ${DAILY_LIMIT} analyses remaining today`)}
-                        </span>
-                      </div>
+                      <UsageBar
+                        remaining={dailyRemaining}
+                        limit={authUser?.daily_limit ?? DAILY_LIMIT}
+                        lang={lang}
+                        tier={authUser?.tier ?? 'free'}
+                        onUpgradeClick={() => { setAuthModalMode('login'); setShowAuthModal(true); }}
+                      />
                     )}
 
                     <SearchHistory
@@ -539,7 +530,7 @@ function MainApp() {
                 </div>
               )}
 
-              {status === 'error' && (
+              {status === 'error' && error && (
                 <div className="border-l-4 border-red-700 bg-red-50 px-6 py-4 max-w-2xl mx-auto">
                   <p className="font-serif font-bold text-red-800 mb-1">{t.errorTitle}</p>
                   <p className="font-sans text-sm text-red-600">{error}</p>
