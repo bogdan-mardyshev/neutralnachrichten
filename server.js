@@ -1219,6 +1219,10 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
 
+    if (!user.email_verified) {
+      return res.status(403).json({ error: 'email_not_verified', email: user.email });
+    }
+
     await updateLastLogin(user.id);
     const token = jwt.sign(
       { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit, email_verified: user.email_verified ?? false },
@@ -1309,6 +1313,28 @@ app.get('/api/auth/verify-email', async (req, res) => {
     console.error('[Auth/verify-email]', err.message);
     res.status(500).json({ error: 'Verification failed' });
   }
+});
+
+// Public resend — for users who can't login yet (email not verified)
+app.post('/api/auth/resend-public', forgotLimiter, async (req, res) => {
+  // Always return ok — prevent email enumeration
+  if (!isDBAvailable()) return res.json({ ok: true });
+  try {
+    const { email } = req.body;
+    if (!email) return res.json({ ok: true });
+    const user = await findUserByEmail(email.toLowerCase().trim());
+    if (user && !user.email_verified) {
+      const token  = generateToken();
+      const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await setEmailVerifyToken(user.id, hashToken(token), expiry);
+      sendVerificationEmail(user.email, token).catch(e =>
+        console.warn('[Auth/resend-public] Email failed:', e.message)
+      );
+    }
+  } catch (err) {
+    console.warn('[Auth/resend-public]', err.message);
+  }
+  res.json({ ok: true });
 });
 
 app.post('/api/auth/resend-verification', requireAuth, forgotLimiter, async (req, res) => {
