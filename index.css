@@ -1,9 +1,142 @@
 @import "tailwindcss";
 
+/* ── Fonts ─────────────────────────────────────────────────────────────────── */
 body {
   font-family: 'Inter', sans-serif;
-  background-color: #f8fafc;
+  background-color: #FFF8F0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 h1, h2, h3, .serif {
   font-family: 'Merriweather', serif;
+}
+
+/* ── Mobile base ───────────────────────────────────────────────────────────── */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* Prevent double-tap zoom */
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
+
+/* Prevent zoom on input focus on iOS (requires font-size >= 16px) */
+@media (max-width: 640px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
+/* iOS momentum scrolling */
+html {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* ── Safe area helpers ─────────────────────────────────────────────────────── */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* ── Animations ────────────────────────────────────────────────────────────── */
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDownFade {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes navBounce {
+  0%   { transform: translateY(0) scale(1); }
+  40%  { transform: translateY(-4px) scale(1.1); }
+  70%  { transform: translateY(1px) scale(0.97); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.animate-slide-up   { animation: slideUpFade 0.35s cubic-bezier(.22,1,.36,1) both; }
+.animate-slide-down { animation: slideDownFade 0.25s ease both; }
+.animate-fade-in    { animation: fadeIn 0.3s ease both; }
+.animate-scale-in   { animation: scaleIn 0.3s cubic-bezier(.22,1,.36,1) both; }
+.animate-sheet-up   { animation: sheetUp 0.4s cubic-bezier(.22,1,.36,1) both; }
+.animate-nav-bounce { animation: navBounce 0.4s cubic-bezier(.22,1,.36,1) both; }
+
+/* Stagger helpers */
+.stagger-1 { animation-delay: 0.04s; }
+.stagger-2 { animation-delay: 0.08s; }
+.stagger-3 { animation-delay: 0.12s; }
+.stagger-4 { animation-delay: 0.16s; }
+.stagger-5 { animation-delay: 0.20s; }
+
+/* ── Shimmer skeleton ──────────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, #e0d8cf 25%, #ede6dc 50%, #e0d8cf 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+/* ── Scroll snap — horizontal spectrum ────────────────────────────────────── */
+.spectrum-scroll {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  gap: 10px;
+  padding: 2px 0 8px;
+}
+.spectrum-scroll::-webkit-scrollbar { display: none; }
+.spectrum-scroll > * {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+/* ── Press effect ──────────────────────────────────────────────────────────── */
+.press-scale {
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+.press-scale:active {
+  transform: scale(0.96);
+  opacity: 0.85;
+}
+
+/* ── Custom scrollbar (desktop only) ───────────────────────────────────────── */
+@media (min-width: 640px) {
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #FFF8F0; }
+  ::-webkit-scrollbar-thumb { background: #e0d8cf; }
+  ::-webkit-scrollbar-thumb:hover { background: #1a1a1a; }
+}
+
+/* ── Focus ring ────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #e11d48;
+  outline-offset: 2px;
 }

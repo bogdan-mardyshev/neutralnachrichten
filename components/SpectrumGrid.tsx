@@ -177,34 +177,53 @@ export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, lang }) =>
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 animate-slide-up">
       <div className="flex items-center justify-between">
         <h3 className="font-serif font-black text-xl text-[#1a1a1a]">{t.analyzedSources}</h3>
         <div className="h-px flex-1 bg-[#1a1a1a] mx-4 opacity-15" />
       </div>
 
-      {/* Political spectrum bar */}
+      {/* Spectrum bar */}
       <div className="flex gap-px overflow-hidden h-1.5">
         {SPECTRUM_ORDER.map((key) => (
           <div key={key} className={`flex-1 ${spectrumStyles[key].bar}`} />
         ))}
       </div>
-      <div className="flex justify-between font-sans text-[9px] uppercase tracking-widest text-gray-400 -mt-3">
+      <div className="flex justify-between font-sans text-[9px] uppercase tracking-widest text-gray-400 -mt-2">
         <span>{leaningLabels['left']}</span>
         <span>{leaningLabels['center']}</span>
         <span>{leaningLabels['right']}</span>
       </div>
 
-      {/* 5-column grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-        {SPECTRUM_ORDER.map((key) => (
-          <SourceCard
+      {/* Mobile: horizontal scroll-snap carousel */}
+      <div className="sm:hidden spectrum-scroll -mx-4 px-4">
+        {SPECTRUM_ORDER.map((key, i) => (
+          <div
             key={key}
-            articles={spectrum[key] ?? []}
-            spectrumKey={key}
-            leaning={leaningLabels[key]}
-            lang={lang}
-          />
+            className={`animate-slide-up stagger-${i + 1}`}
+            style={{ width: 'calc(85vw)', maxWidth: 320 }}
+          >
+            <SourceCard
+              articles={spectrum[key] ?? []}
+              spectrumKey={key}
+              leaning={leaningLabels[key]}
+              lang={lang}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: grid */}
+      <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+        {SPECTRUM_ORDER.map((key, i) => (
+          <div key={key} className={`animate-slide-up stagger-${i + 1}`}>
+            <SourceCard
+              articles={spectrum[key] ?? []}
+              spectrumKey={key}
+              leaning={leaningLabels[key]}
+              lang={lang}
+            />
+          </div>
         ))}
       </div>
     </div>
