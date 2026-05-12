@@ -16,7 +16,8 @@ import bcrypt from 'bcryptjs';
 import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
 import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
 import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
-import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch } from './db.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData } from './db.js';
+import { sendVerificationEmail, sendPasswordResetEmail } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
 dotenv.config();
@@ -212,6 +213,39 @@ function getTopTopics(limit = 10) {
   return [...topicStats.values()]
     .sort((a, b) => b.count - a.count)
     .slice(0, limit);
+}
+
+// ── Auth Rate Limiters ────────────────────────────────────────────────────────
+// Applied per-IP. Separate buckets for login, register, and password-reset
+// so a brute-force on login doesn't consume the reset quota.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 10,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: getClientIP,
+  message: { error: 'Zu viele Anmeldeversuche. Bitte versuche es in 15 Minuten erneut.' },
+  skip: (req) => !!(req.headers['x-admin-key'] && req.headers['x-admin-key'] === ADMIN_KEY),
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 5,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: getClientIP,
+  message: { error: 'Zu viele Registrierungen. Bitte versuche es später erneut.' },
+});
+
+const forgotLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 3,
+  standardHeaders: true, legacyHeaders: false,
+  keyGenerator: getClientIP,
+  message: { error: 'Zu viele Anfragen. Bitte versuche es in einer Stunde erneut.' },
+});
+
+// ── Token helpers (SHA-256 hash stored in DB, plain token sent by email) ──────
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex'); // 256-bit, URL-safe hex
+}
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 // ── JWT auth middleware ────────────────────────────────────────────────────────
@@ -1138,7 +1172,7 @@ app.post('/api/suggest-source', (req, res) => {
 
 // ── Auth Routes ───────────────────────────────────────────────────────────────
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', registerLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
@@ -1150,16 +1184,30 @@ app.post('/api/auth/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await createUser(email.toLowerCase().trim(), passwordHash);
-    const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
 
-    res.status(201).json({ token, user: { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit } });
+    // Send verification email (fire-and-forget — never block registration)
+    const verifyToken  = generateToken();
+    const verifyExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+    setEmailVerifyToken(user.id, hashToken(verifyToken), verifyExpiry).catch(() => {});
+    sendVerificationEmail(user.email, verifyToken).catch(e =>
+      console.warn('[Auth/register] Verification email failed:', e.message)
+    );
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit, email_verified: false },
+      JWT_SECRET, { expiresIn: JWT_EXPIRES }
+    );
+    res.status(201).json({
+      token,
+      user: { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit, email_verified: false },
+    });
   } catch (err) {
     console.error('[Auth/register]', err.message);
     res.status(500).json({ error: 'Registration failed' });
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
@@ -1172,9 +1220,14 @@ app.post('/api/auth/login', async (req, res) => {
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
 
     await updateLastLogin(user.id);
-    const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
-
-    res.json({ token, user: { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit } });
+    const token = jwt.sign(
+      { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit, email_verified: user.email_verified ?? false },
+      JWT_SECRET, { expiresIn: JWT_EXPIRES }
+    );
+    res.json({
+      token,
+      user: { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit, email_verified: user.email_verified ?? false },
+    });
   } catch (err) {
     console.error('[Auth/login]', err.message);
     res.status(500).json({ error: 'Login failed' });
@@ -1238,6 +1291,167 @@ app.delete('/api/history/:id', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[history] DELETE error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Email Verification ────────────────────────────────────────────────────────
+
+app.get('/api/auth/verify-email', async (req, res) => {
+  const { token } = req.query;
+  if (!token || typeof token !== 'string') return res.status(400).json({ error: 'Token required' });
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+  try {
+    const user = await verifyEmailToken(hashToken(token));
+    if (!user) return res.status(400).json({ error: 'Invalid or expired verification link' });
+    console.log(`[Auth] Email verified: ${user.email}`);
+    res.json({ ok: true, message: 'E-Mail erfolgreich bestätigt!' });
+  } catch (err) {
+    console.error('[Auth/verify-email]', err.message);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+app.post('/api/auth/resend-verification', requireAuth, forgotLimiter, async (req, res) => {
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+  try {
+    const user = await findUserById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.email_verified) return res.json({ ok: true, message: 'Already verified' });
+    const token  = generateToken();
+    const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await setEmailVerifyToken(user.id, hashToken(token), expiry);
+    await sendVerificationEmail(user.email, token);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Auth/resend-verification]', err.message);
+    res.status(500).json({ error: 'Failed to resend' });
+  }
+});
+
+// ── Password Reset ─────────────────────────────────────────────────────────────
+
+app.post('/api/auth/forgot-password', forgotLimiter, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  // Always return ok — never reveal whether email exists (prevent enumeration)
+  res.json({ ok: true, message: 'Falls ein Konto existiert, wurde eine E-Mail gesendet.' });
+
+  if (!isDBAvailable()) return;
+  try {
+    const token  = generateToken();
+    const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1h
+    const found  = await setResetToken(email, hashToken(token), expiry);
+    if (found) {
+      await sendPasswordResetEmail(email.toLowerCase().trim(), token);
+      console.log(`[Auth] Password reset email sent to ${email}`);
+    }
+  } catch (err) {
+    console.warn('[Auth/forgot-password] Error (silent):', err.message);
+  }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ error: 'Token and password required' });
+  if (password.length < 8)  return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  if (!isDBAvailable())      return res.status(503).json({ error: 'Database not available' });
+  try {
+    const hash = await bcrypt.hash(password, 12);
+    const user = await useResetToken(hashToken(token), hash);
+    if (!user) return res.status(400).json({ error: 'Invalid or expired reset link' });
+    const jwt_token = jwt.sign(
+      { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit, email_verified: user.email_verified ?? false },
+      JWT_SECRET, { expiresIn: JWT_EXPIRES }
+    );
+    console.log(`[Auth] Password reset for ${user.email}`);
+    res.json({ ok: true, token: jwt_token, user: { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit, email_verified: user.email_verified } });
+  } catch (err) {
+    console.error('[Auth/reset-password]', err.message);
+    res.status(500).json({ error: 'Reset failed' });
+  }
+});
+
+// ── Account Management (authenticated) ───────────────────────────────────────
+
+app.put('/api/auth/change-password', requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Both passwords required' });
+  if (newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+  try {
+    const user = await findUserByEmail(req.user.email);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const ok = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Aktuelles Passwort ist falsch' });
+    const hash = await bcrypt.hash(newPassword, 12);
+    await updateUserPassword(req.user.id, hash);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Auth/change-password]', err.message);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+app.put('/api/auth/change-email', requireAuth, async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+  try {
+    const user = await findUserByEmail(req.user.email);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Passwort ist falsch' });
+    const exists = await findUserByEmail(email);
+    if (exists) return res.status(409).json({ error: 'Diese E-Mail ist bereits vergeben' });
+    const updated = await updateUserEmail(req.user.id, email);
+    // Send new verification email
+    const verifyToken  = generateToken();
+    const verifyExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    setEmailVerifyToken(req.user.id, hashToken(verifyToken), verifyExpiry).catch(() => {});
+    sendVerificationEmail(email.toLowerCase().trim(), verifyToken).catch(e =>
+      console.warn('[Auth/change-email] Verification email failed:', e.message)
+    );
+    const newToken = jwt.sign(
+      { id: req.user.id, email: updated.email, tier: updated.tier, daily_limit: updated.daily_limit, email_verified: false },
+      JWT_SECRET, { expiresIn: JWT_EXPIRES }
+    );
+    res.json({ ok: true, token: newToken, user: { ...updated, email_verified: false } });
+  } catch (err) {
+    console.error('[Auth/change-email]', err.message);
+    res.status(500).json({ error: 'Failed to change email' });
+  }
+});
+
+app.delete('/api/auth/account', requireAuth, async (req, res) => {
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ error: 'Password required to confirm deletion' });
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+  try {
+    const user = await findUserByEmail(req.user.email);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Passwort ist falsch' });
+    await softDeleteUser(req.user.id);
+    console.log(`[Auth] Account deleted: user ${req.user.id}`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Auth/delete-account]', err.message);
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
+});
+
+app.get('/api/auth/export', requireAuth, async (req, res) => {
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+  try {
+    const data = await exportUserData(req.user.id);
+    if (!data) return res.status(404).json({ error: 'No data found' });
+    const filename = `neutralnachrichten-export-${req.user.id}-${Date.now()}.json`;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.json(data);
+  } catch (err) {
+    console.error('[Auth/export]', err.message);
+    res.status(500).json({ error: 'Export failed' });
   }
 });
 
