@@ -71,7 +71,7 @@ interface UserRowProps {
   onSaved: () => void;
 }
 
-function UserRow({ u, adminKey, onSaved }: UserRowProps) {
+const UserRow: React.FC<UserRowProps> = ({ u, adminKey, onSaved }) => {
   const [editing, setEditing] = useState(false);
   const [tier, setTier] = useState(u.tier);
   const [limit, setLimit] = useState(String(u.daily_limit));

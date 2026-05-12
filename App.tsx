@@ -352,7 +352,7 @@ function MainApp() {
           </div>
 
           {/* Logo — centered */}
-          <Link to="/" onClick={() => setMobileMenuOpen(false)} className="absolute left-1/2 -translate-x-1/2 font-serif font-black text-xl tracking-tight text-[#1a1a1a] whitespace-nowrap hover:opacity-80 transition-opacity">
+          <Link to="/" onClick={() => setMobileMenuOpen(false)} className="absolute left-1/2 -translate-x-1/2 font-serif font-black text-xl tracking-tight text-[#1a1a1a] whitespace-nowrap hover:text-rose-600 transition-colors duration-200">
             {t.title}
           </Link>
 
@@ -600,7 +600,7 @@ function MainApp() {
                   <div className="mb-6">
                     <button
                       onClick={handleReset}
-                      className="font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] transition-colors flex items-center gap-2"
+                      className="inline-flex items-center gap-2 font-sans text-[10px] font-bold uppercase tracking-widest border-2 border-[#1a1a1a] px-3 py-2 text-[#1a1a1a] hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all duration-200 animate-fade-in"
                     >
                       ← {t.backToHome}
                     </button>

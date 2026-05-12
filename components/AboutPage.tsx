@@ -105,17 +105,21 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
       heroLabel: 'Über uns',
       heroQuote: 'Verstehen beginnt damit, alle Seiten zu hören.',
       heroSub: 'NeutraleNachrichten ist ein Werkzeug, das das gesamte politische Spektrum der deutschen Presse auf einen Blick zugänglich macht — für alle, nicht nur für Experten.',
+      stat1: 'Deutsche Medien',
+      stat2: 'Politische Lager',
+      stat3: 'Erste Ergebnisse',
+      stat4: 'Sprachen',
 
-      storyLabel: 'Wie es begann',
-      storyLeft: 'Die deutsche Medienlandschaft ist reich und vielfältig. Von der taz bis zur FAZ, von junge Welt bis Junge Freiheit — die Bandbreite ist einzigartig in Europa.',
-      storyRight: 'Aber niemand hat Zeit, täglich fünf Zeitungen zu lesen. Wir haben NeutraleNachrichten gebaut, damit du trotzdem das vollständige Bild bekommst.',
+      storyLabel: 'Was wir gebaut haben',
+      storyLeft: 'Wir crawlen 18 deutsche Medien aus fünf politischen Lagern in Echtzeit — von taz und junge Welt auf der Linken bis zu Junge Freiheit und Tichys Einblick auf der Rechten. Erste Ergebnisse erscheinen in ~2 Sekunden per RSS-Streaming.',
+      storyRight: 'Gemini 2.5 Flash analysiert jeden Artikel auf seine politische Perspektive hin. Wir zeigen dir nicht nur, was geschrieben wird — sondern auch den Originaltext, damit du die KI-Interpretation selbst überprüfen kannst.',
 
       principlesLabel: 'Was uns antreibt',
       principles: [
         { n: '01', title: 'Jede Geschichte hat mehr als eine Perspektive', body: 'Wir zeigen dasselbe Thema gleichzeitig aus fünf politischen Richtungen — damit du dir selbst ein Bild machen kannst.' },
-        { n: '02', title: 'Gute Werkzeuge müssen einfach sein', body: 'Medienanalyse auf Knopfdruck — kein Fachwissen nötig, keine Vorkenntnisse. Einfach ein Thema eingeben und das Ergebnis in Sekunden.' },
-        { n: '03', title: 'Transparenz über unsere Methoden', body: 'Du solltest wissen, wie unsere Analyse entsteht — welche Quellen, welche KI, welche Grenzen. Wir dokumentieren alles offen auf der Methodologie-Seite.' },
-        { n: '04', title: 'KI als Werkzeug, nicht als Autorität', body: 'Wir nutzen KI, um zu aggregieren und zu strukturieren — nicht um zu urteilen. Das Urteil liegt bei dir.' },
+        { n: '02', title: 'Ergebnisse in ~2 Sekunden', body: 'RSS-Streaming liefert die erste Übersicht sofort. Keine leere Seite, kein Warten ins Leere — du siehst echte Artikel, während die KI noch denkt.' },
+        { n: '03', title: 'KI-Aussagen sind überprüfbar', body: 'Jede KI-Zusammenfassung zeigt darunter den originalen RSS-Auszug. Du kannst immer sehen, ob die Interpretation dem Original entspricht.' },
+        { n: '04', title: 'Transparenz über unsere Methoden', body: 'Du solltest wissen, wie unsere Analyse entsteht — welche Quellen, welche KI, welche Grenzen. Wir dokumentieren alles offen auf der Methodologie-Seite.' },
         { n: '05', title: 'Unabhängig von Verlagen und Investoren', body: 'Wir nehmen keine Investitionen von deutschen Medienverlagen an. Unsere Analyse gehört niemandem außer unseren Nutzern.' },
       ],
 
@@ -137,17 +141,21 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
       heroLabel: 'About us',
       heroQuote: 'Understanding begins with hearing all sides.',
       heroSub: 'NeutralNews is a tool that makes the full political spectrum of the German press accessible at a glance — for everyone, not just experts.',
+      stat1: 'German outlets',
+      stat2: 'Political camps',
+      stat3: 'First results',
+      stat4: 'Languages',
 
-      storyLabel: 'How it started',
-      storyLeft: 'The German media landscape is rich and diverse. From taz to FAZ, from junge Welt to Junge Freiheit — the breadth is unique in Europe.',
-      storyRight: 'But nobody has time to read five newspapers a day. We built NeutralNews so you can still get the complete picture.',
+      storyLabel: 'What we built',
+      storyLeft: 'We crawl 18 German outlets across five political camps in real time — from taz and junge Welt on the left to Junge Freiheit and Tichys Einblick on the right. First results arrive in ~2 seconds via RSS streaming.',
+      storyRight: 'Gemini 2.5 Flash analyses each article for its political perspective. We don\'t just show you what\'s written — we also show the original text so you can verify the AI\'s interpretation yourself.',
 
       principlesLabel: 'What drives us',
       principles: [
         { n: '01', title: 'Every story has more than one perspective', body: 'We show the same topic from five political directions simultaneously — so you can form your own view.' },
-        { n: '02', title: 'Good tools must be simple', body: 'Media analysis at the press of a button — no expertise required, no prior knowledge. Just type a topic and get results in seconds.' },
-        { n: '03', title: 'Transparency about our methods', body: 'You should know how our analysis is produced — which sources, which AI, which limitations. We document everything openly on the Methodology page.' },
-        { n: '04', title: 'AI as a tool, not an authority', body: 'We use AI to aggregate and structure — not to judge. The judgement is yours.' },
+        { n: '02', title: 'Results in ~2 seconds', body: 'RSS streaming delivers the first overview instantly. No blank page, no waiting in the dark — you see real articles while the AI is still thinking.' },
+        { n: '03', title: 'AI claims are verifiable', body: 'Every AI summary shows the original RSS excerpt below it. You can always check whether the interpretation matches the original.' },
+        { n: '04', title: 'Transparency about our methods', body: 'You should know how our analysis is produced — which sources, which AI, which limitations. We document everything openly on the Methodology page.' },
         { n: '05', title: 'Independent of publishers and investors', body: 'We accept no investment from German media publishers. Our analysis belongs to nobody but our users.' },
       ],
 
@@ -169,17 +177,21 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
       heroLabel: 'О нас',
       heroQuote: 'Понимание начинается с того, чтобы услышать все точки зрения.',
       heroSub: 'NeutraleNachrichten — инструмент, который делает весь политический спектр немецкой прессы доступным с первого взгляда — для всех, а не только для экспертов.',
+      stat1: 'Немецких изданий',
+      stat2: 'Политических лагерей',
+      stat3: 'Первые результаты',
+      stat4: 'Языка',
 
-      storyLabel: 'С чего всё началось',
-      storyLeft: 'Немецкий медиапейзаж богат и разнообразен. От taz до FAZ, от junge Welt до Junge Freiheit — такого разнообразия нет больше нигде в Европе.',
-      storyRight: 'Но у никого нет времени читать пять газет в день. Мы создали NeutraleNachrichten, чтобы вы всё равно получали полную картину.',
+      storyLabel: 'Что мы построили',
+      storyLeft: 'Мы в реальном времени обходим 18 немецких изданий из пяти политических лагерей — от taz и junge Welt слева до Junge Freiheit и Tichys Einblick справа. Первые результаты появляются через ~2 секунды через RSS-стриминг.',
+      storyRight: 'Gemini 2.5 Flash анализирует каждую статью с точки зрения её политической позиции. Мы показываем не только то, что написано — но и оригинальный текст, чтобы вы могли сами проверить интерпретацию ИИ.',
 
       principlesLabel: 'Что нас движет',
       principles: [
         { n: '01', title: 'У каждой истории больше одной точки зрения', body: 'Мы показываем одну тему с пяти политических направлений одновременно — чтобы вы могли составить собственное мнение.' },
-        { n: '02', title: 'Хорошие инструменты должны быть простыми', body: 'Медиаанализ одним нажатием — никакой экспертизы, никаких предварительных знаний. Просто введите тему и получите результат за секунды.' },
-        { n: '03', title: 'Прозрачность в методах', body: 'Вы должны знать, как создаётся наш анализ — какие источники, какой ИИ, какие ограничения. Мы открыто документируем всё на странице методологии.' },
-        { n: '04', title: 'ИИ — инструмент, а не авторитет', body: 'Мы используем ИИ для агрегации и структурирования — но не для суждений. Суждение — за вами.' },
+        { n: '02', title: 'Результаты за ~2 секунды', body: 'RSS-стриминг даёт первый обзор мгновенно. Никакой пустой страницы — вы видите реальные статьи, пока ИИ ещё анализирует.' },
+        { n: '03', title: 'Утверждения ИИ проверяемы', body: 'Под каждым AI-резюме показывается оригинальный фрагмент из RSS. Вы всегда можете проверить, соответствует ли интерпретация оригиналу.' },
+        { n: '04', title: 'Прозрачность в методах', body: 'Вы должны знать, как создаётся наш анализ — какие источники, какой ИИ, какие ограничения. Мы открыто документируем всё на странице методологии.' },
         { n: '05', title: 'Независимы от издателей и инвесторов', body: 'Мы не принимаем инвестиций от немецких медиаиздателей. Наш анализ не принадлежит никому, кроме наших пользователей.' },
       ],
 
@@ -202,14 +214,14 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
     <div className="max-w-4xl mx-auto pb-16">
 
       {/* ── Back ── */}
-      <Link to="/" className="font-sans text-[10px] uppercase tracking-widest text-gray-400 hover:text-[#1a1a1a] transition-colors flex items-center gap-1.5 mb-8">
+      <Link to="/" className="inline-flex items-center gap-2 font-sans text-[10px] font-bold uppercase tracking-widest border-2 border-[#1a1a1a] px-3 py-2 text-[#1a1a1a] hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all duration-200 mb-8">
         ← {t.backToHome}
       </Link>
 
       {/* ════════════════════════════════════════════════════════
           HERO
       ════════════════════════════════════════════════════════ */}
-      <div className="border-2 border-[#1a1a1a] overflow-hidden mb-8">
+      <div className="border-2 border-[#1a1a1a] overflow-hidden mb-8 animate-fade-in">
         <div className="h-1.5 flex">
           <div className="flex-1 bg-rose-500" /><div className="flex-1 bg-orange-400" />
           <div className="flex-1 bg-slate-400" /><div className="flex-1 bg-sky-400" />
@@ -227,6 +239,20 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
           <p className="font-serif text-sm text-white/55 leading-relaxed max-w-lg relative z-10">
             {L.heroSub}
           </p>
+        </div>
+        {/* Live stats bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x-2 divide-y-2 sm:divide-y-0 divide-[#1a1a1a] border-t-2 border-[#1a1a1a]">
+          {[
+            { value: '18', label: L.stat1, accent: 'text-rose-600' },
+            { value: '5',  label: L.stat2, accent: 'text-orange-500' },
+            { value: '~2s', label: L.stat3, accent: 'text-emerald-600' },
+            { value: '3',  label: L.stat4, accent: 'text-sky-600' },
+          ].map(({ value, label, accent }) => (
+            <div key={label} className="px-5 py-4 flex flex-col gap-1">
+              <span className={`font-serif font-black text-2xl ${accent}`}>{value}</span>
+              <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400">{label}</span>
+            </div>
+          ))}
         </div>
       </div>
 

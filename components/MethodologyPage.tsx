@@ -7,11 +7,11 @@ interface Props { lang: Language }
 // ── Data ─────────────────────────────────────────────────────────────────────
 
 const SOURCES = {
-  left:         ['junge Welt', 'taz', 'neues deutschland', 'der Freitag'],
-  center_left:  ['Der Spiegel', 'Süddeutsche Zeitung', 'Die Zeit', 'Tagesschau / ARD', 'ZDF', 'Deutsche Welle'],
-  center:       ['Tagesspiegel', 'FAZ', 'Handelsblatt', 'Stern', 'NDR / BR / WDR'],
-  center_right: ['Welt', 'Focus', 'ntv', 'NIUS', 'Cicero'],
-  right:        ['Bild', 'Junge Freiheit', 'Tichys Einblick', 'Achse des Guten'],
+  left:         ['taz', 'nd-aktuell', 'Junge Welt'],
+  center_left:  ['Der Spiegel', 'Süddeutsche Zeitung', 'Die Zeit', 'Tagesspiegel'],
+  center:       ['Tagesschau', 'ZDF heute', 'Deutschlandfunk'],
+  center_right: ['FAZ', 'Die Welt', 'Focus', 'NTV', 'Handelsblatt'],
+  right:        ['Bild', 'Junge Freiheit', 'Tichys Einblick'],
 } as const;
 
 const SPECTRUM_ORDER = ['left', 'center_left', 'center', 'center_right', 'right'] as const;
@@ -31,52 +31,58 @@ const SPECTRUM_CFG: Record<SpectrumKey, {
 
 const DEEP_FEATURES: Record<Language, { icon: string; title: string; desc: string; accent: string }[]> = {
   de: [
-    { icon: '◎', title: 'Gemeinsame Fakten',         desc: 'Was alle fünf Lager übereinstimmend berichten — unbestrittener Konsens',          accent: 'bg-emerald-500' },
-    { icon: '↕', title: 'Divergenzpunkte',           desc: 'Dieselben Ereignisse — unterschiedliche Deutungen über das Spektrum hinweg',        accent: 'bg-amber-400'   },
-    { icon: '◌', title: 'Blinde Flecken',            desc: 'Aspekte, die nur von einem Lager oder gar nicht berichtet werden',                  accent: 'bg-rose-500'    },
-    { icon: '≡', title: 'Berichterstattungsvolumen', desc: 'Geschätzte Artikelanzahl pro Lager pro Woche und Monat',                            accent: 'bg-violet-500'  },
-    { icon: '~', title: 'Sentiment-Analyse',         desc: 'Tonalität der Berichterstattung: positiv / neutral / negativ pro Lager',            accent: 'bg-pink-500'    },
-    { icon: '#', title: 'Linguistische Analyse',     desc: 'Charakteristische Schlüsselwörter pro politischem Lager',                          accent: 'bg-teal-500'    },
-    { icon: '◈', title: 'Experten-Karte',            desc: 'Wer wird von welchen Medien zitiert — Übersicht der Quellen und Autoritäten',       accent: 'bg-indigo-500'  },
+    { icon: '◎', title: 'Gemeinsame Fakten',         desc: 'Was alle fünf Lager übereinstimmend berichten — unbestrittener Konsens',                          accent: 'bg-emerald-500' },
+    { icon: '↕', title: 'Divergenzpunkte',           desc: 'Dieselben Ereignisse — unterschiedliche Deutungen über das Spektrum hinweg',                      accent: 'bg-amber-400'   },
+    { icon: '◌', title: 'Blinde Flecken',            desc: 'Aspekte, die nur von einem Lager oder gar nicht berichtet werden',                                accent: 'bg-rose-500'    },
+    { icon: '≡', title: 'Berichterstattungsvolumen', desc: 'Echte Artikelzahl pro Lager aus RSS — Woche und Monat, keine KI-Schätzung',                       accent: 'bg-violet-500'  },
+    { icon: '~', title: 'Sentiment-Analyse',         desc: 'Tonalität der Berichterstattung: positiv / neutral / negativ pro Lager',                          accent: 'bg-pink-500'    },
+    { icon: '#', title: 'Linguistische Analyse',     desc: 'Charakteristische Schlüsselwörter pro politischem Lager',                                          accent: 'bg-teal-500'    },
+    { icon: '◈', title: 'Experten-Karte',            desc: 'Wer wird von welchen Medien zitiert — Übersicht der Quellen und Autoritäten',                      accent: 'bg-indigo-500'  },
+    { icon: '📄', title: 'Original RSS-Snippets',    desc: 'Unter jeder KI-Zusammenfassung wird der originale RSS-Text gezeigt — für direkte Nachprüfbarkeit', accent: 'bg-orange-500'  },
   ],
   en: [
-    { icon: '◎', title: 'Shared Facts',              desc: 'What all five camps agree on — undisputed consensus across the spectrum',           accent: 'bg-emerald-500' },
-    { icon: '↕', title: 'Diverging Points',          desc: 'Same events — different framings and interpretations across the spectrum',           accent: 'bg-amber-400'   },
-    { icon: '◌', title: 'Blind Spots',               desc: 'Angles barely covered or only covered by one side of the spectrum',                 accent: 'bg-rose-500'    },
-    { icon: '≡', title: 'Coverage Volume',           desc: 'Estimated article count per political camp per week and month',                     accent: 'bg-violet-500'  },
-    { icon: '~', title: 'Sentiment Analysis',        desc: 'Overall tone of coverage: positive / neutral / negative per camp',                  accent: 'bg-pink-500'    },
-    { icon: '#', title: 'Linguistic Analysis',       desc: 'Characteristic keywords per political camp — their linguistic fingerprint',         accent: 'bg-teal-500'    },
-    { icon: '◈', title: 'Expert Map',                desc: 'Who is cited by which media — overview of referenced sources and authorities',      accent: 'bg-indigo-500'  },
+    { icon: '◎', title: 'Shared Facts',              desc: 'What all five camps agree on — undisputed consensus across the spectrum',                          accent: 'bg-emerald-500' },
+    { icon: '↕', title: 'Diverging Points',          desc: 'Same events — different framings and interpretations across the spectrum',                         accent: 'bg-amber-400'   },
+    { icon: '◌', title: 'Blind Spots',               desc: 'Angles barely covered or only covered by one side of the spectrum',                               accent: 'bg-rose-500'    },
+    { icon: '≡', title: 'Coverage Volume',           desc: 'Real article count per camp from RSS — week and month, no AI estimation',                          accent: 'bg-violet-500'  },
+    { icon: '~', title: 'Sentiment Analysis',        desc: 'Overall tone of coverage: positive / neutral / negative per camp',                                 accent: 'bg-pink-500'    },
+    { icon: '#', title: 'Linguistic Analysis',       desc: 'Characteristic keywords per political camp — their linguistic fingerprint',                        accent: 'bg-teal-500'    },
+    { icon: '◈', title: 'Expert Map',                desc: 'Who is cited by which media — overview of referenced sources and authorities',                     accent: 'bg-indigo-500'  },
+    { icon: '📄', title: 'Original RSS Snippets',    desc: 'Below each AI summary, the original RSS text is shown — for direct verification',                  accent: 'bg-orange-500'  },
   ],
   ru: [
-    { icon: '◎', title: 'Общие факты',              desc: 'С чем согласны все пять лагерей — бесспорный консенсус по всему спектру',           accent: 'bg-emerald-500' },
-    { icon: '↕', title: 'Точки расхождения',        desc: 'Одни события — разные интерпретации и подача по всему спектру',                    accent: 'bg-amber-400'   },
-    { icon: '◌', title: 'Слепые пятна',             desc: 'Аспекты, о которых почти не говорят или говорит лишь одна сторона',               accent: 'bg-rose-500'    },
-    { icon: '≡', title: 'Объём освещения',          desc: 'Примерное количество статей по лагерям за неделю и месяц',                        accent: 'bg-violet-500'  },
-    { icon: '~', title: 'Анализ тональности',       desc: 'Общий тон освещения: позитивный / нейтральный / негативный по лагерям',           accent: 'bg-pink-500'    },
-    { icon: '#', title: 'Лингвистический анализ',   desc: 'Характерные ключевые слова по политическому лагерю — их языковой отпечаток',      accent: 'bg-teal-500'    },
-    { icon: '◈', title: 'Карта экспертов',          desc: 'Кого цитируют какие СМИ — обзор упоминаемых источников и авторитетов',            accent: 'bg-indigo-500'  },
+    { icon: '◎', title: 'Общие факты',              desc: 'С чем согласны все пять лагерей — бесспорный консенсус по всему спектру',                          accent: 'bg-emerald-500' },
+    { icon: '↕', title: 'Точки расхождения',        desc: 'Одни события — разные интерпретации и подача по всему спектру',                                   accent: 'bg-amber-400'   },
+    { icon: '◌', title: 'Слепые пятна',             desc: 'Аспекты, о которых почти не говорят или говорит лишь одна сторона',                               accent: 'bg-rose-500'    },
+    { icon: '≡', title: 'Объём освещения',          desc: 'Реальное количество статей из RSS по лагерям — за неделю и месяц, без оценок ИИ',                 accent: 'bg-violet-500'  },
+    { icon: '~', title: 'Анализ тональности',       desc: 'Общий тон освещения: позитивный / нейтральный / негативный по лагерям',                           accent: 'bg-pink-500'    },
+    { icon: '#', title: 'Лингвистический анализ',   desc: 'Характерные ключевые слова по политическому лагерю — их языковой отпечаток',                       accent: 'bg-teal-500'    },
+    { icon: '◈', title: 'Карта экспертов',          desc: 'Кого цитируют какие СМИ — обзор упоминаемых источников и авторитетов',                             accent: 'bg-indigo-500'  },
+    { icon: '📄', title: 'Оригинальные RSS-сниппеты', desc: 'Под каждым AI-резюме показывается оригинальный текст из RSS — для прямой проверки',              accent: 'bg-orange-500'  },
   ],
 };
 
 const PIPELINE: Record<Language, { n: string; title: string; desc: string; color: string; dotColor: string }[]> = {
   de: [
-    { n: '01', title: 'Thema eingeben',           desc: 'Du gibst ein Thema ein — in Deutsch, Englisch oder Russisch. Das System übersetzt intern ins Deutsche, falls nötig.',          color: 'border-rose-500',   dotColor: 'bg-rose-500'   },
-    { n: '02', title: 'Deutsche Basis-Analyse',   desc: 'Gemini 2.5 Flash durchsucht alle 5 Spektren gleichzeitig via Google Search Grounding — verifizierte Artikel aus deutschen Medien.',   color: 'border-orange-400', dotColor: 'bg-orange-400' },
-    { n: '03', title: 'Übersetzung & Anreicherung', desc: 'Bei EN/RU-Anfragen wird das Ergebnis semantisch übersetzt. Deep Analysis wird parallel als zweiter Gemini-Call geladen.',    color: 'border-amber-400',  dotColor: 'bg-amber-400'  },
-    { n: '04', title: 'Cache & Auslieferung',     desc: 'Ergebnisse werden in PostgreSQL (24h) + NodeCache (RAM) gecacht. Nächste Anfrage zum gleichen Thema: sofort.',                  color: 'border-blue-600',   dotColor: 'bg-blue-600'   },
+    { n: '01', title: 'Thema eingeben',              desc: 'Du gibst ein Thema ein — auf Deutsch, Englisch oder Russisch. Das System übersetzt intern ins Deutsche, falls nötig.',                                   color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
+    { n: '02', title: 'RSS-Streaming (~2s)',          desc: '18 RSS-Feeds werden parallel abgerufen und sofort per SSE an den Browser gestreamt — echte Artikel erscheinen, bevor die KI überhaupt startet.',        color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
+    { n: '03', title: 'KI-Analyse (15–45s)',          desc: 'Gemini 2.5 Flash durchsucht alle 5 Spektren gleichzeitig via Google Search Grounding. Perspektiv-Zusammenfassungen und Fakten-Check werden generiert.',  color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
+    { n: '04', title: 'Übersetzung & Deep Analysis', desc: 'Bei EN/RU-Anfragen wird das Ergebnis semantisch übersetzt. Die Tiefenanalyse (Fakten, Divergenzen, Blind Spots) läuft parallel als zweiter Gemini-Call.',color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
+    { n: '05', title: 'Cache & Auslieferung',        desc: 'Ergebnisse werden 24h in PostgreSQL + RAM gecacht. Nächste Anfrage zum gleichen Thema: sofort. RSS wird immer frisch abgerufen.',                        color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
   ],
   en: [
-    { n: '01', title: 'Enter topic',              desc: 'You enter a topic — in German, English or Russian. The system translates to German internally if needed.',                       color: 'border-rose-500',   dotColor: 'bg-rose-500'   },
-    { n: '02', title: 'German base analysis',     desc: 'Gemini 2.5 Flash searches all 5 spectra simultaneously via Google Search Grounding — verified articles from German media.',     color: 'border-orange-400', dotColor: 'bg-orange-400' },
-    { n: '03', title: 'Translation & enrichment', desc: 'For EN/RU queries, the result is semantically translated. Deep Analysis is loaded in parallel as a second Gemini call.',        color: 'border-amber-400',  dotColor: 'bg-amber-400'  },
-    { n: '04', title: 'Cache & delivery',         desc: 'Results are cached in PostgreSQL (24h) + NodeCache (RAM). Next request for the same topic: instant.',                           color: 'border-blue-600',   dotColor: 'bg-blue-600'   },
+    { n: '01', title: 'Enter topic',                 desc: 'You enter a topic — in German, English or Russian. The system translates to German internally if needed.',                                                color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
+    { n: '02', title: 'RSS streaming (~2s)',          desc: '18 RSS feeds are fetched in parallel and streamed to the browser instantly via SSE — real articles appear before the AI has even started.',               color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
+    { n: '03', title: 'AI analysis (15–45s)',         desc: 'Gemini 2.5 Flash searches all 5 spectra simultaneously via Google Search Grounding. Perspective summaries and fact-checks are generated.',               color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
+    { n: '04', title: 'Translation & deep analysis', desc: 'For EN/RU queries, results are semantically translated. Deep analysis (shared facts, diverging points, blind spots) runs in parallel as a second Gemini call.', color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
+    { n: '05', title: 'Cache & delivery',            desc: 'Results are cached 24h in PostgreSQL + RAM. Next request for the same topic: instant. RSS is always fetched fresh.',                                      color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
   ],
   ru: [
-    { n: '01', title: 'Введите тему',             desc: 'Вы вводите тему — на немецком, английском или русском. При необходимости система автоматически переводит на немецкий.',         color: 'border-rose-500',   dotColor: 'bg-rose-500'   },
-    { n: '02', title: 'Базовый анализ на немецком', desc: 'Gemini 2.5 Flash одновременно обходит все 5 спектров через Google Search Grounding — верифицированные статьи из немецких СМИ.', color: 'border-orange-400', dotColor: 'bg-orange-400' },
-    { n: '03', title: 'Перевод и обогащение',     desc: 'Для EN/RU запросов результат семантически переводится. Глубокий анализ загружается параллельно вторым вызовом Gemini.',         color: 'border-amber-400',  dotColor: 'bg-amber-400'  },
-    { n: '04', title: 'Кэш и доставка',           desc: 'Результаты кэшируются в PostgreSQL (24ч) + NodeCache (ОЗУ). Следующий запрос по той же теме — мгновенно.',                      color: 'border-blue-600',   dotColor: 'bg-blue-600'   },
+    { n: '01', title: 'Введите тему',                desc: 'Вы вводите тему — на немецком, английском или русском. При необходимости система автоматически переводит на немецкий.',                                   color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
+    { n: '02', title: 'RSS-стриминг (~2с)',           desc: '18 RSS-лент загружаются параллельно и мгновенно стримятся в браузер через SSE — реальные статьи появляются до того, как ИИ вообще начал работу.',        color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
+    { n: '03', title: 'ИИ-анализ (15–45с)',           desc: 'Gemini 2.5 Flash одновременно обходит все 5 спектров через Google Search Grounding. Генерируются перспективные резюме и проверка фактов.',               color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
+    { n: '04', title: 'Перевод и глубокий анализ',   desc: 'Для EN/RU запросов результат семантически переводится. Глубокий анализ (факты, расхождения, слепые пятна) параллельно выполняется вторым вызовом Gemini.', color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
+    { n: '05', title: 'Кэш и доставка',              desc: 'Результаты кэшируются на 24ч в PostgreSQL + ОЗУ. Следующий запрос по той же теме — мгновенно. RSS всегда загружается свежим.',                           color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
   ],
 };
 
@@ -157,14 +163,14 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
     <div className="max-w-4xl mx-auto pb-16">
 
       {/* Back */}
-      <Link to="/" className="font-sans text-[10px] uppercase tracking-widest text-gray-400 hover:text-[#1a1a1a] transition-colors flex items-center gap-1.5 mb-8">
+      <Link to="/" className="inline-flex items-center gap-2 font-sans text-[10px] font-bold uppercase tracking-widest border-2 border-[#1a1a1a] px-3 py-2 text-[#1a1a1a] hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all duration-200 mb-8">
         ← {t.backToHome}
       </Link>
 
       {/* ════════════════════════════════════════════════════════
           HERO
       ════════════════════════════════════════════════════════ */}
-      <div className="border-2 border-[#1a1a1a] overflow-hidden mb-8">
+      <div className="border-2 border-[#1a1a1a] overflow-hidden mb-8 animate-fade-in">
         <div className="h-2 flex">
           <div className="flex-1 bg-rose-600" /><div className="flex-1 bg-orange-400" />
           <div className="flex-1 bg-slate-400" /><div className="flex-1 bg-sky-500" />
@@ -182,22 +188,26 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
             {m.howBody}
           </p>
         </div>
-        {/* Source count badge */}
-        <div className="px-6 sm:px-10 py-4 flex items-center gap-6 border-t border-[#e0d8cf]">
-          <div>
-            <p className="font-serif font-black text-3xl text-[#1a1a1a]">{totalSources}</p>
+        {/* Stats bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x-2 divide-y-2 sm:divide-y-0 divide-[#1a1a1a] border-t-2 border-[#1a1a1a]">
+          <div className="px-5 py-4">
+            <p className="font-serif font-black text-2xl text-rose-600">18</p>
             <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400">{L.totalSources}</p>
           </div>
-          <div className="h-8 w-px bg-[#e0d8cf]" />
-          <div>
-            <p className="font-serif font-black text-3xl text-emerald-600">5</p>
+          <div className="px-5 py-4">
+            <p className="font-serif font-black text-2xl text-emerald-600">5</p>
             <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400">
               {lang === 'de' ? 'Politische Lager' : lang === 'ru' ? 'Политических лагерей' : 'Political camps'}
             </p>
           </div>
-          <div className="h-8 w-px bg-[#e0d8cf]" />
-          <div>
-            <p className="font-serif font-black text-3xl text-sky-600">3</p>
+          <div className="px-5 py-4">
+            <p className="font-serif font-black text-2xl text-orange-500">~2s</p>
+            <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400">
+              {lang === 'de' ? 'Erste Ergebnisse' : lang === 'ru' ? 'Первые результаты' : 'First results'}
+            </p>
+          </div>
+          <div className="px-5 py-4">
+            <p className="font-serif font-black text-2xl text-sky-600">3</p>
             <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400">
               {lang === 'de' ? 'Sprachen' : lang === 'ru' ? 'Языка' : 'Languages'}
             </p>
@@ -214,9 +224,9 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
         </div>
         <div className="p-6">
           {/* Desktop: horizontal steps */}
-          <div className="hidden sm:grid grid-cols-4 relative">
+          <div className="hidden sm:grid grid-cols-5 relative">
             {/* Connecting line */}
-            <div className="absolute top-5 left-[12.5%] right-[12.5%] h-px bg-[#e0d8cf] z-0" />
+            <div className="absolute top-5 left-[10%] right-[10%] h-px bg-[#e0d8cf] z-0" />
             {PIPELINE[lang].map((step, i) => (
               <div
                 key={step.n}
@@ -373,7 +383,7 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
           <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-[#1a1a1a] shrink-0">{L.deepTitle}</p>
           <div className="flex-1 h-px bg-[#1a1a1a] opacity-15" />
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {DEEP_FEATURES[lang].map((f, i) => (
             <div
               key={f.title}
