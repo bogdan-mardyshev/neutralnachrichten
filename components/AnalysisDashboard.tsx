@@ -127,7 +127,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
       </div>
 
       {/* ── Spectrum Grid ── */}
-      <SpectrumGrid spectrum={news_spectrum} lang={lang} />
+      <SpectrumGrid spectrum={news_spectrum} rssSpectra={data._rss?.spectra} lang={lang} />
 
       {/* ── Hype Counter ── */}
       {data.coverage_distribution && (
