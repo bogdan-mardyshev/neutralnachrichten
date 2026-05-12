@@ -971,6 +971,16 @@ app.post('/api/analyze', async (req, res) => {
       console.log(`[Translate] Budget: ${translTimeout}ms (elapsed: ${elapsed}ms)`);
       // Strip deep_analysis + _rss before translation — fetched separately, no need to translate
       const { deep_analysis: _stripped, _rss: _rssStripped, ...analysisForTranslation } = germanAnalysis;
+
+      // When degraded (Gemini failed, only RSS articles): trim to 2 articles per spectrum
+      // to reduce the translation payload and avoid timeouts on slow models.
+      if (degraded) {
+        for (const sp of SPECTRUMS) {
+          if (Array.isArray(analysisForTranslation.news_spectrum?.[sp])) {
+            analysisForTranslation.news_spectrum[sp] = analysisForTranslation.news_spectrum[sp].slice(0, 2);
+          }
+        }
+      }
       await geminiSemaphore.acquire();
       try {
         finalAnalysis = await Promise.race([
@@ -1028,6 +1038,222 @@ app.post('/api/analyze', async (req, res) => {
     clearTimeout(timeoutHandle);
     console.error('[Analyze Error]:', error.message);
     if (!res.headersSent) res.status(500).json({ error: 'Analysis failed', message: error.message });
+  }
+});
+
+// ── SSE streaming analysis endpoint ───────────────────────────────────────────
+// Emits events progressively so the browser can render incrementally:
+//   event:rss    (≈2s)  — real article links + coverage from RSS feeds
+//   event:result (≈15-35s) — full AI analysis, merged with RSS
+//   event:done   — stream closed cleanly
+//
+// Railway 60s hard-kill is not a problem because the first event (RSS) is
+// written within 2 seconds, keeping the connection alive for the full analysis.
+app.get('/api/analyze/stream', async (req, res) => {
+  const topic = ((req.query.topic || '') + '').trim().slice(0, 200);
+  const lang  = ['de', 'en', 'ru'].includes(req.query.lang) ? req.query.lang : 'de';
+
+  if (!topic)           return res.status(400).json({ error: 'topic required' });
+  if (!GEMINI_API_KEY)  return res.status(500).json({ error: 'API Key Missing' });
+
+  serverStats.totalRequests++;
+
+  const clientIP       = getClientIP(req);
+  const adminKeyHeader = req.headers['x-admin-key'] || req.query.adminKey;
+
+  let jwtUser = null;
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) jwtUser = jwt.verify(authHeader.slice(7), JWT_SECRET);
+  } catch { /* anonymous */ }
+
+  const isAdmin     = ADMIN_KEY && adminKeyHeader === ADMIN_KEY;
+  const isUnlimited = jwtUser?.daily_limit === -1;
+  if (!isAdmin && !isUnlimited) {
+    const { allowed, remaining } = await checkDailyLimitDB(clientIP);
+    if (!allowed) {
+      return res.status(429).json({
+        error: 'daily_limit_reached',
+        message: `Free tier allows ${FREE_DAILY_LIMIT} analyses per day. Resets at midnight UTC.`,
+        limit: FREE_DAILY_LIMIT, remaining: 0,
+      });
+    }
+  }
+
+  // ── SSE headers ─────────────────────────────────────────────────────────────
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection',    'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // prevent nginx from buffering the stream
+  res.flushHeaders();
+
+  const emit = (event, data) => {
+    if (res.writableEnded) return;
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+  const closeStream = () => { if (!res.writableEnded) res.end(); };
+
+  req.on('close', closeStream); // clean up if client disconnects
+
+  try {
+    trackSearch(topic);
+
+    const ipHash    = crypto.createHash('sha256').update(clientIP).digest('hex').slice(0, 16);
+    const cacheKey  = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:v4`).digest('hex');
+
+    // ── Fast path: full result already cached ────────────────────────────────
+    const cached = await cacheGetLayered(cacheKey);
+    if (cached) {
+      console.log(`[Cache] HIT stream "${topic}" (${lang})`);
+      serverStats.cacheHits++;
+      if (!isAdmin) await incrementUsageForIP(clientIP);
+      const { remaining } = await checkDailyLimitDB(clientIP);
+      logSearch({ topic, lang, degraded: cached._meta?.degraded ?? false, cacheHit: true, userId: jwtUser?.id, ipHash }).catch(() => {});
+      incrementViewCount(topic).catch(() => {});
+      emit('result', { ...cached, _usage: { remaining, limit: FREE_DAILY_LIMIT } });
+      emit('done', {});
+      closeStream();
+      return;
+    }
+    serverStats.cacheMisses++;
+
+    // ── Phase 1: RSS — start immediately, emit as soon as ready (~2s) ────────
+    const rssKeywords = extractSearchKeywords(topic);
+    console.log(`[RSS-Stream] keywords: ${JSON.stringify(rssKeywords)}`);
+
+    // rssPromise emits the 'rss' event as a side-effect when it resolves
+    const rssPromise = searchAllFeeds(rssKeywords)
+      .then(r => {
+        console.log(`[RSS-Stream] ${r.total_articles} articles found`);
+        const rssCovDist = buildCoverageDistribution(r.spectra);
+        const silenced   = detectSilence(r.spectra, r.total_articles);
+        const coverage   = Object.fromEntries(
+          SPECTRUMS.map(s => [s, { ...rssCovDist[s], silence: silenced.includes(s) }])
+        );
+        // Build news_spectrum from top RSS articles (real links, no AI summaries yet)
+        const rssSpectrum = Object.fromEntries(
+          SPECTRUMS.map(s => [s, (r.spectra[s]?.articles || []).slice(0, 5).map(a => ({
+            source_name:            a.source_name,
+            source_domain:          a.source_domain,
+            article_title:          a.article_title,
+            article_url:            a.article_url || null,
+            summary_of_perspective: a.description?.slice(0, 300) || a.article_title,
+            publication_date:       a.pubDate?.slice(0, 10) ?? undefined,
+            url_is_search_fallback: false,
+          }))])
+        );
+        // Emit partial result immediately — browser renders cards in ~2s
+        emit('rss', {
+          analysis_topic:              topic,
+          response_language:           lang,
+          overall_non_partisan_analysis: '', // filled by result event
+          news_spectrum:               rssSpectrum,
+          coverage_distribution:       coverage,
+          _meta: { degraded: false, rss_articles: r.total_articles },
+          _rss: {
+            total_articles:  r.total_articles,
+            coverage_volume: buildCoverageVolume(r.spectra),
+            fetched_at:      r.fetched_at,
+            spectra:         Object.fromEntries(SPECTRUMS.map(s => [s, r.spectra[s]?.articles || []])),
+          },
+        });
+        return r;
+      })
+      .catch(err => {
+        console.warn('[RSS-Stream] failed:', err.message);
+        return null;
+      });
+
+    // ── Phase 2: Gemini analysis (runs in parallel with RSS) ─────────────────
+    const deKey      = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v4`).digest('hex');
+    let germanAnalysis, degraded;
+
+    const cachedBase = await cacheGetLayered(deKey);
+    if (cachedBase) {
+      console.log(`[Cache] HIT German base stream "${topic}"`);
+      ({ germanAnalysis, degraded } = cachedBase);
+      await rssPromise; // ensure RSS event was emitted before result
+    } else {
+      console.log(`[Gemini-Stream] Waiting for slot`);
+      await geminiSemaphore.acquire();
+      let rssData = null;
+      try {
+        let rawAnalysis;
+        [{ analysis: rawAnalysis, degraded }, rssData] = await Promise.all([
+          callGeminiWithRetry(topic, 'de', 1),
+          rssPromise,
+        ]);
+        germanAnalysis = enrichWithRSSData(rawAnalysis, rssData);
+      } finally {
+        geminiSemaphore.release();
+      }
+      await cacheSetLayered(deKey, { germanAnalysis, degraded }, degraded ? 300 : 86400);
+    }
+
+    // ── Phase 3: Translation ─────────────────────────────────────────────────
+    let finalAnalysis        = germanAnalysis;
+    let translationSucceeded = (lang === 'de');
+
+    if (lang !== 'de') {
+      const { deep_analysis: _s, _rss: _r, ...forTranslation } = germanAnalysis;
+      if (degraded) {
+        for (const sp of SPECTRUMS) {
+          if (Array.isArray(forTranslation.news_spectrum?.[sp]))
+            forTranslation.news_spectrum[sp] = forTranslation.news_spectrum[sp].slice(0, 2);
+        }
+      }
+      await geminiSemaphore.acquire();
+      try {
+        finalAnalysis = await Promise.race([
+          translateAnalysis(forTranslation, lang, genAI),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('translate timeout')), GLOBAL_TRANSL_TIMEOUT)),
+        ]);
+        translationSucceeded = true;
+        console.log(`[Translate-Stream] → ${lang} done`);
+      } catch (err) {
+        console.error('[Translate-Stream] Falling back to German:', err.message);
+        finalAnalysis = germanAnalysis;
+      } finally {
+        geminiSemaphore.release();
+      }
+    }
+
+    // ── Emit final result ────────────────────────────────────────────────────
+    finalAnalysis = {
+      ...finalAnalysis,
+      analysis_topic:    topic,
+      response_language: lang,
+      analyzed_at:       germanAnalysis.analyzed_at,
+      ...(germanAnalysis._rss ? { _rss: germanAnalysis._rss } : {}),
+    };
+    const fullResponse = {
+      ...finalAnalysis,
+      _meta: {
+        degraded,
+        rss_articles: finalAnalysis.coverage_distribution
+          ? Object.values(finalAnalysis.coverage_distribution).reduce((s, e) => s + (e.count ?? 0), 0)
+          : undefined,
+      },
+    };
+
+    if (!isAdmin) await incrementUsageForIP(clientIP);
+    const { remaining } = await checkDailyLimitDB(clientIP);
+
+    if (!degraded && translationSucceeded) {
+      await cacheSetLayered(cacheKey, fullResponse, 86400, topic, lang);
+    }
+
+    logSearch({ topic, lang, degraded, cacheHit: false, userId: jwtUser?.id, ipHash }).catch(() => {});
+
+    emit('result', { ...fullResponse, _usage: { remaining, limit: FREE_DAILY_LIMIT } });
+    emit('done', {});
+    closeStream();
+
+  } catch (err) {
+    serverStats.errors++;
+    console.error('[Stream Error]:', err.message);
+    emit('error', { message: err.message });
+    closeStream();
   }
 });
 

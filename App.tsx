@@ -28,7 +28,7 @@ import UserProfilePage from './components/UserProfilePage';
 import VerifyEmailPage from './components/VerifyEmailPage';
 import ResetPasswordPage from './components/ResetPasswordPage';
 
-import { analyzeTopic, fetchDeepAnalysis } from './services/geminiService';
+import { analyzeTopicStream, fetchDeepAnalysis } from './services/geminiService';
 import { NewsAnalysisResult, FetchStatus } from './types';
 import { translations, Language } from './translations';
 
@@ -65,6 +65,10 @@ function MainApp() {
   // Mobile bottom nav / sheet
   const [analyzedSheetOpen, setAnalyzedSheetOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Streaming: true while waiting for the AI result after RSS already shown
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const streamCleanupRef = useRef<(() => void) | null>(null);
 
   const handleSearchTabPress = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -213,70 +217,86 @@ function MainApp() {
     localStorage.removeItem('authUser');
   };
 
-  const handleSearch = async (query: string, overrideLang?: Language) => {
+  const handleSearch = (query: string, overrideLang?: Language) => {
     const activeLang = overrideLang ?? lang;
+
+    // Cancel any in-flight stream from a previous search
+    streamCleanupRef.current?.();
+    streamCleanupRef.current = null;
+
     setStatus('loading');
     setError(null);
     setData(null);
+    setAnalysisLoading(false);
 
     const startTime = Date.now();
     posthog.capture('analysis_started', { topic: query, lang: activeLang });
 
-    try {
-      const result = await analyzeTopic(query, activeLang, authToken ?? undefined);
-      setData(result);
-      setLastQuery(query);
-      // Track daily remaining from server response
-      if (typeof result._usage?.remaining === 'number') {
-        setDailyRemaining(result._usage.remaining);
-      }
-      setStatus('success');
-      setSearchParams({ topic: query, lang: activeLang }, { replace: true });
-      addToHistory(query, activeLang);
+    const cleanup = analyzeTopicStream(
+      query,
+      activeLang,
+      authToken ?? undefined,
+      (event) => {
+        if (event.type === 'rss') {
+          // Phase 1 (~2s): show real article links + coverage immediately
+          setData(event.data as NewsAnalysisResult);
+          setAnalysisLoading(true); // AI analysis still loading
+          // Keep status='loading' so progress bar stays visible
+        } else if (event.type === 'result') {
+          // Phase 2 (~15-35s): full AI analysis ready
+          setData(event.data);
+          setAnalysisLoading(false);
+          setLastQuery(query);
 
-      // Persist to server history if logged in
-      if (authToken && result.coverage_distribution) {
-        fetch(`${import.meta.env.VITE_API_BASE || ''}/api/history`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
-          body: JSON.stringify({ topic: query, lang: activeLang, coverage: result.coverage_distribution }),
-        }).catch(() => {});
-      }
-      posthog.capture('analysis_completed', {
-        topic: query,
-        duration: Date.now() - startTime
-      });
-
-      // If main result has no deep_analysis and Gemini actually found content, fetch it in background
-      if (!result.deep_analysis && !result._meta?.degraded) {
-        setDeepLoading(true);
-        fetchDeepAnalysis(query, activeLang).then((deep) => {
-          setDeepLoading(false);
-          if (deep) {
-            setData(prev => prev ? { ...prev, deep_analysis: deep } : prev);
+          if (typeof event.data._usage?.remaining === 'number') {
+            setDailyRemaining(event.data._usage.remaining);
           }
-        });
-      }
-    } catch (err: any) {
-      console.error(err);
-      // Handle daily limit error — UsageBar shows the countdown, no separate error needed
-      if (err.status === 429 || err.message?.includes('daily_limit')) {
-        setDailyRemaining(0);
-        setError(''); // UsageBar already shows the limit-reached UI with countdown
-      } else {
-        setError(err.message || t.errorDefault);
-      }
-      setStatus('error');
-      posthog.capture('analysis_failed', { topic: query, error: err.message });
-      Sentry.captureException(err);
-    }
+          setStatus('success');
+          setSearchParams({ topic: query, lang: activeLang }, { replace: true });
+          addToHistory(query, activeLang);
+
+          if (authToken && event.data.coverage_distribution) {
+            fetch(`${import.meta.env.VITE_API_BASE || ''}/api/history`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+              body: JSON.stringify({ topic: query, lang: activeLang, coverage: event.data.coverage_distribution }),
+            }).catch(() => {});
+          }
+          posthog.capture('analysis_completed', { topic: query, duration: Date.now() - startTime });
+
+          if (!event.data.deep_analysis && !event.data._meta?.degraded) {
+            setDeepLoading(true);
+            fetchDeepAnalysis(query, activeLang).then((deep) => {
+              setDeepLoading(false);
+              if (deep) setData(prev => prev ? { ...prev, deep_analysis: deep } : prev);
+            });
+          }
+        } else if (event.type === 'error') {
+          setAnalysisLoading(false);
+          if (event.status === 429 || event.message?.includes('daily_limit')) {
+            setDailyRemaining(0);
+            setError('');
+          } else {
+            setError(event.message || t.errorDefault);
+          }
+          setStatus('error');
+          posthog.capture('analysis_failed', { topic: query, error: event.message });
+          Sentry.captureException(new Error(event.message));
+        }
+      },
+    );
+
+    streamCleanupRef.current = cleanup;
   };
 
   const handleReset = () => {
+    streamCleanupRef.current?.();
+    streamCleanupRef.current = null;
     setStatus('idle');
     setData(null);
     setError(null);
     setDeepLoading(false);
+    setAnalysisLoading(false);
     setLastQuery(null);
     setSearchParams({}, { replace: true });
   };
@@ -520,7 +540,8 @@ function MainApp() {
                 </>
               )}
 
-              {status === 'loading' && (
+              {/* Loading screen — only shown while waiting for the first RSS event */}
+              {status === 'loading' && !data && (
                 <div className="flex flex-col items-center justify-center py-16 sm:py-20 max-w-sm mx-auto w-full animate-fade-in">
                   {/* Newspaper-style spinner */}
                   <div className="w-12 h-12 mb-8 border-2 border-[#1a1a1a] border-t-transparent rounded-full animate-spin" />
@@ -567,7 +588,8 @@ function MainApp() {
                 </div>
               )}
 
-              {status === 'success' && data && (
+              {/* Dashboard shown as soon as RSS data arrives (~2s) and after full result */}
+              {(status === 'success' || (status === 'loading' && data)) && data && (
                 <div className="animate-slide-up">
                   <div className="mb-6">
                     <button
@@ -577,7 +599,12 @@ function MainApp() {
                       ← {t.backToHome}
                     </button>
                   </div>
-                  <AnalysisDashboard data={data} lang={lang} deepLoading={deepLoading} />
+                  <AnalysisDashboard
+                    data={data}
+                    lang={lang}
+                    deepLoading={deepLoading}
+                    analysisLoading={analysisLoading}
+                  />
                 </div>
               )}
             </>
