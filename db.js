@@ -188,17 +188,25 @@ export async function cacheHit(key) {
   ).catch(() => {});
 }
 
-// Return recent public analyses for the "already analyzed" block
-export async function getPublicAnalyses(limit = 12) {
+// Return public analyses grouped by topic (same topic in multiple langs = one entry)
+export async function getPublicAnalyses(limit = 20) {
   if (!pool) return [];
   try {
     const { rows } = await pool.query(
-      `SELECT key, topic, lang, search_count, last_searched,
-              data->'coverage_distribution' AS coverage
+      `SELECT
+         lower(topic)                          AS topic_norm,
+         -- pick the display topic from the most-searched row
+         (array_agg(topic ORDER BY search_count DESC))[1]   AS topic,
+         array_agg(DISTINCT lang ORDER BY lang)              AS langs,
+         SUM(search_count)                                   AS search_count,
+         MAX(last_searched)                                  AS last_searched,
+         -- pick coverage from the most-searched lang row
+         (array_agg(data->'coverage_distribution' ORDER BY search_count DESC))[1] AS coverage
        FROM content_cache
        WHERE topic IS NOT NULL AND degraded = false
          AND last_searched > now() - INTERVAL '48 hours'
-       ORDER BY search_count DESC, last_searched DESC
+       GROUP BY lower(topic)
+       ORDER BY SUM(search_count) DESC, MAX(last_searched) DESC
        LIMIT $1`,
       [limit]
     );

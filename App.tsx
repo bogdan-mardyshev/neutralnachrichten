@@ -460,6 +460,15 @@ function MainApp() {
 
               {status === 'idle' ? (
                 <div className="flex gap-6 items-start">
+                  {/* Left sidebar — Already Analyzed */}
+                  <div className="hidden lg:block w-56 shrink-0 sticky top-24">
+                    <PublicAnalyses
+                      lang={lang}
+                      onSelect={(topic, l) => handleSearch(topic, l)}
+                      recentSearches={history.map(h => h.topic)}
+                    />
+                  </div>
+
                   {/* Main column */}
                   <div className="flex-1 min-w-0">
                     <SearchBar onSearch={handleSearch} status={status} lang={lang} />
@@ -484,10 +493,9 @@ function MainApp() {
                     <CategoryBrowser lang={lang} onSelect={(topic) => handleSearch(topic)} />
                     <TrendingTopics lang={lang} onSelect={(topic) => handleSearch(topic)} />
                     <TopCharts lang={lang} onSelect={(topic) => handleSearch(topic)} />
-                    <PublicAnalyses lang={lang} onSelect={(topic, l) => handleSearch(topic, l)} />
                   </div>
 
-                  {/* Sidebar */}
+                  {/* Right sidebar — Daily News */}
                   <div className="hidden lg:block w-72 shrink-0 sticky top-24">
                     <DailyNews lang={lang} onSelect={(topic) => handleSearch(topic)} />
                   </div>
