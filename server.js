@@ -1326,7 +1326,12 @@ app.get('/api/auth/verify-email', async (req, res) => {
     const user = await verifyEmailToken(hashToken(token));
     if (!user) return res.status(400).json({ error: 'Invalid or expired verification link' });
     console.log(`[Auth] Email verified: ${user.email}`);
-    res.json({ ok: true, message: 'E-Mail erfolgreich bestätigt!' });
+    // Issue a JWT so the frontend can auto-login immediately after verification
+    const jwt_token = jwt.sign(
+      { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit, email_verified: true },
+      JWT_SECRET, { expiresIn: '30d' }
+    );
+    res.json({ ok: true, message: 'E-Mail erfolgreich bestätigt!', token: jwt_token, user: { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit } });
   } catch (err) {
     console.error('[Auth/verify-email]', err.message);
     res.status(500).json({ error: 'Verification failed' });

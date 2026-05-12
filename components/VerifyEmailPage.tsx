@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 
 type Status = 'loading' | 'success' | 'error';
 
@@ -7,6 +7,7 @@ export default function VerifyEmailPage() {
   const [params] = useSearchParams();
   const [status, setStatus]   = useState<Status>('loading');
   const [message, setMessage] = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
     const token = params.get('token');
@@ -15,8 +16,19 @@ export default function VerifyEmailPage() {
     fetch(`${import.meta.env.VITE_API_BASE || ''}/api/auth/verify-email?token=${encodeURIComponent(token)}`)
       .then(r => r.json())
       .then(data => {
-        if (data.ok) { setStatus('success'); setMessage(data.message || 'E-Mail bestätigt!'); }
-        else          { setStatus('error');   setMessage(data.error  || 'Ungültiger Link.'); }
+        if (data.ok) {
+          // Auto-login: store JWT and user, then redirect home
+          if (data.token && data.user) {
+            localStorage.setItem('authToken', data.token);
+            localStorage.setItem('authUser', JSON.stringify(data.user));
+          }
+          setStatus('success');
+          setMessage(data.message || 'E-Mail bestätigt!');
+          setTimeout(() => navigate('/'), 1500);
+        } else {
+          setStatus('error');
+          setMessage(data.error || 'Ungültiger Link.');
+        }
       })
       .catch(() => { setStatus('error'); setMessage('Verbindungsfehler. Bitte versuche es erneut.'); });
   }, []);
