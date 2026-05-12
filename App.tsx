@@ -121,6 +121,18 @@ function MainApp() {
     }
   }, []);
 
+  // Fetch daily usage on mount so UsageBar shows immediately
+  useEffect(() => {
+    const API_BASE = import.meta.env.VITE_API_BASE || '';
+    fetch(`${API_BASE}/api/usage`, {
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.remaining != null) setDailyRemaining(d.remaining); })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authToken]);
+
   useEffect(() => {
     if (status !== 'loading') return;
 

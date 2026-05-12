@@ -926,6 +926,17 @@ RULES:
   return extractJSON(raw);
 }
 
+// ── Daily usage check (used by frontend to show UsageBar on load) ─────────────
+app.get('/api/usage', async (req, res) => {
+  const ip = getClientIP(req);
+  try {
+    const { remaining } = await checkDailyLimitDB(ip);
+    res.json({ remaining, limit: FREE_DAILY_LIMIT });
+  } catch {
+    res.json({ remaining: FREE_DAILY_LIMIT, limit: FREE_DAILY_LIMIT });
+  }
+});
+
 app.get('/api/trending', async (req, res) => {
   const key = trendingCacheKey();
   const cached = await cacheGetLayered(key);
