@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { NewsSource, SpectrumKey } from '../types';
+import { NewsSource, RssArticle, SpectrumKey } from '../types';
 import { Language, translations } from '../translations';
 
 interface SpectrumGridProps {
   spectrum: Record<SpectrumKey, NewsSource[]>;
+  rssSpectra?: Record<SpectrumKey, RssArticle[]>;
   lang: Language;
 }
 
@@ -64,6 +65,47 @@ const spectrumStyles: Record<SpectrumKey, {
 };
 
 const SPECTRUM_ORDER: SpectrumKey[] = ['left', 'center_left', 'center', 'center_right', 'right'];
+
+// ── Merge Gemini articles (with AI summaries) + RSS articles (real URLs) ───────
+// Gemini articles come first (they have proper perspective summaries).
+// RSS articles for outlets not yet in Gemini's selection are appended.
+function mergeArticles(
+  geminiArticles: NewsSource[],
+  rssArticles: RssArticle[]
+): NewsSource[] {
+  const isPlaceholder = (a: NewsSource) =>
+    a.source_name === 'Kein Artikel gefunden' || a.source_domain === 'n/a';
+
+  const merged: NewsSource[] = [];
+  const seenDomains = new Set<string>();
+
+  // 1. Real Gemini articles first — they have AI-generated perspective summaries
+  for (const a of geminiArticles) {
+    if (isPlaceholder(a)) continue;
+    merged.push(a);
+    if (a.source_domain) seenDomains.add(a.source_domain.replace(/^www\./, ''));
+  }
+
+  // 2. RSS articles from additional outlets not already covered by Gemini
+  for (const r of rssArticles) {
+    if (!r.article_url) continue;
+    const dom = (r.source_domain || '').replace(/^www\./, '');
+    if (seenDomains.has(dom)) continue; // outlet already represented
+    merged.push({
+      source_name:            r.source_name,
+      source_domain:          r.source_domain,
+      article_title:          r.article_title,
+      article_url:            r.article_url,
+      summary_of_perspective: r.description || r.article_title,
+      publication_date:       r.pub_date || undefined,
+      url_is_search_fallback: false,
+    });
+    seenDomains.add(dom);
+  }
+
+  // Fall back to original list if nothing merged (edge case)
+  return merged.length > 0 ? merged : geminiArticles;
+}
 
 interface SourceCardProps {
   articles: NewsSource[];
@@ -138,7 +180,7 @@ const SourceCard: React.FC<SourceCardProps> = ({ articles, spectrumKey, leaning,
           </a>
         </div>
 
-        {/* Carousel nav */}
+        {/* Carousel nav — shown when multiple articles */}
         {total > 1 && (
           <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[#e0d8cf]">
             <button
@@ -165,7 +207,7 @@ const SourceCard: React.FC<SourceCardProps> = ({ articles, spectrumKey, leaning,
   );
 };
 
-export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, lang }) => {
+export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, rssSpectra, lang }) => {
   const t = translations[lang];
 
   const leaningLabels: Record<SpectrumKey, string> = {
@@ -183,16 +225,11 @@ export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, lang }) =>
         <div className="h-px flex-1 bg-[#1a1a1a] mx-4 opacity-15" />
       </div>
 
-      {/* Spectrum bar */}
+      {/* Spectrum bar — colors only, no duplicate text labels */}
       <div className="flex gap-px overflow-hidden h-1.5">
         {SPECTRUM_ORDER.map((key) => (
           <div key={key} className={`flex-1 ${spectrumStyles[key].bar}`} />
         ))}
-      </div>
-      <div className="flex justify-between font-sans text-[9px] uppercase tracking-widest text-gray-400 -mt-2">
-        <span>{leaningLabels['left']}</span>
-        <span>{leaningLabels['center']}</span>
-        <span>{leaningLabels['right']}</span>
       </div>
 
       {/* Mobile: horizontal scroll-snap carousel */}
@@ -204,7 +241,7 @@ export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, lang }) =>
             style={{ width: 'calc(85vw)', maxWidth: 320 }}
           >
             <SourceCard
-              articles={spectrum[key] ?? []}
+              articles={mergeArticles(spectrum[key] ?? [], rssSpectra?.[key] ?? [])}
               spectrumKey={key}
               leaning={leaningLabels[key]}
               lang={lang}
@@ -218,7 +255,7 @@ export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, lang }) =>
         {SPECTRUM_ORDER.map((key, i) => (
           <div key={key} className={`animate-slide-up stagger-${i + 1}`}>
             <SourceCard
-              articles={spectrum[key] ?? []}
+              articles={mergeArticles(spectrum[key] ?? [], rssSpectra?.[key] ?? [])}
               spectrumKey={key}
               leaning={leaningLabels[key]}
               lang={lang}

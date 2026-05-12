@@ -60,6 +60,15 @@ export interface DeepAnalysis {
 export type NewsSpectrum = Record<SpectrumKey, NewsSource[]>;
 export type CoverageDistribution = Record<SpectrumKey, CoverageEntry>;
 
+export interface RssArticle {
+  source_name:   string;
+  source_domain: string;
+  article_title: string;
+  article_url:   string | null;
+  pub_date:      string | null;
+  description:   string;
+}
+
 export interface NewsAnalysisResult {
   analysis_topic: string;
   response_language: 'de' | 'en' | 'ru';
@@ -75,6 +84,12 @@ export interface NewsAnalysisResult {
   _usage?: {
     remaining: number;
     limit:     number;
+  };
+  _rss?: {
+    total_articles:  number;
+    coverage_volume: Record<SpectrumKey, CoverageVolume>;
+    fetched_at:      string;
+    spectra?:        Record<SpectrumKey, RssArticle[]>;
   };
 }
 

@@ -479,6 +479,17 @@ function enrichWithRSSData(analysis, rssData) {
     total_articles:  rssData.total_articles,
     coverage_volume: buildCoverageVolume(rssData.spectra),
     fetched_at:      rssData.fetched_at,
+    // All matched RSS articles per spectrum — used by frontend to populate Analyzed Sources
+    spectra: Object.fromEntries(
+      SPECTRUMS.map(s => [s, (rssData.spectra[s]?.articles || []).map(a => ({
+        source_name:   a.source_name,
+        source_domain: a.source_domain,
+        article_title: a.article_title,
+        article_url:   a.article_url || null,
+        pub_date:      a.pubDate?.slice(0, 10) || null,
+        description:   (a.description || '').slice(0, 300),
+      }))])
+    ),
   };
 
   return result;
@@ -955,8 +966,8 @@ app.post('/api/analyze', async (req, res) => {
       const remainingBudget = Math.max(5000, TIMEOUT_MS - elapsed - 1000);
       const translTimeout = Math.min(TRANSLATION_TIMEOUT, remainingBudget);
       console.log(`[Translate] Budget: ${translTimeout}ms (elapsed: ${elapsed}ms)`);
-      // Strip deep_analysis before translation — it's fetched separately and makes JSON much larger
-      const { deep_analysis: _stripped, ...analysisForTranslation } = germanAnalysis;
+      // Strip deep_analysis + _rss before translation — fetched separately, no need to translate
+      const { deep_analysis: _stripped, _rss: _rssStripped, ...analysisForTranslation } = germanAnalysis;
       await geminiSemaphore.acquire();
       try {
         finalAnalysis = await Promise.race([
@@ -975,7 +986,14 @@ app.post('/api/analyze', async (req, res) => {
       }
     }
 
-    finalAnalysis = { ...finalAnalysis, analysis_topic: topic, response_language: lang };
+    // Always restore non-translatable metadata from the German base
+    finalAnalysis = {
+      ...finalAnalysis,
+      analysis_topic:   topic,
+      response_language: lang,
+      analyzed_at:      germanAnalysis.analyzed_at,
+      ...(germanAnalysis._rss ? { _rss: germanAnalysis._rss } : {}),
+    };
     const response = {
       ...finalAnalysis,
       _meta: {
