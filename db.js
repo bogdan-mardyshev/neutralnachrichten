@@ -60,12 +60,22 @@ export async function initDB() {
 async function runMigrations() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS content_cache (
-      key         TEXT PRIMARY KEY,
-      data        JSONB NOT NULL,
-      degraded    BOOLEAN DEFAULT false,
-      updated_at  TIMESTAMPTZ DEFAULT now(),
-      ttl_seconds INTEGER NOT NULL
+      key          TEXT PRIMARY KEY,
+      data         JSONB NOT NULL,
+      degraded     BOOLEAN DEFAULT false,
+      updated_at   TIMESTAMPTZ DEFAULT now(),
+      ttl_seconds  INTEGER NOT NULL,
+      topic        TEXT,
+      lang         TEXT,
+      search_count INTEGER DEFAULT 1,
+      last_searched TIMESTAMPTZ DEFAULT now()
     );
+    -- Add columns to existing table if they don't exist yet
+    ALTER TABLE content_cache ADD COLUMN IF NOT EXISTS topic TEXT;
+    ALTER TABLE content_cache ADD COLUMN IF NOT EXISTS lang TEXT;
+    ALTER TABLE content_cache ADD COLUMN IF NOT EXISTS search_count INTEGER DEFAULT 1;
+    ALTER TABLE content_cache ADD COLUMN IF NOT EXISTS last_searched TIMESTAMPTZ DEFAULT now();
+    CREATE INDEX IF NOT EXISTS content_cache_public ON content_cache(last_searched DESC) WHERE topic IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS users (
       id            BIGSERIAL PRIMARY KEY,
@@ -150,18 +160,52 @@ export async function cacheGet(key) {
   }
 }
 
-export async function cacheSet(key, data, ttlSeconds, degraded = false) {
+export async function cacheSet(key, data, ttlSeconds, degraded = false, topic = null, lang = null) {
   if (!pool) return;
   try {
     await pool.query(
-      `INSERT INTO content_cache (key, data, ttl_seconds, degraded, updated_at)
-       VALUES ($1, $2, $3, $4, now())
+      `INSERT INTO content_cache (key, data, ttl_seconds, degraded, updated_at, topic, lang, search_count, last_searched)
+       VALUES ($1, $2, $3, $4, now(), $5, $6, 1, now())
        ON CONFLICT (key) DO UPDATE
-         SET data = $2, ttl_seconds = $3, degraded = $4, updated_at = now()`,
-      [key, JSON.stringify(data), ttlSeconds, degraded]
+         SET data = $2, ttl_seconds = $3, degraded = $4, updated_at = now(),
+             topic = COALESCE($5, content_cache.topic),
+             lang  = COALESCE($6, content_cache.lang),
+             search_count  = content_cache.search_count + 1,
+             last_searched = now()`,
+      [key, JSON.stringify(data), ttlSeconds, degraded, topic, lang]
     );
   } catch (err) {
     console.error('[DB:cacheSet]', err.message);
+  }
+}
+
+// Increment search_count when cache is hit (fire-and-forget)
+export async function cacheHit(key) {
+  if (!pool) return;
+  pool.query(
+    `UPDATE content_cache SET search_count = search_count + 1, last_searched = now() WHERE key = $1`,
+    [key]
+  ).catch(() => {});
+}
+
+// Return recent public analyses for the "already analyzed" block
+export async function getPublicAnalyses(limit = 12) {
+  if (!pool) return [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT key, topic, lang, search_count, last_searched,
+              data->'coverage_distribution' AS coverage
+       FROM content_cache
+       WHERE topic IS NOT NULL AND degraded = false
+         AND last_searched > now() - INTERVAL '48 hours'
+       ORDER BY search_count DESC, last_searched DESC
+       LIMIT $1`,
+      [limit]
+    );
+    return rows;
+  } catch (err) {
+    console.error('[DB:getPublicAnalyses]', err.message);
+    return [];
   }
 }
 
@@ -473,4 +517,4 @@ export async function closeDB() {
   }
 }
 
-export default { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, logSearch, getTopTopicsDB, getAdminStats, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch };
+export default { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, logSearch, getTopTopicsDB, getAdminStats, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch };

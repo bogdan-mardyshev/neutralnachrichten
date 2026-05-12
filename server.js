@@ -16,7 +16,7 @@ import bcrypt from 'bcryptjs';
 import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
 import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
 import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
-import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData } from './db.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
@@ -264,13 +264,18 @@ function requireAuth(req, res, next) {
 async function cacheGetLayered(key) {
   // L1: NodeCache — in-process, zero latency
   const mem = cache.get(key);
-  if (mem !== undefined) return mem;
+  if (mem !== undefined) {
+    // Bump search_count asynchronously (fire-and-forget)
+    if (isDBAvailable()) cacheHit(key);
+    return mem;
+  }
 
   // L2: Redis — distributed, survives server restarts
   if (isRedisAvailable()) {
     const redisData = await rGet(key);
     if (redisData !== null) {
-      cache.set(key, redisData, 3600); // warm L1 for 1h
+      cache.set(key, redisData, 3600);
+      if (isDBAvailable()) cacheHit(key);
       console.log(`[Cache] Redis→L1 restored "${key}"`);
       return redisData;
     }
@@ -282,18 +287,16 @@ async function cacheGetLayered(key) {
   if (!row || row.isStale) return undefined;
   const remainTTL = Math.max(60, row.ttl_seconds - row.ageSeconds);
   cache.set(key, row.data, remainTTL);
-  // Warm Redis from DB so the next restart doesn't need DB lookup
   if (isRedisAvailable()) rSet(key, row.data, remainTTL).catch(() => {});
   console.log(`[Cache] DB→L1 restored "${key}" (${row.ageSeconds}s old)`);
   return row.data;
 }
 
-async function cacheSetLayered(key, data, ttlSeconds) {
-  // Write to all available layers in parallel
+async function cacheSetLayered(key, data, ttlSeconds, topic = null, lang = null) {
   cache.set(key, data, ttlSeconds);
   await Promise.allSettled([
-    isRedisAvailable() ? rSet(key, data, ttlSeconds)     : Promise.resolve(),
-    isDBAvailable()    ? cacheSet(key, data, ttlSeconds) : Promise.resolve(),
+    isRedisAvailable() ? rSet(key, data, ttlSeconds)                       : Promise.resolve(),
+    isDBAvailable()    ? cacheSet(key, data, ttlSeconds, false, topic, lang) : Promise.resolve(),
   ]).then(([r, d]) => {
     if (r.status === 'rejected') console.error('[Cache] Redis write error:', r.reason?.message);
     if (d.status === 'rejected') console.error('[Cache] DB write error:',    d.reason?.message);
@@ -771,7 +774,7 @@ app.post('/api/analyze', async (req, res) => {
 
     // Only cache if Gemini succeeded AND translation succeeded (avoid caching empty/German fallbacks)
     if (!degraded && translationSucceeded) {
-      await cacheSetLayered(cacheKey, response, 86400);
+      await cacheSetLayered(cacheKey, response, 86400, topic, lang);
     }
 
     // Record usage AFTER successful Gemini call (not on cache hits — already counted above)
@@ -925,6 +928,16 @@ RULES:
   const raw = result.response.text();
   return extractJSON(raw);
 }
+
+// ── Public analyses — already-cached results anyone can open instantly ────────
+app.get('/api/public-analyses', async (req, res) => {
+  try {
+    const rows = await getPublicAnalyses(16);
+    res.json(rows);
+  } catch {
+    res.json([]);
+  }
+});
 
 // ── Daily usage check (used by frontend to show UsageBar on load) ─────────────
 app.get('/api/usage', async (req, res) => {

@@ -20,6 +20,7 @@ import { CategoryBrowser } from './components/CategoryBrowser';
 import { DesignPreview } from './components/DesignPreview';
 import AuthModal, { AuthUser } from './components/AuthModal';
 import { UsageBar } from './components/UsageBar';
+import { PublicAnalyses } from './components/PublicAnalyses';
 import AdminPage from './components/AdminPage';
 import UserProfilePage from './components/UserProfilePage';
 import VerifyEmailPage from './components/VerifyEmailPage';
@@ -483,6 +484,7 @@ function MainApp() {
                     <CategoryBrowser lang={lang} onSelect={(topic) => handleSearch(topic)} />
                     <TrendingTopics lang={lang} onSelect={(topic) => handleSearch(topic)} />
                     <TopCharts lang={lang} onSelect={(topic) => handleSearch(topic)} />
+                    <PublicAnalyses lang={lang} onSelect={(topic, l) => handleSearch(topic, l)} />
                   </div>
 
                   {/* Sidebar */}
