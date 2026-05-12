@@ -6,6 +6,7 @@ interface SpectrumGridProps {
   spectrum: Record<SpectrumKey, NewsSource[]>;
   rssSpectra?: Record<SpectrumKey, RssArticle[]>;
   lang: Language;
+  analysisLoading?: boolean;
 }
 
 const spectrumStyles: Record<SpectrumKey, {
@@ -112,9 +113,10 @@ interface SourceCardProps {
   spectrumKey: SpectrumKey;
   leaning: string;
   lang: Language;
+  analysisLoading?: boolean;
 }
 
-const SourceCard: React.FC<SourceCardProps> = ({ articles, spectrumKey, leaning, lang }) => {
+const SourceCard: React.FC<SourceCardProps> = ({ articles, spectrumKey, leaning, lang, analysisLoading }) => {
   const t = translations[lang];
   const s = spectrumStyles[spectrumKey];
   const [idx, setIdx] = useState(0);
@@ -157,9 +159,18 @@ const SourceCard: React.FC<SourceCardProps> = ({ articles, spectrumKey, leaning,
 
       {/* Summary */}
       <div className="px-4 pb-4 flex-grow">
-        <p className="font-sans text-xs text-gray-500 leading-relaxed line-clamp-4">
-          {source.summary_of_perspective}
-        </p>
+        {analysisLoading ? (
+          <div className="space-y-1.5 animate-pulse">
+            <div className="h-2 bg-[#e0d8cf] rounded w-full" />
+            <div className="h-2 bg-[#e0d8cf] rounded w-5/6" />
+            <div className="h-2 bg-[#e0d8cf] rounded w-4/5" />
+            <div className="h-2 bg-[#e0d8cf] rounded w-3/4" />
+          </div>
+        ) : (
+          <p className="font-sans text-xs text-gray-500 leading-relaxed line-clamp-4">
+            {source.summary_of_perspective}
+          </p>
+        )}
       </div>
 
       {/* Footer */}
@@ -207,7 +218,7 @@ const SourceCard: React.FC<SourceCardProps> = ({ articles, spectrumKey, leaning,
   );
 };
 
-export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, rssSpectra, lang }) => {
+export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, rssSpectra, lang, analysisLoading }) => {
   const t = translations[lang];
 
   const leaningLabels: Record<SpectrumKey, string> = {
@@ -220,9 +231,14 @@ export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, rssSpectra
 
   return (
     <div className="space-y-4 animate-slide-up">
-      <div className="flex items-center justify-between">
-        <h3 className="font-serif font-black text-xl text-[#1a1a1a]">{t.analyzedSources}</h3>
-        <div className="h-px flex-1 bg-[#1a1a1a] mx-4 opacity-15" />
+      <div className="flex items-center gap-3">
+        <h3 className="font-serif font-black text-xl text-[#1a1a1a] shrink-0">{t.analyzedSources}</h3>
+        <div className="h-px flex-1 bg-[#1a1a1a] opacity-15" />
+        {analysisLoading && (
+          <span className="font-sans text-[9px] uppercase tracking-widest text-emerald-600 animate-pulse shrink-0">
+            {t.analysisLoading}
+          </span>
+        )}
       </div>
 
       {/* Spectrum bar — colors only, no duplicate text labels */}
@@ -245,6 +261,7 @@ export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, rssSpectra
               spectrumKey={key}
               leaning={leaningLabels[key]}
               lang={lang}
+              analysisLoading={analysisLoading}
             />
           </div>
         ))}
@@ -259,6 +276,7 @@ export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, rssSpectra
               spectrumKey={key}
               leaning={leaningLabels[key]}
               lang={lang}
+              analysisLoading={analysisLoading}
             />
           </div>
         ))}
