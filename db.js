@@ -132,6 +132,24 @@ async function runMigrations() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires  TIMESTAMPTZ;
   `);
 
+  // Likes table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS analysis_likes (
+      id         BIGSERIAL PRIMARY KEY,
+      topic_norm TEXT    NOT NULL,
+      user_id    BIGINT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (topic_norm, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS analysis_likes_topic ON analysis_likes(topic_norm);
+    CREATE INDEX IF NOT EXISTS analysis_likes_user  ON analysis_likes(user_id);
+  `);
+
+  // content_cache: add view_count column (distinct from search_count)
+  await pool.query(`
+    ALTER TABLE content_cache ADD COLUMN IF NOT EXISTS view_count BIGINT DEFAULT 0;
+  `);
+
   console.log('[DB] Migrations done ✓');
 }
 
@@ -189,31 +207,132 @@ export async function cacheHit(key) {
 }
 
 // Return public analyses grouped by topic (same topic in multiple langs = one entry)
-export async function getPublicAnalyses(limit = 20) {
+export async function getPublicAnalyses(limit = 20, userId = null) {
   if (!pool) return [];
   try {
     const { rows } = await pool.query(
       `SELECT
-         lower(topic)                          AS topic_norm,
-         -- pick the display topic from the most-searched row
-         (array_agg(topic ORDER BY search_count DESC))[1]   AS topic,
-         array_agg(DISTINCT lang ORDER BY lang)              AS langs,
-         SUM(search_count)                                   AS search_count,
-         MAX(last_searched)                                  AS last_searched,
-         -- pick coverage from the most-searched lang row
-         (array_agg(data->'coverage_distribution' ORDER BY search_count DESC))[1] AS coverage
-       FROM content_cache
-       WHERE topic IS NOT NULL AND degraded = false
-         AND last_searched > now() - INTERVAL '48 hours'
-       GROUP BY lower(topic)
-       ORDER BY SUM(search_count) DESC, MAX(last_searched) DESC
+         lower(topic)                                                              AS topic_norm,
+         (array_agg(topic          ORDER BY search_count DESC))[1]               AS topic,
+         array_agg(DISTINCT lang   ORDER BY lang)                                AS langs,
+         SUM(search_count)                                                        AS search_count,
+         SUM(COALESCE(view_count, 0))                                             AS view_count,
+         MAX(last_searched)                                                       AS last_searched,
+         -- coverage from the most-searched lang row
+         (array_agg(data->'coverage_distribution' ORDER BY search_count DESC))[1] AS coverage,
+         -- summary snippet (~150 chars) from overall_non_partisan_analysis
+         LEFT((array_agg(data->>'overall_non_partisan_analysis' ORDER BY search_count DESC))[1], 150) AS summary,
+         -- total source count across all spectrum sides
+         (array_agg(
+           COALESCE(jsonb_array_length(data->'news_spectrum'->'left'),         0) +
+           COALESCE(jsonb_array_length(data->'news_spectrum'->'center_left'),  0) +
+           COALESCE(jsonb_array_length(data->'news_spectrum'->'center'),       0) +
+           COALESCE(jsonb_array_length(data->'news_spectrum'->'center_right'), 0) +
+           COALESCE(jsonb_array_length(data->'news_spectrum'->'right'),        0)
+           ORDER BY search_count DESC
+         ))[1]                                                                    AS source_count,
+         -- like count
+         COUNT(DISTINCT al.id)                                                    AS like_count,
+         -- did the current user like this?
+         BOOL_OR(al.user_id = $2)                                                AS user_liked
+       FROM content_cache cc
+       LEFT JOIN analysis_likes al ON al.topic_norm = lower(cc.topic)
+       WHERE cc.topic IS NOT NULL AND cc.degraded = false
+         AND cc.last_searched > now() - INTERVAL '48 hours'
+       GROUP BY lower(cc.topic)
+       ORDER BY SUM(cc.search_count) DESC, MAX(cc.last_searched) DESC
        LIMIT $1`,
-      [limit]
+      [limit, userId]
     );
     return rows;
   } catch (err) {
     console.error('[DB:getPublicAnalyses]', err.message);
     return [];
+  }
+}
+
+// Increment view_count when a cached analysis is opened (fire-and-forget)
+export async function incrementViewCount(topicNorm) {
+  if (!pool) return;
+  pool.query(
+    `UPDATE content_cache SET view_count = COALESCE(view_count, 0) + 1
+     WHERE lower(topic) = lower($1) AND topic IS NOT NULL`,
+    [topicNorm]
+  ).catch(() => {});
+}
+
+// Toggle like — returns { liked: bool, like_count: number }
+export async function toggleAnalysisLike(topicNorm, userId) {
+  if (!pool) return { liked: false, like_count: 0 };
+  try {
+    // Try to insert; if already exists, delete instead
+    const { rowCount } = await pool.query(
+      `INSERT INTO analysis_likes (topic_norm, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [topicNorm, userId]
+    );
+    const liked = rowCount > 0;
+    if (!liked) {
+      await pool.query(`DELETE FROM analysis_likes WHERE topic_norm = $1 AND user_id = $2`, [topicNorm, userId]);
+    }
+    const { rows } = await pool.query(
+      `SELECT COUNT(*) AS cnt FROM analysis_likes WHERE topic_norm = $1`, [topicNorm]
+    );
+    return { liked, like_count: Number(rows[0]?.cnt ?? 0) };
+  } catch (err) {
+    console.error('[DB:toggleAnalysisLike]', err.message);
+    return { liked: false, like_count: 0 };
+  }
+}
+
+// Get topics liked by a user (with display name from content_cache)
+export async function getLikedAnalyses(userId) {
+  if (!pool) return [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT al.topic_norm, al.created_at AS liked_at,
+              (SELECT topic FROM content_cache WHERE lower(topic) = al.topic_norm AND topic IS NOT NULL LIMIT 1) AS topic,
+              (SELECT lang  FROM content_cache WHERE lower(topic) = al.topic_norm AND topic IS NOT NULL ORDER BY search_count DESC LIMIT 1) AS lang
+       FROM analysis_likes al
+       WHERE al.user_id = $1
+       ORDER BY al.created_at DESC
+       LIMIT 50`,
+      [userId]
+    );
+    return rows.filter(r => r.topic); // skip if cache was cleared
+  } catch (err) {
+    console.error('[DB:getLikedAnalyses]', err.message);
+    return [];
+  }
+}
+
+// Get user's media spectrum — aggregate coverage from all their searches
+export async function getUserMediaSpectrum(userId) {
+  if (!pool) return null;
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         AVG((coverage_json->'left'     ->>'percent')::float)        AS left_pct,
+         AVG((coverage_json->'center_left'->>'percent')::float)      AS center_left_pct,
+         AVG((coverage_json->'center'   ->>'percent')::float)        AS center_pct,
+         AVG((coverage_json->'center_right'->>'percent')::float)     AS center_right_pct,
+         AVG((coverage_json->'right'    ->>'percent')::float)        AS right_pct,
+         COUNT(*)                                                     AS total_searches
+       FROM user_searches
+       WHERE user_id = $1 AND coverage_json IS NOT NULL`,
+      [userId]
+    );
+    if (!rows[0] || !rows[0].total_searches) return null;
+    return {
+      left:          Math.round(rows[0].left_pct          ?? 0),
+      center_left:   Math.round(rows[0].center_left_pct   ?? 0),
+      center:        Math.round(rows[0].center_pct        ?? 0),
+      center_right:  Math.round(rows[0].center_right_pct  ?? 0),
+      right:         Math.round(rows[0].right_pct         ?? 0),
+      total_searches: Number(rows[0].total_searches),
+    };
+  } catch (err) {
+    console.error('[DB:getUserMediaSpectrum]', err.message);
+    return null;
   }
 }
 
@@ -525,4 +644,4 @@ export async function closeDB() {
   }
 }
 
-export default { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, logSearch, getTopTopicsDB, getAdminStats, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch };
+export default { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getTopTopicsDB, getAdminStats, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch };

@@ -215,10 +215,12 @@ const PT = {
     unlimited_badge: 'Unbegrenzt ∞',
     historyLabel: 'Verlauf', historyEmpty: 'Noch keine Analysen gespeichert.',
     historySearch: 'Erneut suchen →', historyDelete: '×',
-    profileLabel: 'Dein Leseprofil',
+    profileLabel: 'Dein Medienprofil',
     profileSub: 'Durchschnittliche Medienabdeckung über alle deine Suchanfragen',
     profileNone: 'Analysiere mindestens eine Suchanfrage, um dein Profil zu sehen.',
-    profileDominant: (label: string) => `Deine Themen werden am häufigsten von ${label} berichtet.`,
+    profileDominant: (label: string) => `Deine Themenwahl wird am häufigsten von ${label}-Medien abgedeckt.`,
+    profileSearches: (n: number) => `Basiert auf ${n} Analysen`,
+    likedLabel: 'Gemerkte Analysen', likedEmpty: 'Noch keine Analysen gemerkt.',
     topicsLabel: 'Häufig gesucht', topicsTime: (n: number) => n === 1 ? '1× gesucht' : `${n}× gesucht`,
     suggestionsLabel: 'Vielleicht interessant', suggestionsSub: 'Themen, die du noch nicht analysiert hast',
     suggestBtn: 'Analysieren →',
@@ -251,10 +253,12 @@ const PT = {
     unlimited_badge: 'Unlimited ∞',
     historyLabel: 'History', historyEmpty: 'No analyses saved yet.',
     historySearch: 'Search again →', historyDelete: '×',
-    profileLabel: 'Your reading profile',
+    profileLabel: 'Your media profile',
     profileSub: 'Average media coverage across all your searches',
     profileNone: 'Analyse at least one topic to see your profile.',
-    profileDominant: (label: string) => `Your topics are most often covered by ${label}.`,
+    profileDominant: (label: string) => `Your topic choices are most covered by ${label}-leaning media.`,
+    profileSearches: (n: number) => `Based on ${n} analyses`,
+    likedLabel: 'Saved analyses', likedEmpty: 'No liked analyses yet.',
     topicsLabel: 'Most searched', topicsTime: (n: number) => n === 1 ? 'searched once' : `searched ${n}×`,
     suggestionsLabel: 'You might like', suggestionsSub: 'Topics you haven\'t analysed yet',
     suggestBtn: 'Analyse →',
@@ -284,10 +288,12 @@ const PT = {
     unlimited_badge: 'Безлимитно ∞',
     historyLabel: 'История', historyEmpty: 'Пока нет сохранённых анализов.',
     historySearch: 'Искать снова →', historyDelete: '×',
-    profileLabel: 'Ваш профиль чтения',
+    profileLabel: 'Ваш медиапрофиль',
     profileSub: 'Среднее медиапокрытие по всем вашим запросам',
     profileNone: 'Проанализируйте хотя бы одну тему, чтобы увидеть профиль.',
-    profileDominant: (label: string) => `Ваши темы чаще всего освещаются лагерем: ${label}.`,
+    profileDominant: (label: string) => `Ваши темы чаще всего освещают ${label} СМИ.`,
+    profileSearches: (n: number) => `На основе ${n} анализов`,
+    likedLabel: 'Сохранённые анализы', likedEmpty: 'Нет лайкнутых анализов.',
     topicsLabel: 'Часто ищете', topicsTime: (n: number) => `${n}× найдено`,
     suggestionsLabel: 'Возможно интересно', suggestionsSub: 'Темы, которые вы ещё не анализировали',
     suggestBtn: 'Анализировать →',
@@ -371,17 +377,27 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
   // Data export
   const [exportLoading, setExportLoading] = useState(false);
 
+  // Server-side media spectrum (more accurate — all devices)
+  const [serverSpectrum, setServerSpectrum] = useState<Record<string, number> & { total_searches?: number } | null>(null);
+
+  // Liked analyses
+  const [likedAnalyses, setLikedAnalyses] = useState<{ topic_norm: string; topic: string; lang: string; liked_at: string }[]>([]);
+
   useEffect(() => {
     if (!authToken) { navigate('/', { replace: true }); return; }
     const h = { Authorization: `Bearer ${authToken}` };
     Promise.all([
-      fetch(`${API_BASE}/api/auth/me`,    { headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`${API_BASE}/api/auth/usage`, { headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`${API_BASE}/api/history`,    { headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([meRes, usageRes, histRes]) => {
-      if (meRes?.user) setUserData(meRes.user);
-      if (usageRes)    setUsageData(usageRes);
+      fetch(`${API_BASE}/api/auth/me`,              { headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${API_BASE}/api/auth/usage`,            { headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${API_BASE}/api/history`,               { headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${API_BASE}/api/profile/media-spectrum`,{ headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${API_BASE}/api/profile/liked-analyses`,{ headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([meRes, usageRes, histRes, spectrumRes, likedRes]) => {
+      if (meRes?.user)      setUserData(meRes.user);
+      if (usageRes)         setUsageData(usageRes);
       if (histRes?.history) setHistory(histRes.history);
+      if (spectrumRes)      setServerSpectrum(spectrumRes);
+      if (likedRes?.liked)  setLikedAnalyses(likedRes.liked);
       setLoading(false);
     });
   }, [authToken, navigate]);
@@ -406,7 +422,10 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
       )
     : null;
 
-  const spectrumProfile = computeSpectrumProfile(history);
+  // Prefer server-side spectrum (all-device data); fall back to local history
+  const spectrumProfile: Record<string, number> | null = serverSpectrum
+    ? { left: serverSpectrum.left ?? 0, center_left: serverSpectrum.center_left ?? 0, center: serverSpectrum.center ?? 0, center_right: serverSpectrum.center_right ?? 0, right: serverSpectrum.right ?? 0 }
+    : computeSpectrumProfile(history);
   const topTopics       = computeTopTopics(history);
   const suggestions     = computeSuggestions(history);
   const uniqueTopics    = new Set(history.map(e => e.topic.toLowerCase().trim())).size;
@@ -673,10 +692,46 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
                     {pt.profileDominant(S_STYLE[dominantCamp][`label_${lang === 'de' ? 'de' : lang === 'ru' ? 'ru' : 'en'}`])}
                   </p>
                 )}
+                {serverSpectrum?.total_searches && (
+                  <p className="font-sans text-[8px] uppercase tracking-widest text-gray-300 pt-1">
+                    {pt.profileSearches(serverSpectrum.total_searches)}
+                  </p>
+                )}
               </div>
             ) : (
               <div className="px-5 py-6 text-center">
                 <p className="font-serif text-sm text-gray-400">{pt.profileNone}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Liked Analyses */}
+          <div className="border-2 border-[#1a1a1a] overflow-hidden">
+            <div className="bg-[#1a1a1a] px-5 py-3 flex items-center gap-2">
+              <span className="text-rose-400 text-sm">♥</span>
+              <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.likedLabel}</p>
+            </div>
+            {likedAnalyses.length > 0 ? (
+              <div className="divide-y divide-[#e0d8cf]">
+                {likedAnalyses.slice(0, 8).map(item => (
+                  <button
+                    key={item.topic_norm}
+                    onClick={() => handleReSearch(item.topic)}
+                    className="w-full flex items-center justify-between px-5 py-3 hover:bg-[#f5f0e8] transition-colors text-left group"
+                  >
+                    <span className="font-serif text-sm text-[#1a1a1a] group-hover:underline truncate flex-1">{item.topic}</span>
+                    <div className="flex items-center gap-2 ml-2 shrink-0">
+                      <span className={`font-sans text-[8px] uppercase tracking-widest px-1 py-0.5 border border-[#e0d8cf] text-gray-400`}>
+                        {item.lang}
+                      </span>
+                      <span className="text-rose-300 text-[10px]">♥</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="px-5 py-6 text-center">
+                <p className="font-serif text-sm text-gray-400">{pt.likedEmpty}</p>
               </div>
             )}
           </div>
