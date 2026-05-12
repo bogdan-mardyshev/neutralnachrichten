@@ -159,24 +159,45 @@ export function UsageBar({ remaining, limit, lang, tier, onUpgradeClick }: Props
 
   // ── Normal ─────────────────────────────────────────────────────────────────
   return (
-    <div className="mt-2 px-1">
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex gap-0.5">
-          {Array.from({ length: limit }).map((_, i) => (
-            <div
-              key={i}
-              className={`h-1.5 transition-all duration-300 ${
-                i < used
-                  ? 'bg-[#1a1a1a]'
-                  : 'bg-[#e0d8cf]'
-              }`}
-              style={{ width: `${Math.min(28, Math.floor(240 / limit))}px` }}
-            />
-          ))}
+    <div className="mt-3 border border-[#e0d8cf] bg-[#fdf9f5] px-4 py-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <div className="flex gap-[3px]">
+            {Array.from({ length: limit }).map((_, i) => (
+              <div
+                key={i}
+                className={`w-2 h-2 rounded-sm transition-all duration-300 ${
+                  i < used ? 'bg-[#1a1a1a]' : 'bg-[#e0d8cf]'
+                }`}
+              />
+            ))}
+          </div>
         </div>
-        <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400 ml-2">
+        <span className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a] font-bold">
           {t.remaining(remaining, limit)}
         </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="w-full bg-[#e0d8cf] h-1 mb-3">
+        <div
+          className="bg-[#1a1a1a] h-1 transition-all duration-500"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="font-sans text-[10px] text-gray-400">
+          {lang === 'de' ? 'Kostenlose Analysen pro Tag' :
+           lang === 'ru' ? 'Бесплатных анализов в день' :
+           'Free analyses per day'}
+        </p>
+        <button
+          onClick={onUpgradeClick}
+          className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a] underline hover:no-underline transition-colors"
+        >
+          {t.proBtn}
+        </button>
       </div>
     </div>
   );
