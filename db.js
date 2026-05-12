@@ -331,7 +331,7 @@ export async function createUser(email, passwordHash) {
 export async function findUserByEmail(email) {
   if (!pool) return null;
   const { rows } = await pool.query(
-    `SELECT id, email, password_hash, tier, daily_limit, is_active FROM users WHERE email = $1`,
+    `SELECT id, email, password_hash, tier, daily_limit, is_active, email_verified FROM users WHERE email = $1`,
     [email.toLowerCase().trim()]
   );
   return rows[0] || null;
