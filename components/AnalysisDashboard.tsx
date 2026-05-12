@@ -96,6 +96,22 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
           <h2 className="font-serif font-black text-xl sm:text-2xl md:text-3xl text-white capitalize leading-tight">
             {analysis_topic}
           </h2>
+          {/* RSS source count + timestamp row */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+            {(data._meta?.rss_articles ?? 0) > 0 && (
+              <span className="font-sans text-[9px] uppercase tracking-widest text-white/40">
+                📡 {data._meta!.rss_articles} RSS-Artikel
+              </span>
+            )}
+            {data.analyzed_at && (
+              <span className="font-sans text-[9px] uppercase tracking-widest text-white/30">
+                {new Date(data.analyzed_at).toLocaleString(lang === 'de' ? 'de-DE' : lang === 'ru' ? 'ru-RU' : 'en-GB', {
+                  day: '2-digit', month: '2-digit', year: '2-digit',
+                  hour: '2-digit', minute: '2-digit',
+                })}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Fact check */}

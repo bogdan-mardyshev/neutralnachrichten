@@ -67,8 +67,10 @@ export interface NewsAnalysisResult {
   news_spectrum: NewsSpectrum;
   coverage_distribution?: CoverageDistribution;
   deep_analysis?: DeepAnalysis;
+  analyzed_at?: string;   // ISO timestamp of when the analysis was first computed
   _meta?: {
-    degraded: boolean;
+    degraded:     boolean;
+    rss_articles?: number; // total articles found via RSS across all spectra
   };
 }
 
