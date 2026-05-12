@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useSearchParams } from 'react-router-dom';
 import * as Sentry from "@sentry/react";
 import posthog from 'posthog-js';
@@ -21,6 +21,8 @@ import { DesignPreview } from './components/DesignPreview';
 import AuthModal, { AuthUser } from './components/AuthModal';
 import { UsageBar } from './components/UsageBar';
 import { PublicAnalyses } from './components/PublicAnalyses';
+import { MobileBottomNav } from './components/MobileBottomNav';
+import { MobileAnalyzedSheet } from './components/MobileAnalyzedSheet';
 import AdminPage from './components/AdminPage';
 import UserProfilePage from './components/UserProfilePage';
 import VerifyEmailPage from './components/VerifyEmailPage';
@@ -59,6 +61,15 @@ function MainApp() {
   // Mobile menu
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLElement>(null);
+
+  // Mobile bottom nav / sheet
+  const [analyzedSheetOpen, setAnalyzedSheetOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSearchTabPress = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => searchInputRef.current?.focus(), 300);
+  }, []);
 
   // Auth state
   const [authToken, setAuthToken] = useState<string | null>(() => localStorage.getItem('authToken'));
@@ -436,25 +447,25 @@ function MainApp() {
       </div>
 
       {/* Main Content */}
-      <main className="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 w-full">
+      <main className="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 w-full pb-24 sm:pb-10">
         <Routes>
           <Route path="/" element={
             <>
               {status === 'idle' && (
-                <div className="mb-10">
-                  <p className="font-sans text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-4">Medienanalyse</p>
-                  <h1 className="font-serif font-black text-3xl sm:text-4xl md:text-5xl text-[#1a1a1a] leading-[1.05] mb-5">
+                <div className="mb-6 sm:mb-10 animate-slide-down">
+                  <p className="font-sans text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-3 sm:mb-4">Medienanalyse</p>
+                  <h1 className="font-serif font-black text-2xl sm:text-4xl md:text-5xl text-[#1a1a1a] leading-[1.05] mb-4 sm:mb-5">
                     {t.subtitle}
                   </h1>
                   {/* Spectrum accent rule */}
-                  <div className="flex gap-0.5 mb-5">
-                    <div className="w-6 h-[3px] bg-rose-600" />
-                    <div className="w-6 h-[3px] bg-orange-400" />
-                    <div className="w-6 h-[3px] bg-slate-400" />
-                    <div className="w-6 h-[3px] bg-sky-500" />
-                    <div className="w-6 h-[3px] bg-blue-700" />
+                  <div className="flex gap-0.5 mb-4 sm:mb-5">
+                    <div className="w-5 sm:w-6 h-[3px] bg-rose-600" />
+                    <div className="w-5 sm:w-6 h-[3px] bg-orange-400" />
+                    <div className="w-5 sm:w-6 h-[3px] bg-slate-400" />
+                    <div className="w-5 sm:w-6 h-[3px] bg-sky-500" />
+                    <div className="w-5 sm:w-6 h-[3px] bg-blue-700" />
                   </div>
-                  <p className="font-sans text-gray-500 text-base">{t.description}</p>
+                  <p className="font-sans text-gray-500 text-sm sm:text-base">{t.description}</p>
                 </div>
               )}
 
@@ -462,7 +473,7 @@ function MainApp() {
                 <div className="flex gap-6 items-start">
                   {/* Main column */}
                   <div className="flex-1 min-w-0">
-                    <SearchBar onSearch={handleSearch} status={status} lang={lang} />
+                    <SearchBar onSearch={handleSearch} status={status} lang={lang} inputRef={searchInputRef} />
 
                     {/* Daily usage indicator */}
                     {dailyRemaining !== null && (
@@ -499,7 +510,7 @@ function MainApp() {
                 </div>
               ) : (
                 <>
-                  <SearchBar onSearch={handleSearch} status={status} lang={lang} />
+                  <SearchBar onSearch={handleSearch} status={status} lang={lang} inputRef={searchInputRef} />
                   <SearchHistory
                     history={history}
                     onSelect={(topic) => handleSearch(topic)}
@@ -510,7 +521,7 @@ function MainApp() {
               )}
 
               {status === 'loading' && (
-                <div className="flex flex-col items-center justify-center py-20 max-w-sm mx-auto w-full">
+                <div className="flex flex-col items-center justify-center py-16 sm:py-20 max-w-sm mx-auto w-full animate-fade-in">
                   {/* Newspaper-style spinner */}
                   <div className="w-12 h-12 mb-8 border-2 border-[#1a1a1a] border-t-transparent rounded-full animate-spin" />
 
@@ -557,7 +568,7 @@ function MainApp() {
               )}
 
               {status === 'success' && data && (
-                <>
+                <div className="animate-slide-up">
                   <div className="mb-6">
                     <button
                       onClick={handleReset}
@@ -567,7 +578,7 @@ function MainApp() {
                     </button>
                   </div>
                   <AnalysisDashboard data={data} lang={lang} deepLoading={deepLoading} />
-                </>
+                </div>
               )}
             </>
           } />
@@ -616,6 +627,24 @@ function MainApp() {
           </div>
         </div>
       </footer>
+
+      {/* Mobile bottom navigation */}
+      <MobileBottomNav
+        lang={lang}
+        authUser={authUser}
+        onSearchTab={handleSearchTabPress}
+        onAnalyzed={() => setAnalyzedSheetOpen(true)}
+      />
+
+      {/* Mobile PublicAnalyses bottom sheet */}
+      <MobileAnalyzedSheet
+        open={analyzedSheetOpen}
+        onClose={() => setAnalyzedSheetOpen(false)}
+        lang={lang}
+        onSelect={(topic, l) => { handleSearch(topic, l); setAnalyzedSheetOpen(false); }}
+        recentSearches={history.map(h => h.topic)}
+        authToken={authToken}
+      />
 
       {showCookieBanner && (
         <CookieBanner
