@@ -13,6 +13,7 @@ export interface AuthUser {
   email: string;
   tier: 'free' | 'pro' | 'enterprise';
   daily_limit: number;
+  email_verified?: boolean;
 }
 
 type Mode = 'login' | 'register';

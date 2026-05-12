@@ -112,6 +112,16 @@ async function runMigrations() {
     CREATE INDEX IF NOT EXISTS user_searches_user_id ON user_searches(user_id);
     CREATE INDEX IF NOT EXISTS user_searches_created  ON user_searches(created_at DESC);
   `);
+
+  // Incremental alterations — safe to run repeatedly (IF NOT EXISTS / DO NOTHING)
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified      BOOLEAN     DEFAULT false;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_token  TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_expires TIMESTAMPTZ;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token          TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires  TIMESTAMPTZ;
+  `);
+
   console.log('[DB] Migrations done ✓');
 }
 
@@ -278,7 +288,7 @@ export async function findUserByEmail(email) {
 export async function findUserById(id) {
   if (!pool) return null;
   const { rows } = await pool.query(
-    `SELECT id, email, tier, daily_limit, created_at FROM users WHERE id = $1 AND is_active = true`,
+    `SELECT id, email, tier, daily_limit, created_at, email_verified FROM users WHERE id = $1 AND is_active = true`,
     [id]
   );
   return rows[0] || null;
@@ -340,6 +350,119 @@ export async function deleteUserSearch(userId, searchId) {
     `DELETE FROM user_searches WHERE id = $1 AND user_id = $2`,
     [searchId, userId]
   );
+}
+
+// ── Email Verification ────────────────────────────────────────────────────────
+
+export async function setEmailVerifyToken(userId, tokenHash, expiresAt) {
+  if (!pool) throw new Error('DB not available');
+  await pool.query(
+    `UPDATE users SET email_verify_token = $1, email_verify_expires = $2 WHERE id = $3`,
+    [tokenHash, expiresAt, userId]
+  );
+}
+
+export async function verifyEmailToken(tokenHash) {
+  if (!pool) return null;
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET email_verified = true, email_verify_token = NULL, email_verify_expires = NULL
+     WHERE email_verify_token = $1
+       AND email_verify_expires > now()
+       AND is_active = true
+     RETURNING id, email, tier, daily_limit, email_verified`,
+    [tokenHash]
+  );
+  return rows[0] || null;
+}
+
+// ── Password Reset ─────────────────────────────────────────────────────────────
+
+export async function setResetToken(email, tokenHash, expiresAt) {
+  if (!pool) return null;
+  const { rows } = await pool.query(
+    `UPDATE users SET reset_token = $1, reset_token_expires = $2
+     WHERE email = $3 AND is_active = true
+     RETURNING id`,
+    [tokenHash, expiresAt, email.toLowerCase().trim()]
+  );
+  return rows[0] || null;
+}
+
+export async function useResetToken(tokenHash, newPasswordHash) {
+  if (!pool) return null;
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL
+     WHERE reset_token = $2
+       AND reset_token_expires > now()
+       AND is_active = true
+     RETURNING id, email, tier, daily_limit, email_verified`,
+    [newPasswordHash, tokenHash]
+  );
+  return rows[0] || null;
+}
+
+// ── Account Management ────────────────────────────────────────────────────────
+
+export async function updateUserPassword(userId, passwordHash) {
+  if (!pool) throw new Error('DB not available');
+  await pool.query(
+    `UPDATE users SET password_hash = $1 WHERE id = $2`,
+    [passwordHash, userId]
+  );
+}
+
+export async function updateUserEmail(userId, email) {
+  if (!pool) throw new Error('DB not available');
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET email = $1, email_verified = false, email_verify_token = NULL
+     WHERE id = $2
+     RETURNING id, email, tier, daily_limit`,
+    [email.toLowerCase().trim(), userId]
+  );
+  return rows[0] || null;
+}
+
+export async function softDeleteUser(userId) {
+  if (!pool) throw new Error('DB not available');
+  // Anonymise PII rather than hard-delete (GDPR Art. 17 — right to erasure)
+  const anon = `deleted_${userId}_${Date.now()}@deleted.invalid`;
+  await pool.query(
+    `UPDATE users
+     SET is_active = false, email = $1, password_hash = 'DELETED',
+         email_verify_token = NULL, reset_token = NULL
+     WHERE id = $2`,
+    [anon, userId]
+  );
+}
+
+export async function exportUserData(userId) {
+  if (!pool) return null;
+  const [userRes, searchesRes, historyRes] = await Promise.all([
+    pool.query(
+      `SELECT id, email, tier, daily_limit, created_at, last_login, email_verified
+       FROM users WHERE id = $1`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT topic, lang, degraded, cache_hit, created_at
+       FROM searches WHERE user_id = $1 ORDER BY created_at DESC`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT topic, lang, coverage_json, created_at
+       FROM user_searches WHERE user_id = $1 ORDER BY created_at DESC`,
+      [userId]
+    ),
+  ]);
+  return {
+    exported_at: new Date().toISOString(),
+    account: userRes.rows[0] || null,
+    searches: searchesRes.rows,
+    saved_analyses: historyRes.rows,
+  };
 }
 
 export async function closeDB() {

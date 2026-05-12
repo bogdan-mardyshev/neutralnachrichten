@@ -21,6 +21,8 @@ import { DesignPreview } from './components/DesignPreview';
 import AuthModal, { AuthUser } from './components/AuthModal';
 import AdminPage from './components/AdminPage';
 import UserProfilePage from './components/UserProfilePage';
+import VerifyEmailPage from './components/VerifyEmailPage';
+import ResetPasswordPage from './components/ResetPasswordPage';
 
 import { analyzeTopic, fetchDeepAnalysis } from './services/geminiService';
 import { NewsAnalysisResult, FetchStatus } from './types';
@@ -573,7 +575,12 @@ function MainApp() {
               authToken={authToken}
               authUser={authUser}
               onLogout={handleLogout}
+              onAuthUpdate={handleAuthSuccess}
             />
+          } />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/reset-password" element={
+            <ResetPasswordPage onAuthSuccess={handleAuthSuccess} />
           } />
         </Routes>
       </main>
