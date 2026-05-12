@@ -16,7 +16,7 @@ import bcrypt from 'bcryptjs';
 import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
 import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
 import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
-import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData } from './db.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
@@ -701,6 +701,7 @@ app.post('/api/analyze', async (req, res) => {
     const { remaining } = await checkDailyLimitDB(clientIP);
     res.set('X-RateLimit-Remaining', String(remaining));
     logSearch({ topic, lang, degraded: cached._meta?.degraded ?? false, cacheHit: true, userId: jwtUser?.id, ipHash: crypto.createHash('sha256').update(clientIP).digest('hex').slice(0, 16) }).catch(() => {});
+    incrementViewCount(topic).catch(() => {});
     return res.json(cached);
   }
   serverStats.cacheMisses++;
@@ -932,10 +933,54 @@ RULES:
 // ── Public analyses — already-cached results anyone can open instantly ────────
 app.get('/api/public-analyses', async (req, res) => {
   try {
-    const rows = await getPublicAnalyses(16);
+    // Pass userId if logged in so user_liked is populated
+    let userId = null;
+    const auth = req.headers.authorization;
+    if (auth?.startsWith('Bearer ')) {
+      try { userId = jwt.verify(auth.slice(7), JWT_SECRET).id; } catch {}
+    }
+    const rows = await getPublicAnalyses(20, userId);
     res.json(rows);
   } catch {
     res.json([]);
+  }
+});
+
+// ── Analysis likes ────────────────────────────────────────────────────────────
+app.post('/api/analyses/:topicNorm/like', requireAuth, async (req, res) => {
+  const { topicNorm } = req.params;
+  if (!topicNorm) return res.status(400).json({ error: 'topicNorm required' });
+  try {
+    const result = await toggleAnalysisLike(decodeURIComponent(topicNorm), req.user.id);
+    res.json(result);
+  } catch {
+    res.status(500).json({ error: 'Failed to toggle like' });
+  }
+});
+
+// ── View count (fire-and-forget when user opens a cached analysis) ────────────
+app.post('/api/analyses/:topicNorm/view', async (req, res) => {
+  incrementViewCount(decodeURIComponent(req.params.topicNorm));
+  res.json({ ok: true });
+});
+
+// ── User media spectrum (for profile) ────────────────────────────────────────
+app.get('/api/profile/media-spectrum', requireAuth, async (req, res) => {
+  try {
+    const spectrum = await getUserMediaSpectrum(req.user.id);
+    res.json(spectrum ?? null);
+  } catch {
+    res.json(null);
+  }
+});
+
+// ── Liked analyses (for profile) ─────────────────────────────────────────────
+app.get('/api/profile/liked-analyses', requireAuth, async (req, res) => {
+  try {
+    const liked = await getLikedAnalyses(req.user.id);
+    res.json({ liked });
+  } catch {
+    res.json({ liked: [] });
   }
 });
 

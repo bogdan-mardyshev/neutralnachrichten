@@ -493,6 +493,7 @@ function MainApp() {
                       lang={lang}
                       onSelect={(topic, l) => handleSearch(topic, l)}
                       recentSearches={history.map(h => h.topic)}
+                      authToken={authToken}
                     />
                   </div>
                 </div>
