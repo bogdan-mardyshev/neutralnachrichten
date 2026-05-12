@@ -110,19 +110,31 @@ function mergeArticles(
 
 interface SourceCardProps {
   articles: NewsSource[];
+  rssArticles?: RssArticle[];
   spectrumKey: SpectrumKey;
   leaning: string;
   lang: Language;
   analysisLoading?: boolean;
 }
 
-const SourceCard: React.FC<SourceCardProps> = ({ articles, spectrumKey, leaning, lang, analysisLoading }) => {
+const SourceCard: React.FC<SourceCardProps> = ({ articles, rssArticles, spectrumKey, leaning, lang, analysisLoading }) => {
   const t = translations[lang];
   const s = spectrumStyles[spectrumKey];
   const [idx, setIdx] = useState(0);
 
   const source = articles[idx];
   const total = articles.length;
+
+  // Find raw RSS description for the current article (only when it differs from AI summary)
+  const rssSnippet = (() => {
+    if (!rssArticles || !source) return null;
+    const dom = (source.source_domain || '').replace(/^www\./, '');
+    const match = rssArticles.find(r => (r.source_domain || '').replace(/^www\./, '') === dom);
+    if (!match?.description) return null;
+    // Don't show if it's already the summary (pure-RSS cards reuse description as summary)
+    if (match.description === source.summary_of_perspective) return null;
+    return match.description;
+  })();
 
   if (!source) {
     return (
@@ -157,8 +169,8 @@ const SourceCard: React.FC<SourceCardProps> = ({ articles, spectrumKey, leaning,
         </a>
       </div>
 
-      {/* Summary */}
-      <div className="px-4 pb-4 flex-grow">
+      {/* AI Summary */}
+      <div className="px-4 pb-3 flex-grow">
         {analysisLoading ? (
           <div className="space-y-1.5 animate-pulse">
             <div className="h-2 bg-[#e0d8cf] rounded w-full" />
@@ -172,6 +184,18 @@ const SourceCard: React.FC<SourceCardProps> = ({ articles, spectrumKey, leaning,
           </p>
         )}
       </div>
+
+      {/* RSS Snippet — real article text for verification */}
+      {!analysisLoading && rssSnippet && (
+        <div className="mx-4 mb-3 px-3 py-2 bg-[#f5f0e8] border border-[#e0d8cf]">
+          <p className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-1">
+            {t.rssSnippetLabel}
+          </p>
+          <p className="font-sans text-[10px] text-gray-400 leading-relaxed line-clamp-3 italic">
+            {rssSnippet}
+          </p>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-[#e0d8cf] mt-auto">
@@ -258,6 +282,7 @@ export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, rssSpectra
           >
             <SourceCard
               articles={mergeArticles(spectrum[key] ?? [], rssSpectra?.[key] ?? [])}
+              rssArticles={rssSpectra?.[key]}
               spectrumKey={key}
               leaning={leaningLabels[key]}
               lang={lang}
@@ -273,6 +298,7 @@ export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, rssSpectra
           <div key={key} className={`animate-slide-up stagger-${i + 1}`}>
             <SourceCard
               articles={mergeArticles(spectrum[key] ?? [], rssSpectra?.[key] ?? [])}
+              rssArticles={rssSpectra?.[key]}
               spectrumKey={key}
               leaning={leaningLabels[key]}
               lang={lang}
