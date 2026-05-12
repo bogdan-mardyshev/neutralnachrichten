@@ -356,7 +356,7 @@ function buildPrompt(topic, language) {
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
   const earliestDate = ninetyDaysAgo.toISOString().split('T')[0];
 
-  return `You are a German media analysis assistant. Use Google Search to find ONE real article about "${topic}" from each of the FIVE political spectrums in German-language media.
+  return `You are a German media analysis assistant. Use Google Search to find MULTIPLE real articles about "${topic}" from FIVE political spectrums in German-language media.
 
 OUTPUT RULES:
 - Output ONLY the JSON object. No markdown, no code fences, no preamble.
@@ -364,33 +364,55 @@ OUTPUT RULES:
 - Use EXACTLY these English keys — NEVER translate keys to another language.
 - All text VALUES must be in ${targetLang}.
 
-GERMAN MEDIA SPECTRUM (find ONE article per spectrum):
-- LEFT: taz, Junge Welt, nd-aktuell, Freitag — search: "${topic} taz OR nd-aktuell"
-- CENTER_LEFT: Spiegel, Süddeutsche, Zeit, Tagesschau — search: "${topic} spiegel OR sueddeutsche OR tagesschau"
-- CENTER: FAZ, Tagesspiegel, Handelsblatt — search: "${topic} faz OR tagesspiegel OR handelsblatt"
-- CENTER_RIGHT: Welt, Focus, NTV — search: "${topic} welt OR focus OR ntv"
-- RIGHT: Bild, Junge Freiheit, Tichys Einblick — search: "${topic} bild OR junge freiheit"
+GERMAN MEDIA SPECTRUM — search each group separately, find 2-4 DIFFERENT articles per spectrum:
+- LEFT (search: "${topic} site:taz.de OR site:nd-aktuell.de OR site:jungewelt.de"):
+  Outlets: taz (taz.de), nd-aktuell (nd-aktuell.de), Junge Welt (jungewelt.de)
+- CENTER_LEFT (search: "${topic} site:spiegel.de OR site:sueddeutsche.de OR site:zeit.de OR site:tagesspiegel.de"):
+  Outlets: Spiegel (spiegel.de), Süddeutsche Zeitung (sueddeutsche.de), Zeit (zeit.de), Tagesspiegel (tagesspiegel.de)
+- CENTER (search: "${topic} site:tagesschau.de OR site:zdf.de OR site:deutschlandfunk.de"):
+  Outlets: Tagesschau/ARD (tagesschau.de), ZDF (zdf.de), Deutschlandfunk (deutschlandfunk.de)
+- CENTER_RIGHT (search: "${topic} site:faz.net OR site:welt.de OR site:focus.de OR site:n-tv.de OR site:handelsblatt.com"):
+  Outlets: FAZ (faz.net), Welt (welt.de), Focus (focus.de), NTV (n-tv.de), Handelsblatt (handelsblatt.com)
+- RIGHT (search: "${topic} site:bild.de OR site:jungefreiheit.de OR site:tichyseinblick.de"):
+  Outlets: Bild (bild.de), Junge Freiheit (jungefreiheit.de), Tichys Einblick (tichyseinblick.de)
 
-RECENCY: Today: ${today}. Prefer last 90 days (after ${earliestDate}). Never leave a spectrum empty.
+RECENCY: Today: ${today}. Prefer last 90 days (after ${earliestDate}).
+IMPORTANT: Each spectrum MUST have 2-4 articles from DIFFERENT outlets where possible.
 publication_date MUST come from search results — omit if uncertain.
 DO NOT include article URLs — not part of the schema.
 
-COVERAGE ESTIMATE (per spectrum):
-- "high"   → major outlet covered it prominently recently
-- "medium" → covered but not a top story
-- "low"    → only older or minor coverage found
+COVERAGE ESTIMATE (one value per spectrum, based on how many articles you found):
+- "high"   → 3+ recent articles found across the spectrum
+- "medium" → 1-2 articles found, or only older coverage
+- "low"    → barely any coverage found
+- "none"   → zero articles found (deliberate silence possible)
 
-REQUIRED JSON STRUCTURE (each spectrum is an ARRAY with exactly 1 object):
+REQUIRED JSON STRUCTURE (each spectrum is an ARRAY of 2-4 article objects):
 {
   "analysis_topic": "${topic}",
   "response_language": "${language}",
-  "overall_non_partisan_analysis": "<2-3 sentence factual summary in ${targetLang}>",
+  "overall_non_partisan_analysis": "<3-4 sentence factual summary covering all angles in ${targetLang}>",
   "news_spectrum": {
-    "left":         [{ "source_name": "taz", "source_domain": "taz.de", "article_title": "<exact headline in ${targetLang}>", "summary_of_perspective": "<1-2 sentences on far-left angle in ${targetLang}>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low>" }],
-    "center_left":  [{ "source_name": "Der Spiegel", "source_domain": "spiegel.de", "article_title": "<exact headline in ${targetLang}>", "summary_of_perspective": "<1-2 sentences on center-left angle in ${targetLang}>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low>" }],
-    "center":       [{ "source_name": "FAZ", "source_domain": "faz.net", "article_title": "<exact headline in ${targetLang}>", "summary_of_perspective": "<1-2 sentences on centrist angle in ${targetLang}>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low>" }],
-    "center_right": [{ "source_name": "Welt", "source_domain": "welt.de", "article_title": "<exact headline in ${targetLang}>", "summary_of_perspective": "<1-2 sentences on center-right angle in ${targetLang}>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low>" }],
-    "right":        [{ "source_name": "Bild", "source_domain": "bild.de", "article_title": "<exact headline in ${targetLang}>", "summary_of_perspective": "<1-2 sentences on right-wing angle in ${targetLang}>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low>" }]
+    "left": [
+      { "source_name": "taz", "source_domain": "taz.de", "article_title": "<exact headline>", "summary_of_perspective": "<2-3 sentences on this outlet's angle in ${targetLang}>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" },
+      { "source_name": "nd-aktuell", "source_domain": "nd-aktuell.de", "article_title": "<exact headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" }
+    ],
+    "center_left": [
+      { "source_name": "Der Spiegel", "source_domain": "spiegel.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" },
+      { "source_name": "Süddeutsche Zeitung", "source_domain": "sueddeutsche.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" }
+    ],
+    "center": [
+      { "source_name": "Tagesschau", "source_domain": "tagesschau.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" },
+      { "source_name": "ZDF", "source_domain": "zdf.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" }
+    ],
+    "center_right": [
+      { "source_name": "FAZ", "source_domain": "faz.net", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" },
+      { "source_name": "Welt", "source_domain": "welt.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" }
+    ],
+    "right": [
+      { "source_name": "Bild", "source_domain": "bild.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" },
+      { "source_name": "Junge Freiheit", "source_domain": "jungefreiheit.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" }
+    ]
   }
 }`;
 }
@@ -518,10 +540,11 @@ async function callDeepAnalysis(analysis, timeoutMs = 15000) {
 
 function coverageToPercent(estimate) {
   switch (estimate) {
-    case 'high': return 75;
+    case 'high':   return 75;
     case 'medium': return 40;
-    case 'low': return 5;
-    default: return 40;
+    case 'low':    return 10;
+    case 'none':   return 0;
+    default:       return 20;
   }
 }
 
@@ -601,16 +624,39 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
       const totalArticles = SPECTRUMS.reduce((acc, s) => acc + analysis.news_spectrum[s].length, 0);
       console.log(`[Gemini] ${directCount}/${totalArticles} articles have direct links`);
 
-      // Build coverage_distribution from first article's coverage_estimate per spectrum
+      // Build coverage_distribution: prefer Gemini's estimate, validate against actual count
       const coverage_distribution = {};
+      const totalArticlesAll = SPECTRUMS.reduce((s, sp) => s + analysis.news_spectrum[sp].length, 0);
+
       for (const spectrum of SPECTRUMS) {
         const articles = analysis.news_spectrum[spectrum];
-        const firstArticle = articles[0];
-        const estimate = ['high', 'medium', 'low'].includes(firstArticle?.coverage_estimate)
-          ? firstArticle.coverage_estimate
-          : (articles.length >= 3 ? 'high' : articles.length === 2 ? 'medium' : 'low');
-        coverage_distribution[spectrum] = { estimate, percent: coverageToPercent(estimate) };
-        // clean up coverage_estimate from all articles
+        const count    = articles.length;
+
+        // Gemini's coverage_estimate from any article (preferably one that's not a fallback)
+        const withEstimate = articles.find(a => ['high','medium','low','none'].includes(a.coverage_estimate));
+        let estimate = withEstimate?.coverage_estimate;
+
+        // Override/correct based on real article count
+        if (!estimate || estimate === 'none') {
+          // No articles found at all
+          estimate = (count === 0) ? 'none' : count >= 3 ? 'high' : count === 2 ? 'medium' : 'low';
+        } else {
+          // Validate: Gemini said "high" but only gave 1 article → downgrade
+          if (estimate === 'high'   && count < 2) estimate = 'medium';
+          if (estimate === 'medium' && count < 1) estimate = 'none';
+        }
+
+        // Silence detection: if total >= 6 articles elsewhere but this spectrum has 0 → flag it
+        const silence = (count === 0 && totalArticlesAll >= 6);
+
+        coverage_distribution[spectrum] = {
+          estimate,
+          percent:  coverageToPercent(estimate),
+          count,
+          silence,  // potential deliberate non-coverage
+        };
+
+        // Clean coverage_estimate from individual article objects (UI doesn't need it)
         for (const art of articles) delete art.coverage_estimate;
       }
       console.log(`[Coverage] ${JSON.stringify(coverage_distribution)}`);

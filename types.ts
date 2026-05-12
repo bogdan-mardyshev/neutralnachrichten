@@ -1,8 +1,10 @@
-export type CoverageEstimate = 'high' | 'medium' | 'low';
+export type CoverageEstimate = 'high' | 'medium' | 'low' | 'none';
 
 export interface CoverageEntry {
   estimate: CoverageEstimate;
-  percent: number;
+  percent:  number;
+  count?:   number;   // actual article count from this spectrum
+  silence?: boolean;  // potential deliberate non-coverage
 }
 
 export type SpectrumKey = 'left' | 'center_left' | 'center' | 'center_right' | 'right';
