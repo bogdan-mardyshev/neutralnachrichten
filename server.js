@@ -16,6 +16,7 @@ import bcrypt from 'bcryptjs';
 import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
 import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
 import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
+import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverageVolume } from './lib/rssSearch.js';
 import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
@@ -92,7 +93,10 @@ function validateAnalysisStructure(data) {
   if (!data || typeof data !== 'object') return false;
   const topLevel = ['overall_non_partisan_analysis', 'news_spectrum'];
   if (!topLevel.every(key => key in data)) return false;
-  return SPECTRUMS.every(key => Array.isArray(data.news_spectrum?.[key]) && data.news_spectrum[key].length > 0);
+  // All 5 spectrum keys must exist and be arrays (empty arrays are OK — RSS fills gaps)
+  if (!SPECTRUMS.every(key => Array.isArray(data.news_spectrum?.[key]))) return false;
+  // At least one spectrum must have actual article content
+  return SPECTRUMS.some(key => data.news_spectrum[key].length > 0);
 }
 
 // ── Gemini Concurrency Limiter ────────────────────────────────────────────────
@@ -345,6 +349,139 @@ function extractJSON(rawText) {
   }
 
   return JSON.parse(cleaned.substring(first, last + 1));
+}
+
+// ── RSS helpers ───────────────────────────────────────────────────────────────
+
+// Extract search keywords from a topic string (any language).
+// RSS feeds are German, so German topics work best; English/Russian topics
+// still work for shared proper nouns (Ukraine, Inflation, AfD, etc.).
+function extractSearchKeywords(topic) {
+  return topic.toLowerCase()
+    .replace(/[^a-züäöß\s-]/gi, ' ')
+    .split(/[\s-]+/)
+    .filter(w => w.length >= 3)
+    .slice(0, 8);
+}
+
+// Merge real RSS data into a Gemini-produced analysis object.
+// Returns a new analysis object (original is not mutated).
+//   - Replaces search-fallback Google URLs with real RSS article URLs
+//   - Overrides coverage_distribution with real RSS article-count math
+//   - Adds deliberate-silence flags
+//   - Stamps analyzed_at with current ISO timestamp
+function enrichWithRSSData(analysis, rssData) {
+  if (!rssData || rssData.total_articles === 0) {
+    // Still stamp the time even with no RSS data
+    return { ...analysis, analyzed_at: new Date().toISOString() };
+  }
+
+  const result = JSON.parse(JSON.stringify(analysis)); // deep clone
+
+  // ── 1. Build domain → [rssArticle, ...] map for URL enrichment ────────────
+  const rssArticlesByDomain = {};
+  for (const spectrum of SPECTRUMS) {
+    for (const art of (rssData.spectra[spectrum]?.articles || [])) {
+      const dom = art.source_domain;
+      if (!rssArticlesByDomain[dom]) rssArticlesByDomain[dom] = [];
+      rssArticlesByDomain[dom].push(art);
+    }
+  }
+
+  // ── 2. Replace search-fallback URLs with real RSS article URLs ─────────────
+  let rssUrlsAdded = 0;
+  for (const spectrum of SPECTRUMS) {
+    result.news_spectrum[spectrum] = (analysis.news_spectrum[spectrum] || []).map(source => {
+      if (!source.url_is_search_fallback) return source; // grounding already gave a real URL
+
+      const domain = (source.source_domain || '').replace(/^www\./, '');
+      const candidates =
+        rssArticlesByDomain[domain] ||
+        rssArticlesByDomain[`www.${domain}`] ||
+        [];
+      if (!candidates.length) return source;
+
+      // Pick the RSS article whose title has the most word overlap with Gemini's title
+      const gemLower = (source.article_title || '').toLowerCase();
+      let bestArt  = null;
+      let bestScore = -1;
+      for (const art of candidates) {
+        if (!art.article_url) continue;
+        const rssWords = (art.article_title || '').toLowerCase()
+          .split(/\s+/).filter(w => w.length >= 4);
+        const hits  = rssWords.filter(w => gemLower.includes(w)).length;
+        const score = rssWords.length > 0 ? hits / rssWords.length : 0;
+        if (score > bestScore) { bestScore = score; bestArt = art; }
+      }
+
+      // Only replace when there's meaningful title overlap (≥15% word match)
+      // — prevents linking to completely unrelated articles from the same outlet
+      if (!bestArt?.article_url || bestScore < 0.15) return source;
+
+      rssUrlsAdded++;
+      return {
+        ...source,
+        article_url:         bestArt.article_url,
+        article_title:       bestArt.article_title || source.article_title,
+        publication_date:    bestArt.pubDate?.slice(0, 10) || source.publication_date,
+        url_is_search_fallback: false,
+      };
+    });
+  }
+  console.log(`[RSS→URLs] ${rssUrlsAdded} fallback URLs → real RSS links`);
+
+  // ── 3. Override coverage_distribution with real RSS article-count math ─────
+  const rssCovDist      = buildCoverageDistribution(rssData.spectra);
+  const silencedSpectra = detectSilence(rssData.spectra, rssData.total_articles);
+  result.coverage_distribution = {};
+  for (const spectrum of SPECTRUMS) {
+    result.coverage_distribution[spectrum] = {
+      ...rssCovDist[spectrum],
+      silence: silencedSpectra.includes(spectrum),
+    };
+  }
+  const covSummary = Object.fromEntries(SPECTRUMS.map(s => [s, result.coverage_distribution[s].count]));
+  console.log(`[RSS→Coverage] article counts per spectrum: ${JSON.stringify(covSummary)}`);
+
+  // ── 4. Fill spectra that Gemini left empty with best RSS articles ─────────
+  // Handles two cases:
+  //   (a) Gemini returned empty array [] for this spectrum
+  //   (b) Gemini was fully degraded and left a "Kein Artikel gefunden" placeholder
+  const isPlaceholder = (art) =>
+    art.source_name === 'Kein Artikel gefunden' || art.source_domain === 'n/a';
+
+  let rssFilled = 0;
+  for (const spectrum of SPECTRUMS) {
+    const existing = result.news_spectrum[spectrum] || [];
+    const hasReal  = existing.some(a => !isPlaceholder(a));
+    if (hasReal) continue; // Gemini already has real articles
+    const rssArts = (rssData.spectra[spectrum]?.articles || []).slice(0, 2);
+    if (rssArts.length === 0) continue;
+    result.news_spectrum[spectrum] = rssArts.map(art => ({
+      source_name:               art.source_name,
+      source_domain:             art.source_domain,
+      article_title:             art.article_title,
+      article_url:               art.article_url || null,
+      url_is_search_fallback:    !art.article_url,
+      publication_date:          art.pubDate?.slice(0, 10) ?? undefined,
+      // Brief machine-generated summary from RSS description (no Gemini context)
+      summary_of_perspective:    art.description
+        ? `${art.source_name} berichtet: ${art.description.slice(0, 300)}`
+        : `${art.source_name}: ${art.article_title}`,
+    }));
+    rssFilled += rssArts.length;
+  }
+  if (rssFilled > 0) console.log(`[RSS→Spectrum] Added ${rssFilled} RSS articles to empty spectra`);
+
+  // ── 5. Stamp analyzed_at + store RSS metadata for downstream use ──────────
+  result.analyzed_at = new Date().toISOString();
+  result._rss = {
+    total_articles:  rssData.total_articles,
+    coverage_volume: buildCoverageVolume(rssData.spectra),
+    fetched_at:      rssData.fetched_at,
+  };
+
+  return result;
 }
 
 function buildPrompt(topic, language) {
@@ -774,11 +911,33 @@ app.post('/api/analyze', async (req, res) => {
       console.log(`[Cache] HIT German base for "${topic}"`);
       ({ germanAnalysis, degraded } = cachedBase);
     } else {
+      // ── RSS: start fetching real articles immediately (no semaphore needed) ──
+      // Runs in parallel while we wait for a Gemini slot — zero extra latency cost.
+      const rssKeywords = extractSearchKeywords(topic);
+      console.log(`[RSS] Parallel search for keywords: ${JSON.stringify(rssKeywords)}`);
+      const rssPromise = searchAllFeeds(rssKeywords)
+        .then(r => {
+          console.log(`[RSS] Done — ${r.total_articles} articles found (${Date.now() - requestStart}ms elapsed)`);
+          return r;
+        })
+        .catch(err => {
+          console.warn('[RSS] Search failed (analysis continues without it):', err.message);
+          return null;
+        });
+
       // Throttle concurrent Gemini calls — wait for a slot, then call
       console.log(`[Gemini] Waiting for slot (active=${geminiSemaphore.active}, queue=${geminiSemaphore.waiting})`);
       await geminiSemaphore.acquire();
+      let rssData = null;
       try {
-        ({ analysis: germanAnalysis, degraded } = await callGeminiWithRetry(topic, 'de', 1));
+        // Run Gemini analysis + wait for RSS results in parallel
+        let rawAnalysis;
+        [{ analysis: rawAnalysis, degraded }, rssData] = await Promise.all([
+          callGeminiWithRetry(topic, 'de', 1),
+          rssPromise,
+        ]);
+        // Merge real RSS data into analysis (URLs, coverage counts, silence flags)
+        germanAnalysis = enrichWithRSSData(rawAnalysis, rssData);
       } finally {
         geminiSemaphore.release();
       }
@@ -817,7 +976,15 @@ app.post('/api/analyze', async (req, res) => {
     }
 
     finalAnalysis = { ...finalAnalysis, analysis_topic: topic, response_language: lang };
-    const response = { ...finalAnalysis, _meta: { degraded } };
+    const response = {
+      ...finalAnalysis,
+      _meta: {
+        degraded,
+        rss_articles: finalAnalysis.coverage_distribution
+          ? Object.values(finalAnalysis.coverage_distribution).reduce((s, e) => s + (e.count ?? 0), 0)
+          : undefined,
+      },
+    };
 
     // Only cache if Gemini succeeded AND translation succeeded (avoid caching empty/German fallbacks)
     if (!degraded && translationSucceeded) {
@@ -885,6 +1052,12 @@ app.post('/api/deep-analysis', async (req, res) => {
       geminiSemaphore.release();
     }
     console.log(`[DeepAnalysis] Done — ${deep.shared_facts.length} facts, ${deep.diverging_points.length} diverging, ${deep.silenced_topics.length} silenced`);
+
+    // Override Gemini's hallucinated coverage_volume with real RSS week/month counts
+    if (germanAnalysis._rss?.coverage_volume) {
+      deep.coverage_volume = germanAnalysis._rss.coverage_volume;
+      console.log('[DeepAnalysis] coverage_volume overridden with real RSS data');
+    }
 
     // Cache German deep analysis
     await cacheSetLayered(deepKey, deep, 86400);
