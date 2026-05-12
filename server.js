@@ -48,7 +48,7 @@ const PORT = process.env.PORT || 3001;
 // Keeping Gemini at 32s ensures translation always has time even on slow queries.
 // Slow/degraded Gemini still gets all RSS articles via enrichWithRSSData fallback.
 const IS_PRODUCTION = !!process.env.RAILWAY_ENVIRONMENT;
-const GEMINI_ATTEMPT_TIMEOUT = IS_PRODUCTION ? 32000 : 90000;
+const GEMINI_ATTEMPT_TIMEOUT = IS_PRODUCTION ? 45000 : 90000;
 const GLOBAL_TIMEOUT_MS     = IS_PRODUCTION ? 55000 : 120000;
 const GLOBAL_TRANSL_TIMEOUT = IS_PRODUCTION ? 20000 :  40000;
 

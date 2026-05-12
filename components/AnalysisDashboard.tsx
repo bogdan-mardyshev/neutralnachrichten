@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NewsAnalysisResult } from '../types';
 import { SpectrumGrid } from './SpectrumGrid';
 import { BiasBar } from './BiasBar';
@@ -7,6 +7,96 @@ import { ShareButtons } from './ShareButtons';
 import { DeepAnalysisBlock } from './DeepAnalysisBlock';
 import { HypeCounter } from './HypeCounter';
 import { translations, Language } from '../translations';
+
+// ── Sources known to be analysed (fixed list, matches rssSearch.js feeds) ─────
+const SOURCES_TICKER = [
+  'taz', 'nd-aktuell', 'Junge Welt',
+  'Spiegel', 'Süddeutsche Zeitung', 'Die Zeit', 'Tagesspiegel',
+  'Tagesschau', 'ZDF heute', 'Deutschlandfunk',
+  'FAZ', 'Die Welt', 'Focus', 'NTV', 'Handelsblatt',
+  'Bild', 'Junge Freiheit', 'Tichys Einblick',
+];
+
+const SPECTRUM_LABELS: Record<string, Record<Language, string>> = {
+  left:         { de: 'Linke Medien',        en: 'Left media',        ru: 'Левые СМИ' },
+  center_left:  { de: 'Mitte-Links Medien',   en: 'Center-left media', ru: 'Центрально-левые СМИ' },
+  center:       { de: 'Zentristische Medien', en: 'Centrist media',    ru: 'Центристские СМИ' },
+  center_right: { de: 'Mitte-Rechts Medien',  en: 'Center-right media',ru: 'Центрально-правые СМИ' },
+  right:        { de: 'Rechte Medien',        en: 'Right media',       ru: 'Правые СМИ' },
+};
+
+function useSourceTicker(active: boolean) {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setIdx(i => (i + 1) % SOURCES_TICKER.length), 650);
+    return () => clearInterval(id);
+  }, [active]);
+  return SOURCES_TICKER[idx];
+}
+
+function useCountdown(active: boolean, from: number) {
+  const [rem, setRem] = useState(from);
+  useEffect(() => {
+    if (!active) { setRem(from); return; }
+    setRem(from);
+    const id = setInterval(() => setRem(s => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [active]);
+  return rem;
+}
+
+function useTypewriter(text: string, msPerChar = 12) {
+  const [displayed, setDisplayed] = useState('');
+  const prevRef = useRef('');
+  useEffect(() => {
+    if (!text) { setDisplayed(''); prevRef.current = ''; return; }
+    if (text === prevRef.current) return;
+    prevRef.current = text;
+    setDisplayed('');
+    let i = 0;
+    const id = setInterval(() => {
+      i++;
+      setDisplayed(text.slice(0, i));
+      if (i >= text.length) clearInterval(id);
+    }, msPerChar);
+    return () => clearInterval(id);
+  }, [text]);
+  return text ? displayed : '';
+}
+
+function getInsights(
+  coverage: NewsAnalysisResult['coverage_distribution'],
+  lang: Language,
+): string[] {
+  if (!coverage) return [];
+  const order = ['left', 'center_left', 'center', 'center_right', 'right'] as const;
+  const counts = order.map(s => ({ s, count: (coverage[s] as any)?.count ?? 0 }));
+  const total = counts.reduce((a, b) => a + b.count, 0);
+  if (total === 0) return [];
+
+  const insights: string[] = [];
+
+  if (lang === 'de') insights.push(`${total} Artikel aus 18 deutschen Medien analysiert`);
+  else if (lang === 'en') insights.push(`${total} articles found across 18 German outlets`);
+  else insights.push(`Найдено ${total} статей в 18 немецких изданиях`);
+
+  const withArticles = counts.filter(x => x.count > 0);
+  if (withArticles.length >= 2) {
+    const max = withArticles.reduce((a, b) => b.count > a.count ? b : a);
+    const min = withArticles.reduce((a, b) => b.count < a.count ? b : a);
+    if (max.count >= min.count * 2 && max.s !== min.s) {
+      const ratio = (max.count / min.count).toFixed(1);
+      const maxName = SPECTRUM_LABELS[max.s]?.[lang] ?? max.s;
+      const minName = SPECTRUM_LABELS[min.s]?.[lang] ?? min.s;
+      if (lang === 'de') insights.push(`${maxName} berichten ${ratio}× häufiger als ${minName}`);
+      else if (lang === 'en') insights.push(`${maxName} cover this ${ratio}× more than ${minName}`);
+      else insights.push(`${maxName} пишут в ${ratio}× раз чаще, чем ${minName}`);
+    }
+  }
+
+  return insights;
+}
 
 // ── Rotating status messages ───────────────────────────────────────────────────
 const LOADING_MSGS: Record<Language, string[]> = {
@@ -80,6 +170,10 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
   const t = translations[lang];
   const { news_spectrum, overall_non_partisan_analysis, analysis_topic } = data;
 
+  const ticker    = useSourceTicker(analysisLoading ?? false);
+  const countdown = useCountdown(analysisLoading ?? false, 25);
+  const typewriterText = useTypewriter(overall_non_partisan_analysis ?? '');
+
   return (
     <div className="animate-fade-in space-y-8">
 
@@ -87,6 +181,43 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
       {analysisLoading && (
         <div className="relative h-[3px] bg-emerald-100 overflow-hidden -mt-2 rounded-full">
           <div className="absolute inset-y-0 left-0 w-1/3 bg-emerald-400 rounded-full animate-scan" />
+        </div>
+      )}
+
+      {/* ── AI Loading Banner — ticker + insights + countdown ────────────────── */}
+      {analysisLoading && (
+        <div className="border border-[#e0d8cf] bg-[#FFF8F0] px-5 py-4 space-y-3 animate-fade-in">
+          {/* Source ticker */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0" />
+            <span className="font-sans text-[11px] text-gray-500">
+              {lang === 'de' ? 'Analysiere:' : lang === 'en' ? 'Analysing:' : 'Анализируем:'}
+            </span>
+            <span className="font-sans text-[11px] font-bold text-emerald-700 transition-all duration-500">
+              {ticker}
+            </span>
+          </div>
+
+          {/* Auto-insights from RSS coverage */}
+          {getInsights(data.coverage_distribution, lang).map((insight, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <span className="text-[9px] text-emerald-400 mt-0.5 shrink-0">◆</span>
+              <p className="font-sans text-[11px] text-gray-600">{insight}</p>
+            </div>
+          ))}
+
+          {/* Countdown */}
+          <div className="flex items-center gap-2 pt-2 border-t border-[#e0d8cf]">
+            <div className="w-1 h-1 bg-gray-300 rounded-full animate-pulse" />
+            <span className="font-sans text-[10px] uppercase tracking-widest text-gray-400">
+              {lang === 'de'
+                ? (countdown > 0 ? `KI-Analyse · noch ~${countdown}s` : 'KI-Analyse · gleich fertig…')
+                : lang === 'en'
+                ? (countdown > 0 ? `AI analysis · ~${countdown}s left` : 'AI analysis · almost done…')
+                : (countdown > 0 ? `ИИ анализирует · ~${countdown}с` : 'ИИ анализирует · почти готово…')
+              }
+            </span>
+          </div>
         </div>
       )}
 
@@ -143,7 +274,10 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
             </div>
           ) : (
             <p className="font-serif text-base text-[#1a1a1a] leading-relaxed border-l-2 border-emerald-400 pl-4">
-              {overall_non_partisan_analysis}
+              {typewriterText}
+              {typewriterText.length < (overall_non_partisan_analysis?.length ?? 0) && (
+                <span className="inline-block w-0.5 h-[1em] bg-emerald-500 animate-pulse ml-0.5 align-middle" />
+              )}
             </p>
           )}
         </div>
