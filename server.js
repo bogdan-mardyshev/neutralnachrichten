@@ -1185,22 +1185,16 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await createUser(email.toLowerCase().trim(), passwordHash);
 
-    // Send verification email (fire-and-forget — never block registration)
+    // Send verification email — must be confirmed before login is allowed
     const verifyToken  = generateToken();
     const verifyExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
-    setEmailVerifyToken(user.id, hashToken(verifyToken), verifyExpiry).catch(() => {});
+    await setEmailVerifyToken(user.id, hashToken(verifyToken), verifyExpiry);
     sendVerificationEmail(user.email, verifyToken).catch(e =>
       console.warn('[Auth/register] Verification email failed:', e.message)
     );
 
-    const token = jwt.sign(
-      { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit, email_verified: false },
-      JWT_SECRET, { expiresIn: JWT_EXPIRES }
-    );
-    res.status(201).json({
-      token,
-      user: { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit, email_verified: false },
-    });
+    // Do NOT return a JWT — user must verify email before they can log in
+    res.status(201).json({ ok: true, email: user.email });
   } catch (err) {
     console.error('[Auth/register]', err.message);
     res.status(500).json({ error: 'Registration failed' });
