@@ -44,10 +44,13 @@ const __dirname = dirname(__filename);
 const PORT = process.env.PORT || 3001;
 
 // Adaptive timeouts: local dev is unconstrained; Railway kills requests at ~60s
+// Budget breakdown (production): 32s Gemini + 20s translation + 3s overhead = 55s
+// Keeping Gemini at 32s ensures translation always has time even on slow queries.
+// Slow/degraded Gemini still gets all RSS articles via enrichWithRSSData fallback.
 const IS_PRODUCTION = !!process.env.RAILWAY_ENVIRONMENT;
-const GEMINI_ATTEMPT_TIMEOUT = IS_PRODUCTION ? 44000 : 90000;
+const GEMINI_ATTEMPT_TIMEOUT = IS_PRODUCTION ? 32000 : 90000;
 const GLOBAL_TIMEOUT_MS     = IS_PRODUCTION ? 55000 : 120000;
-const GLOBAL_TRANSL_TIMEOUT = IS_PRODUCTION ? 22000 :  40000;
+const GLOBAL_TRANSL_TIMEOUT = IS_PRODUCTION ? 20000 :  40000;
 
 const rawKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 const GEMINI_API_KEY = rawKey.replace(/["']/g, '').trim();
@@ -2069,7 +2072,20 @@ function buildOGHtml(topic, lang, baseUrl) {
 }
 
 const distPath = path.join(__dirname, 'dist');
-app.use(express.static(distPath));
+app.use(express.static(distPath, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      // Never cache HTML — Vite changes asset hashes on every deploy.
+      // Stale HTML + new hashes = browser requests missing assets → 404 → HTML fallback → MIME error
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    } else if (filePath.includes('/assets/')) {
+      // Hashed assets are content-addressed — cache forever
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  },
+}));
 app.get(/^(?!\/api\/).*$/, (req, res) => {
   const ua = req.headers['user-agent'] || '';
   const topic = req.query.topic;
@@ -2082,6 +2098,7 @@ app.get(/^(?!\/api\/).*$/, (req, res) => {
     return res.send(buildOGHtml(topic, lang, serverBase));
   }
 
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile('index.html', { root: distPath });
 });
 
