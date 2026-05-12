@@ -31,6 +31,18 @@ function useCountUp(target: number, duration = 900) {
 }
 
 function computeHype(cd: CoverageDistribution): number {
+  // Use total article count (RSS-based) on a log scale.
+  // Fallback to percent-based average for legacy non-RSS data.
+  const hasRealCounts = SPECTRUM_ORDER.some(s => typeof cd[s]?.count === 'number');
+
+  if (hasRealCounts) {
+    const total = SPECTRUM_ORDER.reduce((acc, s) => acc + (cd[s]?.count ?? 0), 0);
+    if (total === 0) return 0;
+    // log10 scale: 1→~15, 5→~39, 10→~52, 20→~66, 43→~82, 100→100
+    return Math.min(100, Math.round(Math.log10(total + 1) * 50));
+  }
+
+  // Legacy path: Gemini estimated percent as absolute intensity (0-100 per spectrum)
   const vals = SPECTRUM_ORDER.map(s => cd[s]?.percent ?? 0);
   return Math.min(100, Math.round(vals.reduce((a, b) => a + b, 0) / vals.length));
 }
