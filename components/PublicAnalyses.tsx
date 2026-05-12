@@ -179,16 +179,14 @@ function LikeButton({
 }
 
 // ── Single card ───────────────────────────────────────────────────────────────
-function AnalysisCard({
-  item, lang, recentTopics, authToken, onSelect, onLikeToggle,
-}: {
+const AnalysisCard: React.FC<{
   item: PublicEntry;
   lang: Language;
   recentTopics: Set<string>;
   authToken?: string | null;
   onSelect: (topic: string, lang: Language) => void;
   onLikeToggle: (topicNorm: string, liked: boolean, count: number) => void;
-}) {
+}> = ({ item, lang, recentTopics, authToken, onSelect, onLikeToggle }) => {
   const t = L[lang] ?? L.de;
   const isRecent  = recentTopics.has(item.topic.toLowerCase());
   const viewCount = Number(item.view_count ?? 0);

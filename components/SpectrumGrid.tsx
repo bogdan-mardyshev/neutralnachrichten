@@ -273,23 +273,25 @@ export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, rssSpectra
       </div>
 
       {/* Mobile: horizontal scroll-snap carousel */}
-      <div className="sm:hidden spectrum-scroll -mx-4 px-4">
-        {SPECTRUM_ORDER.map((key, i) => (
-          <div
-            key={key}
-            className={`animate-slide-up stagger-${i + 1}`}
-            style={{ width: 'calc(85vw)', maxWidth: 320 }}
-          >
-            <SourceCard
-              articles={mergeArticles(spectrum[key] ?? [], rssSpectra?.[key] ?? [])}
-              rssArticles={rssSpectra?.[key]}
-              spectrumKey={key}
-              leaning={leaningLabels[key]}
-              lang={lang}
-              analysisLoading={analysisLoading}
-            />
-          </div>
-        ))}
+      <div className="sm:hidden">
+        <div className="spectrum-scroll -mx-4 px-4">
+          {SPECTRUM_ORDER.map((key, i) => (
+            <div
+              key={key}
+              className={`animate-slide-up stagger-${i + 1}`}
+              style={{ width: 'calc(85vw)', maxWidth: 320 }}
+            >
+              <SourceCard
+                articles={mergeArticles(spectrum[key] ?? [], rssSpectra?.[key] ?? [])}
+                rssArticles={rssSpectra?.[key]}
+                spectrumKey={key}
+                leaning={leaningLabels[key]}
+                lang={lang}
+                analysisLoading={analysisLoading}
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Desktop: grid */}
