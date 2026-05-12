@@ -1172,7 +1172,26 @@ app.get('/api/analyze/stream', async (req, res) => {
     if (cachedBase) {
       console.log(`[Cache] HIT German base stream "${topic}"`);
       ({ germanAnalysis, degraded } = cachedBase);
-      await rssPromise; // ensure RSS event was emitted before result
+      // Always refresh coverage/RSS data even on cache hit — Gemini stays cached,
+      // but article counts and _rss.spectra should reflect current feeds.
+      const freshRssData = await rssPromise;
+      if (freshRssData && freshRssData.total_articles > 0) {
+        const rssCovDist = buildCoverageDistribution(freshRssData.spectra);
+        const silenced   = detectSilence(freshRssData.spectra, freshRssData.total_articles);
+        germanAnalysis = {
+          ...germanAnalysis,
+          coverage_distribution: Object.fromEntries(
+            SPECTRUMS.map(s => [s, { ...rssCovDist[s], silence: silenced.includes(s) }])
+          ),
+          _rss: {
+            total_articles:  freshRssData.total_articles,
+            coverage_volume: buildCoverageVolume(freshRssData.spectra),
+            fetched_at:      freshRssData.fetched_at,
+            spectra:         Object.fromEntries(SPECTRUMS.map(s => [s, freshRssData.spectra[s]?.articles || []])),
+          },
+        };
+        console.log(`[RSS→Coverage] (cache-hit refresh) ${JSON.stringify(Object.fromEntries(SPECTRUMS.map(s => [s, rssCovDist[s].count])))}`);
+      }
     } else {
       console.log(`[Gemini-Stream] Waiting for slot`);
       await geminiSemaphore.acquire();
