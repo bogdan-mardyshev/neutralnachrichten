@@ -78,7 +78,10 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
 
-  // Unverified email state
+  // "Check your email" screen after registration
+  const [registeredEmail, setRegisteredEmail] = useState('');
+
+  // Unverified email state (login blocked)
   const [unverifiedEmail,   setUnverifiedEmail]   = useState('');
   const [resendLoading,     setResendLoading]     = useState(false);
   const [resendSent,        setResendSent]        = useState(false);
@@ -139,6 +142,13 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
         setError(data.error || t.errorNetwork);
         return;
       }
+
+      // Registration: no JWT returned — show "check your email" screen
+      if (mode === 'register' && data.ok && !data.token) {
+        setRegisteredEmail(data.email || email.trim());
+        return;
+      }
+
       onSuccess(data.token, data.user);
     } catch {
       setError(t.errorNetwork);
@@ -219,8 +229,55 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
           <div className="flex-1 bg-blue-700" />
         </div>
 
-        {/* ── FORGOT PASSWORD MODE ── */}
-        {mode === 'forgot' ? (
+        {/* ── CONTENT: three possible screens ── */}
+        {registeredEmail ? (
+
+          /* ── 1. REGISTERED — CHECK EMAIL ── */
+          <div className="p-8 text-center">
+            <div className="w-14 h-14 bg-[#1a1a1a] flex items-center justify-center mx-auto mb-5">
+              <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+              </svg>
+            </div>
+            <h3 className="font-serif font-black text-xl text-[#1a1a1a] mb-2">
+              {lang === 'de' ? 'E-Mail bestätigen' : lang === 'ru' ? 'Подтвердите почту' : 'Confirm your email'}
+            </h3>
+            <p className="font-sans text-sm text-gray-500 mb-1">
+              {lang === 'de' ? 'Wir haben einen Bestätigungslink gesendet an:' :
+               lang === 'ru' ? 'Мы отправили ссылку для подтверждения на:' :
+               'We sent a confirmation link to:'}
+            </p>
+            <p className="font-serif font-bold text-[#1a1a1a] mb-5 break-all">{registeredEmail}</p>
+            <p className="font-sans text-[11px] text-gray-400 mb-6">
+              {lang === 'de' ? 'Klicke auf den Link in der E-Mail, um dein Konto zu aktivieren. Danach kannst du dich anmelden.' :
+               lang === 'ru' ? 'Нажмите на ссылку в письме, чтобы активировать аккаунт. После этого вы сможете войти.' :
+               'Click the link in the email to activate your account. You can then log in.'}
+            </p>
+            <div className="h-px bg-[#e0d8cf] mb-5" />
+            <p className="font-sans text-[11px] text-gray-400 mb-3">
+              {lang === 'de' ? 'Keine E-Mail erhalten?' : lang === 'ru' ? 'Не получили письмо?' : "Didn't receive an email?"}
+            </p>
+            <button
+              onClick={async () => {
+                await fetch(`${API_BASE}/api/auth/resend-public`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email: registeredEmail }),
+                });
+                setResendSent(true);
+              }}
+              disabled={resendSent}
+              className="font-sans text-[10px] uppercase tracking-widest text-gray-500 underline hover:no-underline hover:text-[#1a1a1a] transition-colors disabled:opacity-50"
+            >
+              {resendSent
+                ? (lang === 'de' ? '✓ Gesendet' : lang === 'ru' ? '✓ Отправлено' : '✓ Sent')
+                : (lang === 'de' ? 'Erneut senden' : lang === 'ru' ? 'Отправить повторно' : 'Resend email')}
+            </button>
+          </div>
+
+        ) : mode === 'forgot' ? (
+
+          /* ── 2. FORGOT PASSWORD ── */
           <div className="p-6 space-y-4">
             {forgotSent ? (
               <div className="text-center py-4">
@@ -230,13 +287,8 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                   </svg>
                 </div>
                 <p className="font-serif font-bold text-[#1a1a1a] mb-1">{t.forgotSent}</p>
-                <p className="font-sans text-[11px] text-gray-400 mb-5">
-                  {forgotEmail}
-                </p>
-                <button
-                  onClick={() => switchMode('login')}
-                  className="font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] transition-colors"
-                >
+                <p className="font-sans text-[11px] text-gray-400 mb-5">{forgotEmail}</p>
+                <button onClick={() => switchMode('login')} className="font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] transition-colors">
                   {t.backToLogin}
                 </button>
               </div>
@@ -256,40 +308,29 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                       className="w-full border-2 border-[#1a1a1a] bg-white px-3 py-2.5 font-serif text-[#1a1a1a] placeholder:text-[#1a1a1a]/30 focus:outline-none focus:ring-2 focus:ring-[#1a1a1a] focus:ring-offset-1"
                     />
                   </div>
-                  {forgotError && (
-                    <div className="border border-rose-400 bg-rose-50 px-3 py-2 font-serif text-sm text-rose-700">{forgotError}</div>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={forgotLoading}
-                    className="w-full bg-[#1a1a1a] text-[#FFF8F0] py-3 font-sans text-xs uppercase tracking-widest hover:bg-[#333] transition-colors disabled:opacity-50"
-                  >
+                  {forgotError && <div className="border border-rose-400 bg-rose-50 px-3 py-2 font-serif text-sm text-rose-700">{forgotError}</div>}
+                  <button type="submit" disabled={forgotLoading} className="w-full bg-[#1a1a1a] text-[#FFF8F0] py-3 font-sans text-xs uppercase tracking-widest hover:bg-[#333] transition-colors disabled:opacity-50">
                     {forgotLoading ? t.loading : t.forgotSubmit}
                   </button>
                 </form>
                 <div className="text-center">
-                  <button
-                    onClick={() => switchMode('login')}
-                    className="font-sans text-[10px] uppercase tracking-widest text-gray-400 hover:text-[#1a1a1a] transition-colors"
-                  >
+                  <button onClick={() => switchMode('login')} className="font-sans text-[10px] uppercase tracking-widest text-gray-400 hover:text-[#1a1a1a] transition-colors">
                     {t.backToLogin}
                   </button>
                 </div>
               </>
             )}
           </div>
+
         ) : (
+
+          /* ── 3. LOGIN / REGISTER ── */
           <>
-            {/* ── LOGIN / REGISTER TABS ── */}
             <div className="flex border-b-2 border-[#1a1a1a]">
               {(['login', 'register'] as Mode[]).map(m => (
-                <button
-                  key={m}
-                  onClick={() => switchMode(m)}
+                <button key={m} onClick={() => switchMode(m)}
                   className={`flex-1 py-2.5 font-sans text-xs uppercase tracking-widest transition-colors ${
-                    mode === m
-                      ? 'bg-[#1a1a1a] text-[#FFF8F0]'
-                      : 'text-[#1a1a1a]/60 hover:text-[#1a1a1a] hover:bg-[#e8e0d5]'
+                    mode === m ? 'bg-[#1a1a1a] text-[#FFF8F0]' : 'text-[#1a1a1a]/60 hover:text-[#1a1a1a] hover:bg-[#e8e0d5]'
                   }`}
                 >
                   {m === 'login' ? t.login : t.register}
@@ -299,9 +340,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
 
             <div className="p-6 space-y-4">
               {/* Google OAuth */}
-              <button
-                onClick={handleGoogleLogin}
-                type="button"
+              <button onClick={handleGoogleLogin} type="button"
                 className="w-full flex items-center justify-center gap-3 border-2 border-[#1a1a1a] py-2.5 font-sans text-xs uppercase tracking-widest hover:bg-[#e8e0d5] transition-colors"
               >
                 <GoogleIcon />
@@ -315,16 +354,11 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                 <div className="flex-1 h-px bg-[#e0d8cf]" />
               </div>
 
-              {/* Email / Password form */}
+              {/* Form */}
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/60 mb-1">{t.email}</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    required
-                    autoComplete="email"
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email"
                     placeholder="name@beispiel.de"
                     className="w-full border-2 border-[#1a1a1a] bg-white px-3 py-2.5 font-serif text-[#1a1a1a] placeholder:text-[#1a1a1a]/30 focus:outline-none focus:ring-2 focus:ring-[#1a1a1a] focus:ring-offset-1"
                   />
@@ -337,9 +371,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                       {mode === 'register' && <span className="ml-1 text-[#1a1a1a]/40 normal-case tracking-normal">{t.passwordMin}</span>}
                     </label>
                     {mode === 'login' && (
-                      <button
-                        type="button"
-                        onClick={() => switchMode('forgot')}
+                      <button type="button" onClick={() => switchMode('forgot')}
                         className="font-sans text-[10px] text-gray-400 hover:text-[#1a1a1a] transition-colors underline"
                       >
                         {t.forgotPassword}
@@ -348,19 +380,12 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                   </div>
                   <div className="relative">
                     <input
-                      type={showPw ? 'text' : 'password'}
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      required
-                      autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                      placeholder="••••••••"
+                      type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
+                      required autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="••••••••"
                       className="w-full border-2 border-[#1a1a1a] bg-white px-3 py-2.5 pr-10 font-serif text-[#1a1a1a] placeholder:text-[#1a1a1a]/30 focus:outline-none focus:ring-2 focus:ring-[#1a1a1a] focus:ring-offset-1"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPw(v => !v)}
+                    <button type="button" onClick={() => setShowPw(v => !v)} tabIndex={-1}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1a1a1a] transition-colors"
-                      tabIndex={-1}
                     >
                       {showPw ? (
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -375,17 +400,17 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                     </button>
                   </div>
 
-                  {/* Password strength (register only) */}
+                  {/* Strength + checklist (register only) */}
                   {mode === 'register' && password.length > 0 && (
                     <div className="mt-2">
                       <StrengthBar score={score} />
                       <div className="mt-2 space-y-1">
                         <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 mb-1">{t.pwReq}</p>
-                        {[
+                        {([
                           { ok: checks.len,   label: t.pwLen },
                           { ok: checks.num,   label: t.pwNum },
                           { ok: checks.upper, label: t.pwUpper },
-                        ].map(({ ok, label }) => (
+                        ] as { ok: boolean; label: string }[]).map(({ ok, label }) => (
                           <div key={label} className="flex items-center gap-2">
                             <Check ok={ok} />
                             <span className={`font-sans text-[11px] transition-colors ${ok ? 'text-emerald-700' : 'text-gray-400'}`}>{label}</span>
@@ -396,26 +421,17 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                   )}
                 </div>
 
-                {/* Error */}
                 {error && error !== '__unverified__' && (
-                  <div className="border border-rose-400 bg-rose-50 px-3 py-2 font-serif text-sm text-rose-700">
-                    {error}
-                  </div>
+                  <div className="border border-rose-400 bg-rose-50 px-3 py-2 font-serif text-sm text-rose-700">{error}</div>
                 )}
 
-                {/* Unverified email banner */}
                 {error === '__unverified__' && (
                   <div className="border border-amber-400 bg-amber-50 px-3 py-3 space-y-2">
-                    <p className="font-serif text-sm text-amber-800">
-                      {t.notVerifiedError}
-                    </p>
+                    <p className="font-serif text-sm text-amber-800">{t.notVerifiedError}</p>
                     {resendSent ? (
                       <p className="font-sans text-[11px] text-emerald-700 font-bold">{t.notVerifiedSent}</p>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={handleResend}
-                        disabled={resendLoading}
+                      <button type="button" onClick={handleResend} disabled={resendLoading}
                         className="font-sans text-[11px] uppercase tracking-widest text-amber-800 underline hover:no-underline disabled:opacity-50"
                       >
                         {resendLoading ? t.loading : t.notVerifiedResend}
@@ -424,36 +440,29 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                   </div>
                 )}
 
-                <button
-                  type="submit"
-                  disabled={loading || (mode === 'register' && !allPass)}
+                <button type="submit" disabled={loading || (mode === 'register' && !allPass)}
                   className="w-full bg-[#1a1a1a] text-[#FFF8F0] py-3 font-sans text-xs uppercase tracking-widest hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? t.loading : mode === 'login' ? t.submitLogin : t.submitRegister}
                 </button>
               </form>
 
-              {/* Benefits (register only) */}
               {mode === 'register' && (
                 <div className="border-t border-[#e0d8cf] pt-4">
                   <p className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 mb-2">{t.benefitsTitle}</p>
                   <ul className="space-y-1">
                     {t.benefits.map((item: string) => (
                       <li key={item} className="font-serif text-sm text-[#1a1a1a]/70 flex items-start gap-2">
-                        <span className="text-[#1a1a1a]/40 mt-0.5">→</span>
-                        {item}
+                        <span className="text-[#1a1a1a]/40 mt-0.5">→</span>{item}
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
 
-              {/* Switch mode */}
               <p className="text-center font-serif text-sm text-[#1a1a1a]/60">
                 {mode === 'login' ? t.switchToRegister : t.switchToLogin}{' '}
-                <button
-                  type="button"
-                  onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
+                <button type="button" onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
                   className="text-[#1a1a1a] underline hover:no-underline"
                 >
                   {mode === 'login' ? t.linkRegister : t.linkLogin}
