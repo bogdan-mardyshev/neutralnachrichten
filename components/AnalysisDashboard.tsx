@@ -123,7 +123,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
             <p className="font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-600">{t.factCheck}</p>
             {analysisLoading && (
               <span className="font-sans text-[9px] uppercase tracking-widest text-emerald-500/60 animate-pulse ml-1">
-                KI analysiert…
+                {t.analysisLoading}
               </span>
             )}
           </div>

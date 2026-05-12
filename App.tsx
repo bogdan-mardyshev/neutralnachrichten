@@ -70,6 +70,9 @@ function MainApp() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const streamCleanupRef = useRef<(() => void) | null>(null);
 
+  // Abort any in-flight stream when the component unmounts
+  useEffect(() => () => { streamCleanupRef.current?.(); }, []);
+
   const handleSearchTabPress = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setTimeout(() => searchInputRef.current?.focus(), 300);
@@ -150,7 +153,8 @@ function MainApp() {
   }, [authToken]);
 
   useEffect(() => {
-    if (status !== 'loading') return;
+    // Only animate while waiting for the first RSS event (data is still null)
+    if (status !== 'loading' || data !== null) return;
 
     setLoadingStage(0);
     setLoadingProgress(0);
@@ -180,7 +184,7 @@ function MainApp() {
       clearInterval(stageInterval);
       clearInterval(progressInterval);
     };
-  }, [status, t.loadingStages.length]);
+  }, [status, data, t.loadingStages.length]);
 
   const initPostHog = () => {
     const key = import.meta.env.VITE_POSTHOG_KEY;
@@ -228,6 +232,7 @@ function MainApp() {
     setError(null);
     setData(null);
     setAnalysisLoading(false);
+    setLastQuery(query); // set early so language switch works during streaming
 
     const startTime = Date.now();
     posthog.capture('analysis_started', { topic: query, lang: activeLang });
@@ -246,7 +251,6 @@ function MainApp() {
           // Phase 2 (~15-35s): full AI analysis ready
           setData(event.data);
           setAnalysisLoading(false);
-          setLastQuery(query);
 
           if (typeof event.data._usage?.remaining === 'number') {
             setDailyRemaining(event.data._usage.remaining);
@@ -254,6 +258,7 @@ function MainApp() {
           setStatus('success');
           setSearchParams({ topic: query, lang: activeLang }, { replace: true });
           addToHistory(query, activeLang);
+          // lastQuery already set at search start; no need to re-set here
 
           if (authToken && event.data.coverage_distribution) {
             fetch(`${import.meta.env.VITE_API_BASE || ''}/api/history`, {
@@ -306,7 +311,8 @@ function MainApp() {
     setLang(newLang);
     localStorage.setItem('lang', newLang);
     posthog.capture('language_switched', { from: oldLang, to: newLang });
-    if (lastQuery && status === 'success') {
+    // Re-search when a result is shown (success) OR when we're mid-stream (RSS data arrived)
+    if (lastQuery && (status === 'success' || (status === 'loading' && data !== null))) {
       handleSearch(lastQuery, newLang);
     }
   };
