@@ -10,8 +10,9 @@ const LegalShell: React.FC<{ title: string; subtitle: string; lang: Language; ch
   const t = translations[lang];
   return (
     <div className="max-w-3xl mx-auto py-10 px-4">
-      <Link to="/" className="font-sans text-[10px] uppercase tracking-widest text-gray-400 hover:text-[#1a1a1a] transition-colors mb-8 flex items-center gap-1.5">
-        ← {t.backToHome}
+      <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 mb-8">
+        <span className="inline-block group-hover:-translate-x-1 transition-transform duration-200">←</span>
+        {t.backToHome}
       </Link>
       <div className="border-b-2 border-[#1a1a1a] pb-6 mb-8">
         <div className="h-[3px] flex mb-5">

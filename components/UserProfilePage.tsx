@@ -541,8 +541,9 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
   return (
     <div className="max-w-3xl space-y-5">
 
-      <Link to="/" className="font-sans text-[10px] uppercase tracking-widest text-gray-400 hover:text-[#1a1a1a] transition-colors">
-        {pt.back}
+      <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200">
+        <span className="inline-block group-hover:-translate-x-1 transition-transform duration-200">←</span>
+        {pt.back.replace('← ', '')}
       </Link>
 
       {loading ? (
