@@ -44,13 +44,13 @@ const __dirname = dirname(__filename);
 const PORT = process.env.PORT || 3001;
 
 // Adaptive timeouts: local dev is unconstrained; Railway kills requests at ~60s
-// Budget breakdown (production): 32s Gemini + 20s translation + 3s overhead = 55s
-// Keeping Gemini at 32s ensures translation always has time even on slow queries.
-// Slow/degraded Gemini still gets all RSS articles via enrichWithRSSData fallback.
+// Budget breakdown (production): 42s Gemini + 15s translation + 3s overhead = 60s
+// On Railway, SSE keeps the connection alive so the hard 60s kill doesn't apply
+// to streaming endpoints — we only need to be safe on regular endpoints.
 const IS_PRODUCTION = !!process.env.RAILWAY_ENVIRONMENT;
-const GEMINI_ATTEMPT_TIMEOUT = IS_PRODUCTION ? 45000 : 90000;
-const GLOBAL_TIMEOUT_MS     = IS_PRODUCTION ? 55000 : 120000;
-const GLOBAL_TRANSL_TIMEOUT = IS_PRODUCTION ? 20000 :  40000;
+const GEMINI_ATTEMPT_TIMEOUT = IS_PRODUCTION ? 50000 : 90000;
+const GLOBAL_TIMEOUT_MS     = IS_PRODUCTION ? 58000 : 120000;
+const GLOBAL_TRANSL_TIMEOUT = IS_PRODUCTION ? 15000 :  40000;
 
 const rawKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 const GEMINI_API_KEY = rawKey.replace(/["']/g, '').trim();
@@ -351,7 +351,16 @@ function extractJSON(rawText) {
     throw new Error('No JSON object found in Gemini response');
   }
 
-  return JSON.parse(cleaned.substring(first, last + 1));
+  const candidate = cleaned.substring(first, last + 1);
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    // Attempt repair: remove trailing commas before } or ] (common Gemini truncation artifact)
+    const repaired = candidate
+      .replace(/,\s*([}\]])/g, '$1')
+      .replace(/:\s*undefined/g, ': null');
+    return JSON.parse(repaired);
+  }
 }
 
 // ── RSS helpers ───────────────────────────────────────────────────────────────
@@ -818,6 +827,8 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
     } catch (err) {
       console.error(`[Gemini] Attempt ${attempt} failed:`, err.message);
       lastError = err;
+      // Never retry timeouts — no time budget left for a second attempt
+      if (err.message.includes('timed out')) break;
     }
   }
 
@@ -947,7 +958,7 @@ app.post('/api/analyze', async (req, res) => {
         // Run Gemini analysis + wait for RSS results in parallel
         let rawAnalysis;
         [{ analysis: rawAnalysis, degraded }, rssData] = await Promise.all([
-          callGeminiWithRetry(topic, 'de', 1),
+          callGeminiWithRetry(topic, 'de', 2),
           rssPromise,
         ]);
         // Merge real RSS data into analysis (URLs, coverage counts, silence flags)
@@ -1199,7 +1210,7 @@ app.get('/api/analyze/stream', async (req, res) => {
       try {
         let rawAnalysis;
         [{ analysis: rawAnalysis, degraded }, rssData] = await Promise.all([
-          callGeminiWithRetry(topic, 'de', 1),
+          callGeminiWithRetry(topic, 'de', 2),
           rssPromise,
         ]);
         germanAnalysis = enrichWithRSSData(rawAnalysis, rssData);
