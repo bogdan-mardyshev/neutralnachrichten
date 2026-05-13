@@ -43,14 +43,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PORT = process.env.PORT || 3001;
 
-// Adaptive timeouts: local dev is unconstrained; Railway kills requests at ~60s
-// Budget breakdown (production): 42s Gemini + 15s translation + 3s overhead = 60s
-// On Railway, SSE keeps the connection alive so the hard 60s kill doesn't apply
-// to streaming endpoints — we only need to be safe on regular endpoints.
+// Adaptive timeouts — two tiers:
+//   SSE streaming endpoint: Railway does NOT kill at 60s (SSE is long-lived by design)
+//   REST endpoint:          Railway hard-kills at ~60s — must stay under that
 const IS_PRODUCTION = !!process.env.RAILWAY_ENVIRONMENT;
-const GEMINI_ATTEMPT_TIMEOUT = IS_PRODUCTION ? 50000 : 90000;
+const GEMINI_TIMEOUT_SSE  = IS_PRODUCTION ? 90000 : 180000; // SSE path — no Railway kill
+const GEMINI_ATTEMPT_TIMEOUT = IS_PRODUCTION ? 50000 : 90000; // REST path — stays under 60s kill
 const GLOBAL_TIMEOUT_MS     = IS_PRODUCTION ? 58000 : 120000;
-const GLOBAL_TRANSL_TIMEOUT = IS_PRODUCTION ? 15000 :  40000;
+const GLOBAL_TRANSL_TIMEOUT = IS_PRODUCTION ? 20000 :  40000;
 
 const rawKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 const GEMINI_API_KEY = rawKey.replace(/["']/g, '').trim();
@@ -708,7 +708,7 @@ function coverageToPercent(estimate) {
   }
 }
 
-async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
+async function callGeminiWithRetry(topic, language, maxAttempts = 3, attemptTimeoutMs = GEMINI_ATTEMPT_TIMEOUT) {
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
     tools: [{ googleSearch: {} }]
@@ -721,14 +721,13 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3) {
       console.log(`[Gemini] Attempt ${attempt}/${maxAttempts} for topic="${topic}" lang=${language}`);
 
       const prompt = buildPrompt(topic, language);
-      // Timeout per Gemini attempt — shorter on Railway (hard 60s kill), longer for local dev
       const result = await Promise.race([
         model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.2 }
         }),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Gemini attempt timed out')), GEMINI_ATTEMPT_TIMEOUT)
+          setTimeout(() => reject(new Error('Gemini attempt timed out')), attemptTimeoutMs)
         )
       ]);
 
@@ -1210,7 +1209,7 @@ app.get('/api/analyze/stream', async (req, res) => {
       try {
         let rawAnalysis;
         [{ analysis: rawAnalysis, degraded }, rssData] = await Promise.all([
-          callGeminiWithRetry(topic, 'de', 2),
+          callGeminiWithRetry(topic, 'de', 2, GEMINI_TIMEOUT_SSE),
           rssPromise,
         ]);
         germanAnalysis = enrichWithRSSData(rawAnalysis, rssData);
