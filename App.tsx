@@ -351,9 +351,17 @@ function MainApp() {
             <span className="font-sans text-[10px] uppercase tracking-widest text-gray-500 hidden sm:block">{dateStr}</span>
           </div>
 
-          {/* Logo — centered */}
-          <Link to="/" onClick={() => setMobileMenuOpen(false)} className="absolute left-1/2 -translate-x-1/2 font-serif font-black text-xl tracking-tight text-[#1a1a1a] whitespace-nowrap hover:text-rose-600 transition-colors duration-200">
-            {t.title}
+          {/* Logo — centered, always navigates home */}
+          <Link
+            to="/"
+            onClick={() => setMobileMenuOpen(false)}
+            title={lang === 'de' ? 'Zur Hauptseite' : lang === 'ru' ? 'На главную' : 'Go to home'}
+            className="absolute left-1/2 -translate-x-1/2 group flex items-center gap-1.5 whitespace-nowrap"
+          >
+            <span className="font-serif font-black text-xl tracking-tight text-[#1a1a1a] group-hover:text-rose-600 transition-colors duration-200">
+              {t.title}
+            </span>
+            <span className="font-sans text-[10px] text-gray-300 group-hover:text-rose-400 transition-colors duration-200 hidden sm:inline">⌂</span>
           </Link>
 
           {/* Right controls */}
@@ -600,9 +608,10 @@ function MainApp() {
                   <div className="mb-6">
                     <button
                       onClick={handleReset}
-                      className="inline-flex items-center gap-2 font-sans text-[10px] font-bold uppercase tracking-widest border-2 border-[#1a1a1a] px-3 py-2 text-[#1a1a1a] hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all duration-200 animate-fade-in"
+                      className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 animate-fade-in"
                     >
-                      ← {t.backToHome}
+                      <span className="inline-block group-hover:-translate-x-1 transition-transform duration-200">←</span>
+                      {t.backToHome}
                     </button>
                   </div>
                   <AnalysisDashboard

@@ -267,8 +267,9 @@ export const ComparePage: React.FC<Props> = ({ lang }) => {
     <div className="max-w-5xl mx-auto pb-16 px-4">
 
       {/* ── Back ── */}
-      <Link to="/" className="font-sans text-[10px] uppercase tracking-widest text-gray-400 hover:text-[#1a1a1a] transition-colors flex items-center gap-1.5 mb-8">
-        ← {t.backToHome}
+      <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 mb-8">
+        <span className="inline-block group-hover:-translate-x-1 transition-transform duration-200">←</span>
+        {t.backToHome}
       </Link>
 
       {/* ════════════════════════════════════════════════════════

@@ -53,8 +53,9 @@ export const SuggestPage: React.FC<Props> = ({ lang }) => {
         <CheckCircle className="w-16 h-16 text-emerald-500 mx-auto mb-6" />
         <h2 className="text-2xl font-bold text-slate-900 mb-3">{s.successTitle}</h2>
         <p className="text-gray-600 mb-8">{s.successBody}</p>
-        <Link to="/" className="text-slate-600 hover:text-slate-900 font-medium">
-          ← {t.backToHome}
+        <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200">
+          <span className="inline-block group-hover:-translate-x-1 transition-transform duration-200">←</span>
+          {t.backToHome}
         </Link>
       </div>
     );
@@ -67,8 +68,9 @@ export const SuggestPage: React.FC<Props> = ({ lang }) => {
 
   return (
     <div className="max-w-lg mx-auto py-12 px-4">
-      <Link to="/" className="text-slate-500 hover:text-slate-800 mb-8 flex items-center gap-2 text-sm">
-        ← {t.backToHome}
+      <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 mb-8">
+        <span className="inline-block group-hover:-translate-x-1 transition-transform duration-200">←</span>
+        {t.backToHome}
       </Link>
 
       <h1 className="text-4xl font-bold text-slate-900 mb-3">{s.title}</h1>
