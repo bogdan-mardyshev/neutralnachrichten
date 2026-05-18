@@ -160,12 +160,21 @@ function trackSearch(topic) {
 const FREE_DAILY_LIMIT = parseInt(process.env.FREE_DAILY_LIMIT || '10');
 const ADMIN_KEY        = process.env.ADMIN_KEY || '';
 
-// Estimated Gemini token costs per analysis (approximate):
-// - Input prompt:  ~4 000 tokens × $0.075/1M = $0.0003
-// - Output JSON:   ~3 000 tokens × $0.30/1M  = $0.0009
-// - Search grounding: $0.035 per request
-// Total per analysis ≈ $0.036
-const COST_PER_ANALYSIS = 0.036;
+// Estimated Gemini 2.5 Flash costs per analysis (approximate):
+// Call 1 — main analysis (thinking ON, googleSearch):
+//   Input:    ~4 000 tokens × $0.075/1M  = $0.0003
+//   Output:   ~3 000 tokens × $0.30/1M   = $0.0009
+//   Thinking: ~12 000 tokens × $3.50/1M  = $0.042
+//   Search grounding: $0.035/request     = $0.035
+// Call 2 — deep analysis (thinking OFF, no search):
+//   Input:    ~1 000 tokens × $0.075/1M  = $0.000075
+//   Output:   ~1 500 tokens × $0.30/1M   = $0.00045
+// Call 3 — translation EN/RU (thinking OFF):
+//   Input:    ~7 000 tokens × $0.075/1M  = $0.000525
+//   Output:   ~6 000 tokens × $0.30/1M   = $0.0018
+// Total per DE analysis ≈ $0.079
+// Total per EN/RU analysis ≈ $0.081
+const COST_PER_ANALYSIS = 0.080;
 const TOKENS_PER_ANALYSIS_INPUT  = 4000;
 const TOKENS_PER_ANALYSIS_OUTPUT = 3000;
 
@@ -673,6 +682,7 @@ async function callDeepAnalysis(analysis, timeoutMs = 15000) {
         temperature: 0.3,
         maxOutputTokens: 8192,
         responseMimeType: 'application/json',
+        thinkingConfig: { thinkingBudget: 0 }, // no search, no discovery — pure text comparison
       }
     }),
     new Promise((_, reject) =>
@@ -1416,7 +1426,7 @@ RULES:
   const result = await Promise.race([
     model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2 },
+      generationConfig: { temperature: 0.2, thinkingConfig: { thinkingBudget: 0 } }, // simple list task
     }),
     new Promise((_, reject) => setTimeout(() => reject(new Error('Trending timeout')), 40000)),
   ]);
@@ -1581,7 +1591,7 @@ RULES:
   const result = await Promise.race([
     model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1 },
+      generationConfig: { temperature: 0.1, thinkingConfig: { thinkingBudget: 0 } }, // simple list task
     }),
     new Promise((_, reject) => setTimeout(() => reject(new Error('Daily news timeout')), 40000)),
   ]);
@@ -1669,7 +1679,7 @@ RULES:
   const result = await Promise.race([
     model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1 },
+      generationConfig: { temperature: 0.1, thinkingConfig: { thinkingBudget: 0 } }, // simple list task
     }),
     new Promise((_, reject) => setTimeout(() => reject(new Error('Category news timeout')), 40000)),
   ]);
