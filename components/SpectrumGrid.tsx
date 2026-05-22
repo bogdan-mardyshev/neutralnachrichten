@@ -138,21 +138,21 @@ const SourceCard: React.FC<SourceCardProps> = ({ articles, rssArticles, spectrum
 
   if (!source) {
     return (
-      <div className={`group flex flex-col bg-white rounded-xl border border-gray-100 shadow-sm ${s.card} overflow-hidden min-h-[200px] items-center justify-center p-4`}>
-        <p className="text-xs text-gray-400 italic text-center">{t.noData ?? '—'}</p>
+      <div className={`group flex flex-col bg-white dark:bg-[#1e1a14] rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm ${s.card} overflow-hidden min-h-[200px] items-center justify-center p-4`}>
+        <p className="text-xs text-gray-400 dark:text-gray-500 italic text-center">{t.noData ?? '—'}</p>
       </div>
     );
   }
 
   return (
-    <div className={`flex flex-col bg-[#FFF8F0] border border-[#e0d8cf] ${s.card} overflow-hidden`}>
+    <div className={`flex flex-col bg-[#FFF8F0] dark:bg-[#1e1a14] border border-[#e0d8cf] dark:border-gray-700 ${s.card} overflow-hidden`}>
       {/* Header */}
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-center justify-between mb-3">
           <span className={`font-sans text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 border ${s.badge}`}>
             {leaning}
           </span>
-          <span className="font-sans text-[10px] text-gray-400 uppercase tracking-wider truncate max-w-[100px]">
+          <span className="font-sans text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider truncate max-w-[100px]">
             {source.source_name}
           </span>
         </div>
@@ -163,7 +163,7 @@ const SourceCard: React.FC<SourceCardProps> = ({ articles, rssArticles, spectrum
           rel="noopener noreferrer"
           className="block"
         >
-          <h4 className="font-serif font-bold text-[#1a1a1a] text-sm leading-snug mb-2 line-clamp-3 hover:opacity-70 transition-opacity">
+          <h4 className="font-serif font-bold text-[#1a1a1a] dark:text-[#f0ece4] text-sm leading-snug mb-2 line-clamp-3 hover:opacity-70 transition-opacity">
             {source.article_title}
           </h4>
         </a>
@@ -173,13 +173,13 @@ const SourceCard: React.FC<SourceCardProps> = ({ articles, rssArticles, spectrum
       <div className="px-4 pb-3 flex-grow">
         {analysisLoading ? (
           <div className="space-y-1.5 animate-pulse">
-            <div className="h-2 bg-[#e0d8cf] rounded w-full" />
-            <div className="h-2 bg-[#e0d8cf] rounded w-5/6" />
-            <div className="h-2 bg-[#e0d8cf] rounded w-4/5" />
-            <div className="h-2 bg-[#e0d8cf] rounded w-3/4" />
+            <div className="h-2 bg-[#e0d8cf] dark:bg-gray-700 rounded w-full" />
+            <div className="h-2 bg-[#e0d8cf] dark:bg-gray-700 rounded w-5/6" />
+            <div className="h-2 bg-[#e0d8cf] dark:bg-gray-700 rounded w-4/5" />
+            <div className="h-2 bg-[#e0d8cf] dark:bg-gray-700 rounded w-3/4" />
           </div>
         ) : (
-          <p className="font-sans text-xs text-gray-500 leading-relaxed line-clamp-4">
+          <p className="font-sans text-xs text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-4">
             {source.summary_of_perspective}
           </p>
         )}
@@ -187,20 +187,20 @@ const SourceCard: React.FC<SourceCardProps> = ({ articles, rssArticles, spectrum
 
       {/* RSS Snippet — real article text for verification */}
       {!analysisLoading && rssSnippet && (
-        <div className="mx-4 mb-3 px-3 py-2 bg-[#f5f0e8] border border-[#e0d8cf]">
-          <p className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-1">
+        <div className="mx-4 mb-3 px-3 py-2 bg-[#f5f0e8] dark:bg-[#1a1510] border border-[#e0d8cf] dark:border-gray-700">
+          <p className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">
             {t.rssSnippetLabel}
           </p>
-          <p className="font-sans text-[10px] text-gray-400 leading-relaxed line-clamp-3 italic">
+          <p className="font-sans text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed line-clamp-3 italic">
             {rssSnippet}
           </p>
         </div>
       )}
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-[#e0d8cf] mt-auto">
+      <div className="px-4 py-3 border-t border-[#e0d8cf] dark:border-gray-700 mt-auto">
         <div className="flex items-center justify-between">
-          <span className="font-sans text-[10px] text-gray-400">
+          <span className="font-sans text-[10px] text-gray-400 dark:text-gray-500">
             {source.publication_date || ''}
           </span>
           <a
@@ -217,21 +217,21 @@ const SourceCard: React.FC<SourceCardProps> = ({ articles, rssArticles, spectrum
 
         {/* Carousel nav — shown when multiple articles */}
         {total > 1 && (
-          <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[#e0d8cf]">
+          <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[#e0d8cf] dark:border-gray-700">
             <button
               onClick={() => setIdx(i => Math.max(0, i - 1))}
               disabled={idx === 0}
-              className="w-6 h-6 border border-[#1a1a1a] disabled:opacity-20 disabled:cursor-default font-sans text-xs flex items-center justify-center hover:bg-[#1a1a1a] hover:text-white transition-colors"
+              className="w-6 h-6 border border-[#1a1a1a] dark:border-gray-600 disabled:opacity-20 disabled:cursor-default font-sans text-xs flex items-center justify-center hover:bg-[#1a1a1a] dark:hover:bg-gray-600 hover:text-white dark:text-gray-300 transition-colors"
             >
               ‹
             </button>
-            <span className="font-sans text-[10px] text-gray-400 tracking-wider">
+            <span className="font-sans text-[10px] text-gray-400 dark:text-gray-500 tracking-wider">
               {idx + 1} / {total}
             </span>
             <button
               onClick={() => setIdx(i => Math.min(total - 1, i + 1))}
               disabled={idx === total - 1}
-              className="w-6 h-6 border border-[#1a1a1a] disabled:opacity-20 disabled:cursor-default font-sans text-xs flex items-center justify-center hover:bg-[#1a1a1a] hover:text-white transition-colors"
+              className="w-6 h-6 border border-[#1a1a1a] dark:border-gray-600 disabled:opacity-20 disabled:cursor-default font-sans text-xs flex items-center justify-center hover:bg-[#1a1a1a] dark:hover:bg-gray-600 hover:text-white dark:text-gray-300 transition-colors"
             >
               ›
             </button>
@@ -256,8 +256,8 @@ export const SpectrumGrid: React.FC<SpectrumGridProps> = ({ spectrum, rssSpectra
   return (
     <div className="space-y-4 animate-slide-up">
       <div className="flex items-center gap-3">
-        <h3 className="font-serif font-black text-xl text-[#1a1a1a] shrink-0">{t.analyzedSources}</h3>
-        <div className="h-px flex-1 bg-[#1a1a1a] opacity-15" />
+        <h3 className="font-serif font-black text-xl text-[#1a1a1a] dark:text-white shrink-0">{t.analyzedSources}</h3>
+        <div className="h-px flex-1 bg-[#1a1a1a] dark:bg-gray-600 opacity-15 dark:opacity-100" />
         {analysisLoading && (
           <span className="font-sans text-[9px] uppercase tracking-widest text-emerald-600 animate-pulse shrink-0">
             {t.analysisLoading}

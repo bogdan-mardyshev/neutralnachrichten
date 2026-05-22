@@ -73,14 +73,14 @@ const PrincipleCard: React.FC<{
   return (
     <button
       onClick={() => setOpen(o => !o)}
-      className={`w-full text-left border-2 border-[#1a1a1a] transition-all duration-500 group focus:outline-none ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5'} ${open ? 'bg-[#1a1a1a]' : 'hover:bg-[#f5f0e8]'}`}
+      className={`w-full text-left border-2 border-[#1a1a1a] dark:border-gray-700 transition-all duration-500 group focus:outline-none ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5'} ${open ? 'bg-[#1a1a1a] dark:bg-gray-800' : 'hover:bg-[#f5f0e8] dark:hover:bg-[#1e1a14]'}`}
       style={{ transitionDelay: `${delay}ms`, transitionProperty: 'opacity, transform, background-color' }}
     >
       <div className="flex items-center gap-4 px-5 py-4">
         <span className={`font-serif font-black text-xl leading-none ${open ? 'text-white/40' : accent} transition-colors shrink-0`}>{n}</span>
-        <div className={`flex-1 h-px ${open ? 'bg-white/15' : 'bg-[#1a1a1a]/15'} transition-colors`} />
-        <p className={`font-sans text-[10px] font-bold uppercase tracking-wider ${open ? 'text-white' : 'text-[#1a1a1a]'} transition-colors leading-tight text-right max-w-[70%]`}>{title}</p>
-        <span className={`font-sans text-sm shrink-0 transition-all duration-200 ${open ? 'text-white rotate-45' : 'text-[#1a1a1a]/40 rotate-0'}`}>+</span>
+        <div className={`flex-1 h-px ${open ? 'bg-white/15' : 'bg-[#1a1a1a]/15 dark:bg-gray-600'} transition-colors`} />
+        <p className={`font-sans text-[10px] font-bold uppercase tracking-wider ${open ? 'text-white' : 'text-[#1a1a1a] dark:text-[#f0ece4]'} transition-colors leading-tight text-right max-w-[70%]`}>{title}</p>
+        <span className={`font-sans text-sm shrink-0 transition-all duration-200 ${open ? 'text-white rotate-45' : 'text-[#1a1a1a]/40 dark:text-gray-500 rotate-0'}`}>+</span>
       </div>
       <div className={`overflow-hidden transition-all duration-300 ease-in-out ${open ? 'max-h-40' : 'max-h-0'}`}>
         <p className="px-5 pb-5 font-serif text-xs text-white/65 leading-relaxed">{body}</p>
@@ -214,7 +214,7 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
     <div className="max-w-4xl mx-auto pb-16">
 
       {/* ── Back ── */}
-      <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 mb-8">
+      <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] dark:bg-gray-800 text-white px-5 py-3 hover:bg-rose-600 dark:hover:bg-rose-600 transition-colors duration-200 mb-8">
         <span className="inline-block group-hover:-translate-x-1 transition-transform duration-200">←</span>
         {t.backToHome}
       </Link>
@@ -222,13 +222,13 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
       {/* ════════════════════════════════════════════════════════
           HERO
       ════════════════════════════════════════════════════════ */}
-      <div className="border-2 border-[#1a1a1a] overflow-hidden mb-8 animate-fade-in">
+      <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden mb-8 animate-fade-in">
         <div className="h-1.5 flex">
           <div className="flex-1 bg-rose-500" /><div className="flex-1 bg-orange-400" />
           <div className="flex-1 bg-slate-400" /><div className="flex-1 bg-sky-400" />
           <div className="flex-1 bg-blue-700" />
         </div>
-        <div className="px-6 sm:px-10 py-10 bg-[#1a1a1a] relative overflow-hidden">
+        <div className="px-6 sm:px-10 py-10 bg-[#1a1a1a] dark:bg-[#0a0a0a] relative overflow-hidden">
           <div className="absolute bottom-0 right-0 font-serif font-black text-[140px] leading-none text-white/[0.035] select-none pointer-events-none">
             NN
           </div>
@@ -242,16 +242,16 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
           </p>
         </div>
         {/* Live stats bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x-2 divide-y-2 sm:divide-y-0 divide-[#1a1a1a] border-t-2 border-[#1a1a1a]">
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x-2 divide-y-2 sm:divide-y-0 divide-[#1a1a1a] dark:divide-gray-700 border-t-2 border-[#1a1a1a] dark:border-gray-700">
           {[
             { value: '18', label: L.stat1, accent: 'text-rose-600' },
             { value: '5',  label: L.stat2, accent: 'text-orange-500' },
             { value: '~2s', label: L.stat3, accent: 'text-emerald-600' },
             { value: '3',  label: L.stat4, accent: 'text-sky-600' },
           ].map(({ value, label, accent }) => (
-            <div key={label} className="px-5 py-4 flex flex-col gap-1">
+            <div key={label} className="px-5 py-4 flex flex-col gap-1 dark:bg-[#141414]">
               <span className={`font-serif font-black text-2xl ${accent}`}>{value}</span>
-              <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400">{label}</span>
+              <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500">{label}</span>
             </div>
           ))}
         </div>
@@ -260,16 +260,16 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
       {/* ════════════════════════════════════════════════════════
           STORY — two-column origin
       ════════════════════════════════════════════════════════ */}
-      <div ref={storyRef} className="mb-8 border-2 border-[#1a1a1a] overflow-hidden">
-        <div className="bg-[#1a1a1a] px-6 py-3">
+      <div ref={storyRef} className="mb-8 border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+        <div className="bg-[#1a1a1a] dark:bg-gray-900 px-6 py-3">
           <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{L.storyLabel}</p>
         </div>
-        <div className="grid sm:grid-cols-2 divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-[#1a1a1a]">
-          <div className={`p-6 sm:p-8 transition-all duration-700 ${storyInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-            <p className="font-serif text-sm text-[#1a1a1a] leading-relaxed">{L.storyLeft}</p>
+        <div className="grid sm:grid-cols-2 divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-[#1a1a1a] dark:divide-gray-700">
+          <div className={`p-6 sm:p-8 dark:bg-[#141414] transition-all duration-700 ${storyInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+            <p className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] leading-relaxed">{L.storyLeft}</p>
           </div>
-          <div className={`p-6 sm:p-8 transition-all duration-700 delay-150 ${storyInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-            <p className="font-serif text-sm text-gray-500 leading-relaxed">{L.storyRight}</p>
+          <div className={`p-6 sm:p-8 dark:bg-[#141414] transition-all duration-700 delay-150 ${storyInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+            <p className="font-serif text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{L.storyRight}</p>
           </div>
         </div>
       </div>
@@ -279,8 +279,8 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
       ════════════════════════════════════════════════════════ */}
       <div ref={principlesRef} className="mb-8">
         <div className="flex items-center gap-4 mb-4">
-          <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-[#1a1a1a] shrink-0">{L.principlesLabel}</p>
-          <div className="flex-1 h-px bg-[#1a1a1a] opacity-15" />
+          <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-[#1a1a1a] dark:text-[#f0ece4] shrink-0">{L.principlesLabel}</p>
+          <div className="flex-1 h-px bg-[#1a1a1a] dark:bg-gray-600 opacity-15 dark:opacity-100" />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -304,26 +304,26 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
       {/* ════════════════════════════════════════════════════════
           VISION
       ════════════════════════════════════════════════════════ */}
-      <div ref={visionRef} className="mb-8 border-2 border-[#1a1a1a] overflow-hidden">
-        <div className="bg-[#1a1a1a] px-6 py-3">
+      <div ref={visionRef} className="mb-8 border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+        <div className="bg-[#1a1a1a] dark:bg-gray-900 px-6 py-3">
           <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{L.visionLabel}</p>
         </div>
 
-        <div className={`px-6 sm:px-8 py-7 border-b-2 border-[#1a1a1a] transition-all duration-700 ${visionInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <h2 className="font-serif font-black text-xl text-[#1a1a1a] mb-3">{L.visionTitle}</h2>
-          <p className="font-serif text-sm text-gray-500 leading-relaxed max-w-2xl">{L.visionBody}</p>
+        <div className={`px-6 sm:px-8 py-7 border-b-2 border-[#1a1a1a] dark:border-gray-700 dark:bg-[#141414] transition-all duration-700 ${visionInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          <h2 className="font-serif font-black text-xl text-[#1a1a1a] dark:text-white mb-3">{L.visionTitle}</h2>
+          <p className="font-serif text-sm text-gray-500 dark:text-gray-400 leading-relaxed max-w-2xl">{L.visionBody}</p>
         </div>
 
-        <div className="grid sm:grid-cols-3 divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-[#1a1a1a]">
+        <div className="grid sm:grid-cols-3 divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-[#1a1a1a] dark:divide-gray-700">
           {L.visionItems.map((item, i) => (
             <div
               key={item.label}
-              className={`p-5 sm:p-6 flex flex-col gap-2 transition-all duration-700 ${visionInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+              className={`p-5 sm:p-6 flex flex-col gap-2 dark:bg-[#141414] transition-all duration-700 ${visionInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
               style={{ transitionDelay: `${120 + i * 90}ms` }}
             >
-              <span className="font-serif text-lg text-gray-300">{item.icon}</span>
-              <p className="font-sans text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a]">{item.label}</p>
-              <p className="font-serif text-xs text-gray-400 leading-relaxed">{item.desc}</p>
+              <span className="font-serif text-lg text-gray-300 dark:text-gray-600">{item.icon}</span>
+              <p className="font-sans text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a] dark:text-[#f0ece4]">{item.label}</p>
+              <p className="font-serif text-xs text-gray-400 dark:text-gray-500 leading-relaxed">{item.desc}</p>
             </div>
           ))}
         </div>
@@ -332,11 +332,11 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
       {/* ════════════════════════════════════════════════════════
           TEAM
       ════════════════════════════════════════════════════════ */}
-      <div ref={teamRef} className="mb-8 border-2 border-[#1a1a1a] overflow-hidden">
-        <div className="bg-[#1a1a1a] px-6 py-3">
+      <div ref={teamRef} className="mb-8 border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+        <div className="bg-[#1a1a1a] dark:bg-gray-900 px-6 py-3">
           <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{L.teamLabel}</p>
         </div>
-        <div className="grid sm:grid-cols-3 divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-[#1a1a1a]">
+        <div className="grid sm:grid-cols-3 divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-[#1a1a1a] dark:divide-gray-700">
           {TEAM.map((member, i) => (
             <div
               key={member.name}
@@ -345,19 +345,19 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
             >
               {/* Gradient strip — expands on hover */}
               <div className={`h-1 bg-gradient-to-r ${member.gradient} transition-all duration-300 group-hover:h-2`} />
-              <div className="p-5 sm:p-6 flex flex-col gap-4 flex-1">
+              <div className="p-5 sm:p-6 flex flex-col gap-4 flex-1 dark:bg-[#141414]">
                 {/* Avatar */}
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${member.gradient} flex items-center justify-center shrink-0`}>
                     <span className="font-serif font-black text-sm text-white">{member.initials}</span>
                   </div>
                   <div>
-                    <p className="font-sans text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a] leading-tight">{member.name}</p>
-                    <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 mt-0.5">{member.role[lang]}</p>
+                    <p className="font-sans text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a] dark:text-[#f0ece4] leading-tight">{member.name}</p>
+                    <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500 mt-0.5">{member.role[lang]}</p>
                   </div>
                 </div>
                 {/* Bio */}
-                <p className="font-serif text-xs text-gray-500 leading-relaxed flex-1">{member.bio[lang]}</p>
+                <p className="font-serif text-xs text-gray-500 dark:text-gray-400 leading-relaxed flex-1">{member.bio[lang]}</p>
                 {/* Focus tag */}
                 <span className={`self-start font-sans text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 bg-gradient-to-r ${member.gradient} text-white`}>
                   {member.focus[lang]}
@@ -376,35 +376,35 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
           <span className="text-white font-bold text-base leading-none">✓</span>
           <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{a.independenceTitle}</p>
         </div>
-        <div className="px-6 py-5 bg-emerald-50">
-          <p className="font-serif text-sm text-[#1a1a1a] leading-relaxed">{a.independenceBody}</p>
+        <div className="px-6 py-5 bg-emerald-50 dark:bg-emerald-950/30">
+          <p className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] leading-relaxed">{a.independenceBody}</p>
         </div>
       </div>
 
       {/* ════════════════════════════════════════════════════════
           CONTACT
       ════════════════════════════════════════════════════════ */}
-      <div className="border-2 border-[#1a1a1a] overflow-hidden">
-        <div className="bg-[#1a1a1a] px-6 py-3">
+      <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+        <div className="bg-[#1a1a1a] dark:bg-gray-900 px-6 py-3">
           <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{a.contactTitle}</p>
         </div>
-        <div className="px-6 py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="px-6 py-6 dark:bg-[#141414] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <p className="font-serif text-sm text-gray-500 mb-1">{a.contactBody}</p>
-            <a href={`mailto:${a.contactEmail}`} className="font-serif font-bold text-base text-[#1a1a1a] hover:text-rose-600 transition-colors">
+            <p className="font-serif text-sm text-gray-500 dark:text-gray-400 mb-1">{a.contactBody}</p>
+            <a href={`mailto:${a.contactEmail}`} className="font-serif font-bold text-base text-[#1a1a1a] dark:text-white hover:text-rose-600 transition-colors">
               {a.contactEmail}
             </a>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 shrink-0">
             <a
               href={`mailto:${a.contactEmail}`}
-              className="font-sans text-[10px] font-bold uppercase tracking-widest bg-[#1a1a1a] text-white px-4 py-2.5 hover:bg-rose-600 transition-colors text-center"
+              className="font-sans text-[10px] font-bold uppercase tracking-widest bg-[#1a1a1a] dark:bg-gray-700 text-white px-4 py-2.5 hover:bg-rose-600 transition-colors text-center"
             >
               ↗ {L.contactBtn}
             </a>
             <Link
               to="/suggest"
-              className="font-sans text-[10px] uppercase tracking-widest border-2 border-[#1a1a1a] text-[#1a1a1a] px-4 py-2.5 hover:bg-[#1a1a1a] hover:text-white transition-colors text-center"
+              className="font-sans text-[10px] uppercase tracking-widest border-2 border-[#1a1a1a] dark:border-gray-600 text-[#1a1a1a] dark:text-[#f0ece4] px-4 py-2.5 hover:bg-[#1a1a1a] dark:hover:bg-gray-700 hover:text-white transition-colors text-center"
             >
               {L.suggestBtn}
             </Link>

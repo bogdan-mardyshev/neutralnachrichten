@@ -45,21 +45,21 @@ interface AdminStats {
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="border-2 border-[#1a1a1a] p-4 bg-[#FFF8F0]">
-      <p className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 mb-1">{label}</p>
-      <p className="font-serif font-black text-3xl text-[#1a1a1a]">{value}</p>
-      {sub && <p className="font-sans text-[10px] text-[#1a1a1a]/40 mt-1">{sub}</p>}
+    <div className="border-2 border-[#1a1a1a] dark:border-gray-700 p-4 bg-[#FFF8F0] dark:bg-[#141414]">
+      <p className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-gray-500 mb-1">{label}</p>
+      <p className="font-serif font-black text-3xl text-[#1a1a1a] dark:text-[#f0ece4]">{value}</p>
+      {sub && <p className="font-sans text-[10px] text-[#1a1a1a]/40 dark:text-gray-600 mt-1">{sub}</p>}
     </div>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border-2 border-[#1a1a1a]">
-      <div className="bg-[#1a1a1a] px-4 py-2">
+    <div className="border-2 border-[#1a1a1a] dark:border-gray-700">
+      <div className="bg-[#1a1a1a] dark:bg-gray-900 px-4 py-2">
         <h3 className="font-sans text-xs uppercase tracking-widest text-[#FFF8F0]">{title}</h3>
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-4 dark:bg-[#141414]">{children}</div>
     </div>
   );
 }
@@ -102,16 +102,16 @@ const UserRow: React.FC<UserRowProps> = ({ u, adminKey, onSaved }) => {
   const isUnlimited = parseInt(limit) === -1;
 
   return (
-    <tr className="hover:bg-[#e8e0d5]/50 transition-colors align-top">
-      <td className="py-2.5 pr-3 font-mono text-xs text-[#1a1a1a]/40 whitespace-nowrap">{u.id}</td>
-      <td className="py-2.5 pr-3 font-serif text-sm text-[#1a1a1a]">{u.email}</td>
+    <tr className="hover:bg-[#e8e0d5]/50 dark:hover:bg-gray-800/50 transition-colors align-top">
+      <td className="py-2.5 pr-3 font-mono text-xs text-[#1a1a1a]/40 dark:text-gray-600 whitespace-nowrap">{u.id}</td>
+      <td className="py-2.5 pr-3 font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4]">{u.email}</td>
 
       <td className="py-2.5 pr-3">
         {editing ? (
           <select
             value={tier}
             onChange={e => setTier(e.target.value)}
-            className="font-sans text-[10px] border border-[#1a1a1a] px-1.5 py-0.5 bg-white"
+            className="font-sans text-[10px] border border-[#1a1a1a] dark:border-gray-600 px-1.5 py-0.5 bg-white dark:bg-[#1e1a14] dark:text-[#f0ece4]"
           >
             <option value="free">free</option>
             <option value="pro">pro</option>
@@ -124,7 +124,7 @@ const UserRow: React.FC<UserRowProps> = ({ u, adminKey, onSaved }) => {
         )}
       </td>
 
-      <td className="py-2.5 pr-3 font-serif text-sm text-[#1a1a1a]">{u.search_count}</td>
+      <td className="py-2.5 pr-3 font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4]">{u.search_count}</td>
 
       <td className="py-2.5 pr-3">
         {editing ? (
@@ -133,7 +133,7 @@ const UserRow: React.FC<UserRowProps> = ({ u, adminKey, onSaved }) => {
               type="number"
               value={limit}
               onChange={e => setLimit(e.target.value)}
-              className="font-sans text-xs border border-[#1a1a1a] px-1.5 py-0.5 w-20 bg-white"
+              className="font-sans text-xs border border-[#1a1a1a] dark:border-gray-600 px-1.5 py-0.5 w-20 bg-white dark:bg-[#1e1a14] dark:text-[#f0ece4]"
               placeholder="10"
             />
             <label className="flex items-center gap-1 cursor-pointer">
@@ -153,10 +153,10 @@ const UserRow: React.FC<UserRowProps> = ({ u, adminKey, onSaved }) => {
         )}
       </td>
 
-      <td className="py-2.5 pr-3 font-sans text-xs text-[#1a1a1a]/50 whitespace-nowrap">
+      <td className="py-2.5 pr-3 font-sans text-xs text-[#1a1a1a]/50 dark:text-gray-600 whitespace-nowrap">
         {new Date(u.created_at).toLocaleDateString('de-DE')}
       </td>
-      <td className="py-2.5 pr-3 font-sans text-xs text-[#1a1a1a]/50 whitespace-nowrap">
+      <td className="py-2.5 pr-3 font-sans text-xs text-[#1a1a1a]/50 dark:text-gray-600 whitespace-nowrap">
         {u.last_login ? new Date(u.last_login).toLocaleDateString('de-DE') : '—'}
       </td>
 
@@ -205,21 +205,21 @@ function UserManagementSection({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b-2 border-[#1a1a1a]">
+            <tr className="border-b-2 border-[#1a1a1a] dark:border-gray-700">
               {['ID', 'E-Mail', 'Tier', 'Suchen', 'Limit/Tag', 'Registriert', 'Login', ''].map(h => (
-                <th key={h} className="text-left py-2 pr-3 font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50">
+                <th key={h} className="text-left py-2 pr-3 font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-gray-500">
                   {h}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#e0d8cf]">
+          <tbody className="divide-y divide-[#e0d8cf] dark:divide-gray-700">
             {users.map(u => (
               <UserRow key={u.id} u={u} adminKey={adminKey} onSaved={onRefresh} />
             ))}
           </tbody>
         </table>
-        <p className="font-sans text-[9px] uppercase tracking-widest text-[#1a1a1a]/30 mt-3">
+        <p className="font-sans text-[9px] uppercase tracking-widest text-[#1a1a1a]/30 dark:text-gray-700 mt-3">
           Limit -1 = unbegrenzte Analysen · Tier-Änderungen werden sofort aktiv (nach erneutem Login)
         </p>
       </div>
@@ -276,9 +276,9 @@ export default function AdminPage() {
   // ── Login screen ──────────────────────────────────────────────────────────────
   if (!adminKey) {
     return (
-      <div className="min-h-screen bg-[#FFF8F0] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#FFF8F0] dark:bg-[#0f0f0f] flex items-center justify-center p-4">
         <div className="w-full max-w-sm">
-          <div className="bg-[#1a1a1a] px-6 py-4 mb-0">
+          <div className="bg-[#1a1a1a] dark:bg-gray-900 px-6 py-4 mb-0">
             <p className="font-sans text-[10px] uppercase tracking-widest text-[#FFF8F0]/50 mb-0.5">
               NeutralNachrichten
             </p>
@@ -291,10 +291,10 @@ export default function AdminPage() {
           </div>
           <form
             onSubmit={handleKeySubmit}
-            className="border-2 border-t-0 border-[#1a1a1a] p-6 space-y-4 bg-[#FFF8F0]"
+            className="border-2 border-t-0 border-[#1a1a1a] dark:border-gray-700 p-6 space-y-4 bg-[#FFF8F0] dark:bg-[#141414]"
           >
             <div>
-              <label className="block font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/60 mb-1">
+              <label className="block font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/60 dark:text-gray-500 mb-1">
                 Admin-Schlüssel
               </label>
               <input
@@ -302,7 +302,7 @@ export default function AdminPage() {
                 value={keyInput}
                 onChange={e => setKeyInput(e.target.value)}
                 placeholder="ADMIN_KEY"
-                className="w-full border-2 border-[#1a1a1a] bg-white px-3 py-2.5 font-mono text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-[#1a1a1a]"
+                className="w-full border-2 border-[#1a1a1a] dark:border-gray-600 bg-white dark:bg-[#1e1a14] px-3 py-2.5 font-mono text-sm text-[#1a1a1a] dark:text-[#f0ece4] focus:outline-none focus:ring-2 focus:ring-[#1a1a1a] dark:focus:ring-gray-500"
               />
             </div>
             {error && (
@@ -310,7 +310,7 @@ export default function AdminPage() {
             )}
             <button
               type="submit"
-              className="w-full bg-[#1a1a1a] text-[#FFF8F0] py-3 font-sans text-xs uppercase tracking-widest hover:bg-[#333] transition-colors"
+              className="w-full bg-[#1a1a1a] dark:bg-gray-700 text-[#FFF8F0] py-3 font-sans text-xs uppercase tracking-widest hover:bg-[#333] dark:hover:bg-gray-600 transition-colors"
             >
               Zugang
             </button>
@@ -323,20 +323,20 @@ export default function AdminPage() {
   // ── Loading ───────────────────────────────────────────────────────────────────
   if (loading && !stats) {
     return (
-      <div className="min-h-screen bg-[#FFF8F0] flex items-center justify-center">
-        <p className="font-serif text-[#1a1a1a]/50 animate-pulse">Lade Statistiken…</p>
+      <div className="min-h-screen bg-[#FFF8F0] dark:bg-[#0f0f0f] flex items-center justify-center">
+        <p className="font-serif text-[#1a1a1a]/50 dark:text-gray-500 animate-pulse">Lade Statistiken…</p>
       </div>
     );
   }
 
   if (error && !stats) {
     return (
-      <div className="min-h-screen bg-[#FFF8F0] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#FFF8F0] dark:bg-[#0f0f0f] flex items-center justify-center p-4">
         <div className="text-center">
           <p className="font-serif text-rose-600 mb-4">{error}</p>
           <button
             onClick={() => { setAdminKey(''); setKeyInput(''); }}
-            className="border-2 border-[#1a1a1a] px-4 py-2 font-sans text-xs uppercase tracking-widest hover:bg-[#1a1a1a] hover:text-[#FFF8F0] transition-colors"
+            className="border-2 border-[#1a1a1a] dark:border-gray-600 dark:text-[#f0ece4] px-4 py-2 font-sans text-xs uppercase tracking-widest hover:bg-[#1a1a1a] dark:hover:bg-gray-700 hover:text-[#FFF8F0] transition-colors"
           >
             Erneut anmelden
           </button>
@@ -353,9 +353,9 @@ export default function AdminPage() {
   const maxHourly = Math.max(...(hourlyLast24h ?? []).map(h => parseInt(h.count) || 0), 1);
 
   return (
-    <div className="min-h-screen bg-[#e8e0d5]">
+    <div className="min-h-screen bg-[#e8e0d5] dark:bg-[#0a0a0a]">
       {/* Header */}
-      <div className="bg-[#1a1a1a] text-[#FFF8F0]">
+      <div className="bg-[#1a1a1a] dark:bg-[#0a0a0a] text-[#FFF8F0]">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
             <p className="font-sans text-[10px] uppercase tracking-widest text-[#FFF8F0]/50">
@@ -399,11 +399,11 @@ export default function AdminPage() {
 
         {/* Status badges */}
         <div className="flex flex-wrap gap-2">
-          <span className={`inline-flex items-center gap-1.5 font-sans text-[10px] uppercase tracking-widest px-3 py-1 border ${server.dbAvailable ? 'border-emerald-500 text-emerald-700 bg-emerald-50' : 'border-amber-500 text-amber-700 bg-amber-50'}`}>
+          <span className={`inline-flex items-center gap-1.5 font-sans text-[10px] uppercase tracking-widest px-3 py-1 border ${server.dbAvailable ? 'border-emerald-500 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30' : 'border-amber-500 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30'}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${server.dbAvailable ? 'bg-emerald-500' : 'bg-amber-500'}`} />
             {server.dbAvailable ? 'PostgreSQL verbunden' : 'Kein DB (nur RAM)'}
           </span>
-          <span className="inline-flex items-center gap-1.5 font-sans text-[10px] uppercase tracking-widest px-3 py-1 border border-sky-500 text-sky-700 bg-sky-50">
+          <span className="inline-flex items-center gap-1.5 font-sans text-[10px] uppercase tracking-widest px-3 py-1 border border-sky-500 text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/30">
             <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
             Uptime {server.uptime_hours}h
           </span>
@@ -436,11 +436,11 @@ export default function AdminPage() {
                   return (
                     <div key={i} className="flex-1 flex flex-col items-center gap-1" title={`${hour}:00 — ${count} Analysen`}>
                       <div
-                        className="w-full bg-[#1a1a1a] transition-all"
+                        className="w-full bg-[#1a1a1a] dark:bg-gray-400 transition-all"
                         style={{ height: `${Math.max(2, pct)}%` }}
                       />
                       {i % 4 === 0 && (
-                        <span className="font-sans text-[8px] text-[#1a1a1a]/40">{hour}h</span>
+                        <span className="font-sans text-[8px] text-[#1a1a1a]/40 dark:text-gray-600">{hour}h</span>
                       )}
                     </div>
                   );
@@ -452,16 +452,16 @@ export default function AdminPage() {
           {/* Top IPs */}
           {topIPs && topIPs.length > 0 && (
             <Section title={`Aktivste IPs heute (${usage.freeDailyLimit}/Tag Limit)`}>
-              <div className="divide-y divide-[#e0d8cf]">
+              <div className="divide-y divide-[#e0d8cf] dark:divide-gray-700">
                 {topIPs.map((ip, i) => (
                   <div key={i} className="flex items-center justify-between py-2">
                     <div className="flex items-center gap-3">
-                      <span className="font-sans text-[10px] text-[#1a1a1a]/40 w-5">{i + 1}</span>
-                      <span className="font-mono text-sm text-[#1a1a1a]">{ip.ip}</span>
+                      <span className="font-sans text-[10px] text-[#1a1a1a]/40 dark:text-gray-600 w-5">{i + 1}</span>
+                      <span className="font-mono text-sm text-[#1a1a1a] dark:text-[#f0ece4]">{ip.ip}</span>
                     </div>
                     <div className="flex items-center gap-4 text-right">
-                      <span className="font-serif text-sm text-[#1a1a1a]">{ip.count}×</span>
-                      <span className="font-sans text-[10px] text-[#1a1a1a]/40">
+                      <span className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4]">{ip.count}×</span>
+                      <span className="font-sans text-[10px] text-[#1a1a1a]/40 dark:text-gray-600">
                         ~{(ip.tokensEstimate / 1000).toFixed(1)}k tokens
                       </span>
                     </div>
@@ -474,22 +474,22 @@ export default function AdminPage() {
 
         {/* Top Topics */}
         <Section title={`Top ${topTopics.length} Themen`}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 divide-y divide-[#e0d8cf] md:divide-y-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 divide-y divide-[#e0d8cf] dark:divide-gray-700 md:divide-y-0">
             {topTopics.map((t, i) => {
               const maxCount = topTopics[0]?.count || 1;
               const pct = Math.round((t.count / maxCount) * 100);
               return (
-                <div key={t.topic} className="flex items-center gap-3 py-2.5 border-b border-[#e0d8cf]">
-                  <span className="font-serif font-black text-sm text-[#1a1a1a]/30 w-6 shrink-0">
+                <div key={t.topic} className="flex items-center gap-3 py-2.5 border-b border-[#e0d8cf] dark:border-gray-700">
+                  <span className="font-serif font-black text-sm text-[#1a1a1a]/30 dark:text-gray-600 w-6 shrink-0">
                     {i < 3 ? ['①', '②', '③'][i] : `${i + 1}`}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="font-serif text-sm text-[#1a1a1a] truncate capitalize">{t.topic}</p>
-                    <div className="mt-1 h-1 bg-[#e0d8cf]">
-                      <div className="h-full bg-[#1a1a1a]" style={{ width: `${pct}%` }} />
+                    <p className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] truncate capitalize">{t.topic}</p>
+                    <div className="mt-1 h-1 bg-[#e0d8cf] dark:bg-gray-700">
+                      <div className="h-full bg-[#1a1a1a] dark:bg-gray-400" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
-                  <span className="font-serif text-sm font-bold text-[#1a1a1a] shrink-0">{t.count}×</span>
+                  <span className="font-serif text-sm font-bold text-[#1a1a1a] dark:text-[#f0ece4] shrink-0">{t.count}×</span>
                 </div>
               );
             })}
@@ -503,22 +503,22 @@ export default function AdminPage() {
 
         {/* Server info */}
         <Section title="Server-Details">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-sans text-xs text-[#1a1a1a]/60">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-sans text-xs text-[#1a1a1a]/60 dark:text-gray-500">
             <div>
-              <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40">Gestartet</p>
-              <p className="font-serif text-[#1a1a1a]">{new Date(server.startedAt).toLocaleString('de-DE')}</p>
+              <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40 dark:text-gray-600">Gestartet</p>
+              <p className="font-serif text-[#1a1a1a] dark:text-[#f0ece4]">{new Date(server.startedAt).toLocaleString('de-DE')}</p>
             </div>
             <div>
-              <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40">Requests gesamt</p>
-              <p className="font-serif text-[#1a1a1a]">{server.totalRequests.toLocaleString()}</p>
+              <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40 dark:text-gray-600">Requests gesamt</p>
+              <p className="font-serif text-[#1a1a1a] dark:text-[#f0ece4]">{server.totalRequests.toLocaleString()}</p>
             </div>
             <div>
-              <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40">Cache-Einträge</p>
-              <p className="font-serif text-[#1a1a1a]">{server.cachedItems}</p>
+              <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40 dark:text-gray-600">Cache-Einträge</p>
+              <p className="font-serif text-[#1a1a1a] dark:text-[#f0ece4]">{server.cachedItems}</p>
             </div>
             <div>
-              <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40">Aktive IPs heute</p>
-              <p className="font-serif text-[#1a1a1a]">{usage.activeIPsToday}</p>
+              <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40 dark:text-gray-600">Aktive IPs heute</p>
+              <p className="font-serif text-[#1a1a1a] dark:text-[#f0ece4]">{usage.activeIPsToday}</p>
             </div>
           </div>
         </Section>
