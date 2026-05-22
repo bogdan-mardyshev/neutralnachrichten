@@ -9,7 +9,12 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "build": "vite build",
     "postinstall": "npm run build",
-    "start": "node server.js"
+    "start": "node server.js",
+    "deploy:staging": "bash scripts/deploy-staging.sh",
+    "deploy:prod": "bash scripts/deploy-prod.sh",
+    "logs:prod": "$HOME/.railway/bin/railway logs --environment production --tail",
+    "logs:staging": "$HOME/.railway/bin/railway logs --environment staging --tail",
+    "status": "$HOME/.railway/bin/railway status"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
