@@ -64,7 +64,7 @@ function fmt(n: number | string): string {
 
 // ── Coverage bar ──────────────────────────────────────────────────────────────
 function CoverageBar({ coverage }: { coverage: Record<string, { percent: number }> | null }) {
-  if (!coverage) return <div className="h-[3px] bg-[#e0d8cf] w-full" />;
+  if (!coverage) return <div className="h-[3px] bg-[#e0d8cf] dark:bg-gray-700 w-full" />;
   return (
     <div className="flex h-[3px] w-full overflow-hidden gap-px">
       {SPEC_ORDER.map(k => {
@@ -166,8 +166,8 @@ function LikeButton({
         liked
           ? 'text-rose-500'
           : authToken
-            ? 'text-gray-300 hover:text-rose-400'
-            : 'text-gray-200 cursor-default'
+            ? 'text-gray-300 dark:text-gray-600 hover:text-rose-400'
+            : 'text-gray-200 dark:text-gray-700 cursor-default'
       }`}
     >
       <span className={`text-[11px] leading-none ${loading ? 'opacity-50' : ''}`}>
@@ -199,7 +199,7 @@ const AnalysisCard: React.FC<{
   return (
     <button
       onClick={() => onSelect(item.topic, bestLang)}
-      className="group w-full text-left px-3 py-3 hover:bg-[#f5ede0] transition-colors border-b border-[#e0d8cf] last:border-0"
+      className="group w-full text-left px-3 py-3 hover:bg-[#f5ede0] dark:hover:bg-[#1e1a14] transition-colors border-b border-[#e0d8cf] dark:border-gray-700 last:border-0 dark:bg-[#141414]"
     >
       {/* Spectrum strip */}
       <CoverageBar coverage={item.coverage} />
@@ -208,7 +208,7 @@ const AnalysisCard: React.FC<{
       <div className="mt-2 mb-1">
         <p className={`font-serif text-[13px] leading-snug line-clamp-2 transition-colors ${
           isRecent ? 'font-bold' : ''
-        } text-[#1a1a1a] group-hover:text-rose-700`}>
+        } text-[#1a1a1a] dark:text-[#f0ece4] group-hover:text-rose-700 dark:group-hover:text-rose-400`}>
           {isRecent && <span className="text-rose-400 mr-1 text-[10px]">↺</span>}
           {item.topic}
         </p>
@@ -232,17 +232,17 @@ const AnalysisCard: React.FC<{
             <span
               key={l}
               onClick={e => { e.stopPropagation(); onSelect(item.topic, l as Language); }}
-              className={`font-sans text-[8px] uppercase tracking-widest px-1 py-0.5 border transition-colors hover:bg-[#1a1a1a] hover:text-white hover:border-[#1a1a1a] ${
+              className={`font-sans text-[8px] uppercase tracking-widest px-1 py-0.5 border transition-colors hover:bg-[#1a1a1a] dark:hover:bg-gray-700 hover:text-white hover:border-[#1a1a1a] dark:hover:border-gray-500 ${
                 l === bestLang
-                  ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
-                  : 'text-gray-400 border-[#e0d8cf]'
+                  ? 'bg-[#1a1a1a] dark:bg-gray-700 text-white border-[#1a1a1a] dark:border-gray-600'
+                  : 'text-gray-400 border-[#e0d8cf] dark:border-gray-600'
               }`}
             >
               {l}
             </span>
           ))}
           {srcCount > 0 && (
-            <span className="font-sans text-[8px] text-gray-300 ml-0.5">
+            <span className="font-sans text-[8px] text-gray-300 dark:text-gray-600 ml-0.5">
               · {t.sources(srcCount)}
             </span>
           )}
@@ -251,7 +251,7 @@ const AnalysisCard: React.FC<{
         {/* Right: views + likes + time */}
         <div className="flex items-center gap-2">
           {viewCount > 0 && (
-            <span className="font-sans text-[9px] text-gray-300 flex items-center gap-0.5">
+            <span className="font-sans text-[9px] text-gray-300 dark:text-gray-600 flex items-center gap-0.5">
               <span className="text-[9px]">👁</span> {fmt(viewCount)}
             </span>
           )}
@@ -263,7 +263,7 @@ const AnalysisCard: React.FC<{
             lang={lang}
             onToggle={onLikeToggle}
           />
-          <span className="font-sans text-[9px] text-gray-300">
+          <span className="font-sans text-[9px] text-gray-300 dark:text-gray-600">
             {relativeTime(item.last_searched, lang)}
           </span>
         </div>
@@ -305,8 +305,8 @@ export function PublicAnalyses({ lang, onSelect, recentSearches = [], authToken 
 
   if (loading) return (
     <div className="w-full">
-      <div className="h-4 bg-[#e0d8cf] animate-pulse rounded mb-3 w-36" />
-      {[1,2,3].map(i => <div key={i} className="h-24 bg-[#e0d8cf] animate-pulse mb-px" />)}
+      <div className="h-4 bg-[#e0d8cf] dark:bg-gray-700 animate-pulse rounded mb-3 w-36" />
+      {[1,2,3].map(i => <div key={i} className="h-24 bg-[#e0d8cf] dark:bg-gray-700 animate-pulse mb-px" />)}
     </div>
   );
 
@@ -322,17 +322,17 @@ export function PublicAnalyses({ lang, onSelect, recentSearches = [], authToken 
               <div key={c} className={`w-2.5 h-[3px] ${c}`} />
             ))}
           </div>
-          <h3 className="font-sans text-[10px] uppercase tracking-widest font-bold text-[#1a1a1a]">
+          <h3 className="font-sans text-[10px] uppercase tracking-widest font-bold text-[#1a1a1a] dark:text-[#f0ece4]">
             {t.analyzed}
           </h3>
         </div>
-        <span className="font-sans text-[9px] uppercase tracking-widest text-gray-300">
+        <span className="font-sans text-[9px] uppercase tracking-widest text-gray-300 dark:text-gray-600">
           {t.instant}
         </span>
       </div>
 
       {/* Cards */}
-      <div className="border border-[#1a1a1a]">
+      <div className="border border-[#1a1a1a] dark:border-gray-700">
         {sorted.map(item => (
           <AnalysisCard
             key={item.topic_norm}
