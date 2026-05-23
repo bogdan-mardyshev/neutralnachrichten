@@ -1,11 +1,18 @@
 @import "tailwindcss";
 
+/* ── Dark mode (Tailwind v4 class strategy) ─────────────────────────────────── */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ── Fonts ─────────────────────────────────────────────────────────────────── */
 body {
   font-family: 'Inter', sans-serif;
   background-color: #FFF8F0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+.dark body {
+  background-color: #0f0f0f;
+  color: #f0ece4;
 }
 h1, h2, h3, .serif {
   font-family: 'Merriweather', serif;
