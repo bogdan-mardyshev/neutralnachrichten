@@ -106,8 +106,8 @@ function MiniCard({ source, spectrumKey, lang }: { source: NewsSource | undefine
       className={`border-2 border-[#1a1a1a] border-l-4 ${c.border.replace('border-', 'border-l-')} ${c.bg} p-3 flex flex-col gap-1.5 hover:border-[#1a1a1a] transition-colors group`}
     >
       <p className={`font-sans text-[9px] font-bold uppercase tracking-widest ${c.text}`}>{source.source_name}</p>
-      <p className="font-serif text-xs font-bold text-[#1a1a1a] leading-snug line-clamp-2 group-hover:underline">{source.article_title}</p>
-      <p className="font-serif text-[11px] text-gray-500 leading-relaxed line-clamp-2">{source.summary_of_perspective}</p>
+      <p className="font-serif text-xs font-bold text-[#1a1a1a] dark:text-[#f0ece4] leading-snug line-clamp-2 group-hover:underline">{source.article_title}</p>
+      <p className="font-serif text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-2">{source.summary_of_perspective}</p>
       <span className={`font-sans text-[9px] font-bold uppercase tracking-widest ${c.text} mt-auto`}>
         {translations[lang].compare.readMore}
       </span>
@@ -117,13 +117,13 @@ function MiniCard({ source, spectrumKey, lang }: { source: NewsSource | undefine
 
 function Skeleton() {
   return (
-    <div className="border-2 border-[#1a1a1a] animate-pulse">
-      <div className="bg-[#1a1a1a] h-10" />
-      <div className="p-5 flex flex-col gap-3">
-        <div className="h-2 bg-gray-200 w-1/2" />
-        <div className="h-2 bg-gray-100 w-full" />
+    <div className="border-2 border-[#1a1a1a] dark:border-gray-700 animate-pulse">
+      <div className="bg-[#1a1a1a] dark:bg-gray-800 h-10" />
+      <div className="p-5 flex flex-col gap-3 dark:bg-[#141414]">
+        <div className="h-2 bg-gray-200 dark:bg-gray-700 w-1/2" />
+        <div className="h-2 bg-gray-100 dark:bg-gray-800 w-full" />
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-16 bg-gray-50 border border-gray-100" />
+          <div key={i} className="h-16 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700" />
         ))}
       </div>
     </div>
@@ -267,7 +267,7 @@ export const ComparePage: React.FC<Props> = ({ lang }) => {
     <div className="max-w-5xl mx-auto pb-16 px-4">
 
       {/* ── Back ── */}
-      <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 mb-8">
+      <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] dark:bg-gray-800 text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 mb-8">
         <span className="inline-block group-hover:-translate-x-1 transition-transform duration-200">←</span>
         {t.backToHome}
       </Link>
@@ -275,7 +275,7 @@ export const ComparePage: React.FC<Props> = ({ lang }) => {
       {/* ════════════════════════════════════════════════════════
           HERO HEADER
       ════════════════════════════════════════════════════════ */}
-      <div className="border-2 border-[#1a1a1a] overflow-hidden mb-6">
+      <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden mb-6">
         <div className="h-1.5 flex">
           <div className="flex-1 bg-rose-500" /><div className="flex-1 bg-orange-400" />
           <div className="flex-1 bg-slate-400" /><div className="flex-1 bg-sky-400" />
@@ -300,16 +300,16 @@ export const ComparePage: React.FC<Props> = ({ lang }) => {
       {!hasSearched && (
         <div className="mb-6">
           {/* 4-step how-to */}
-          <div className="border-2 border-[#1a1a1a] overflow-hidden mb-4">
-            <div className="bg-[#1a1a1a] px-5 py-3">
+          <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden mb-4">
+            <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3">
               <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{L.howLabel}</p>
             </div>
-            <div className="grid sm:grid-cols-4 divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-[#1a1a1a]">
+            <div className="grid sm:grid-cols-4 divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-[#1a1a1a] dark:divide-gray-700">
               {L.steps.map((step, i) => (
-                <div key={step.n} className="p-4 sm:p-5 flex flex-col gap-2">
-                  <span className="font-serif font-black text-lg text-gray-200 leading-none">{step.n}</span>
-                  <p className="font-sans text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a] leading-tight">{step.title}</p>
-                  <p className="font-serif text-[11px] text-gray-400 leading-relaxed">{step.desc}</p>
+                <div key={step.n} className="p-4 sm:p-5 flex flex-col gap-2 dark:bg-[#141414]">
+                  <span className="font-serif font-black text-lg text-gray-200 dark:text-gray-600 leading-none">{step.n}</span>
+                  <p className="font-sans text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a] dark:text-[#f0ece4] leading-tight">{step.title}</p>
+                  <p className="font-serif text-[11px] text-gray-400 dark:text-gray-500 leading-relaxed">{step.desc}</p>
                 </div>
               ))}
             </div>
@@ -318,36 +318,36 @@ export const ComparePage: React.FC<Props> = ({ lang }) => {
           {/* Why + Examples side by side */}
           <div className="grid sm:grid-cols-2 gap-4">
             {/* Why useful */}
-            <div className="border-2 border-[#1a1a1a] overflow-hidden">
-              <div className="bg-[#1a1a1a] px-5 py-3">
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+              <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3">
                 <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{L.whyLabel}</p>
               </div>
-              <div className="p-5 flex flex-col gap-3">
+              <div className="p-5 dark:bg-[#141414] flex flex-col gap-3">
                 {L.whyCases.map((wc, i) => (
                   <div key={i} className="flex items-start gap-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0 mt-1.5" />
-                    <p className="font-serif text-xs text-gray-500 leading-relaxed">{wc}</p>
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600 shrink-0 mt-1.5" />
+                    <p className="font-serif text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{wc}</p>
                   </div>
                 ))}
               </div>
             </div>
 
             {/* Example chips */}
-            <div className="border-2 border-[#1a1a1a] overflow-hidden">
-              <div className="bg-[#1a1a1a] px-5 py-3">
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+              <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3">
                 <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{L.examplesLabel}</p>
               </div>
-              <div className="p-5 flex flex-col gap-2">
+              <div className="p-5 dark:bg-[#141414] flex flex-col gap-2">
                 {EXAMPLES[lang].map((ex, i) => (
                   <button
                     key={i}
                     onClick={() => { setInputA(ex.a); setInputB(ex.b); }}
-                    className="w-full flex items-center gap-2 border-2 border-[#1a1a1a] px-3 py-2 hover:bg-[#1a1a1a] group transition-colors text-left"
+                    className="w-full flex items-center gap-2 border-2 border-[#1a1a1a] dark:border-gray-600 px-3 py-2 hover:bg-[#1a1a1a] dark:hover:bg-gray-700 group transition-colors text-left"
                   >
-                    <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a] group-hover:text-white transition-colors flex-1 truncate">{ex.a}</span>
-                    <span className="font-sans text-[9px] text-gray-300 group-hover:text-white/40 transition-colors shrink-0">{L.vsText}</span>
-                    <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a] group-hover:text-white transition-colors flex-1 truncate text-right">{ex.b}</span>
-                    <span className="font-sans text-[9px] text-gray-300 group-hover:text-white/40 transition-colors shrink-0">↗</span>
+                    <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a] dark:text-[#f0ece4] group-hover:text-white transition-colors flex-1 truncate">{ex.a}</span>
+                    <span className="font-sans text-[9px] text-gray-300 dark:text-gray-600 group-hover:text-white/40 transition-colors shrink-0">{L.vsText}</span>
+                    <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a] dark:text-[#f0ece4] group-hover:text-white transition-colors flex-1 truncate text-right">{ex.b}</span>
+                    <span className="font-sans text-[9px] text-gray-300 dark:text-gray-600 group-hover:text-white/40 transition-colors shrink-0">↗</span>
                   </button>
                 ))}
               </div>
@@ -359,35 +359,35 @@ export const ComparePage: React.FC<Props> = ({ lang }) => {
       {/* ════════════════════════════════════════════════════════
           SEARCH FORM
       ════════════════════════════════════════════════════════ */}
-      <div className="border-2 border-[#1a1a1a] overflow-hidden mb-6">
-        <div className="grid sm:grid-cols-[1fr_auto_1fr_auto] divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-[#1a1a1a]">
+      <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden mb-6">
+        <div className="grid sm:grid-cols-[1fr_auto_1fr_auto] divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-[#1a1a1a] dark:divide-gray-700">
 
           {/* Input A */}
-          <div className="p-4 sm:p-5 flex flex-col gap-2">
-            <label className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400">{L.topicALabel}</label>
+          <div className="p-4 sm:p-5 flex flex-col gap-2 dark:bg-[#141414]">
+            <label className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">{L.topicALabel}</label>
             <input
               value={inputA}
               onChange={e => setInputA(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAnalyze()}
               placeholder={c.placeholderA}
-              className="font-serif text-sm text-[#1a1a1a] bg-transparent border-b-2 border-[#1a1a1a]/20 focus:border-[#1a1a1a] outline-none py-1 placeholder:text-gray-300 transition-colors w-full"
+              className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] bg-transparent border-b-2 border-[#1a1a1a]/20 dark:border-gray-600 focus:border-[#1a1a1a] dark:focus:border-gray-400 outline-none py-1 placeholder:text-gray-300 dark:placeholder:text-gray-600 transition-colors w-full"
             />
           </div>
 
           {/* VS divider */}
-          <div className="hidden sm:flex items-center justify-center px-4 bg-[#f5f0e8]">
-            <span className="font-serif font-black text-xl text-gray-300">{L.vsText}</span>
+          <div className="hidden sm:flex items-center justify-center px-4 bg-[#f5f0e8] dark:bg-[#1e1a14]">
+            <span className="font-serif font-black text-xl text-gray-300 dark:text-gray-600">{L.vsText}</span>
           </div>
 
           {/* Input B */}
-          <div className="p-4 sm:p-5 flex flex-col gap-2">
-            <label className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400">{L.topicBLabel}</label>
+          <div className="p-4 sm:p-5 flex flex-col gap-2 dark:bg-[#141414]">
+            <label className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">{L.topicBLabel}</label>
             <input
               value={inputB}
               onChange={e => setInputB(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAnalyze()}
               placeholder={c.placeholderB}
-              className="font-serif text-sm text-[#1a1a1a] bg-transparent border-b-2 border-[#1a1a1a]/20 focus:border-[#1a1a1a] outline-none py-1 placeholder:text-gray-300 transition-colors w-full"
+              className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] bg-transparent border-b-2 border-[#1a1a1a]/20 dark:border-gray-600 focus:border-[#1a1a1a] dark:focus:border-gray-400 outline-none py-1 placeholder:text-gray-300 dark:placeholder:text-gray-600 transition-colors w-full"
             />
           </div>
 
@@ -395,7 +395,7 @@ export const ComparePage: React.FC<Props> = ({ lang }) => {
           <button
             onClick={handleAnalyze}
             disabled={isLoading || !inputA.trim() || !inputB.trim()}
-            className="font-sans text-[10px] font-bold uppercase tracking-widest px-6 py-4 sm:py-0 bg-[#1a1a1a] text-white hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+            className="font-sans text-[10px] font-bold uppercase tracking-widest px-6 py-4 sm:py-0 bg-[#1a1a1a] dark:bg-gray-800 text-white hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
           >
             {isLoading ? L.btnLoading : L.btnText}
           </button>
@@ -423,13 +423,13 @@ export const ComparePage: React.FC<Props> = ({ lang }) => {
                 { result: resultA, topic: inputA, score: scoreA, err: errorA, accent: 'border-t-violet-500', side: 'A' },
                 { result: resultB, topic: inputB, score: scoreB, err: errorB, accent: 'border-t-emerald-500', side: 'B' },
               ] as const).map(({ result, topic, score, err, accent, side }) => (
-                <div key={side} className={`border-2 border-[#1a1a1a] border-t-4 ${accent} overflow-hidden`}>
-                  <div className="px-5 py-4 border-b-2 border-[#1a1a1a] flex items-start justify-between gap-2">
+                <div key={side} className={`border-2 border-[#1a1a1a] dark:border-gray-700 border-t-4 ${accent} overflow-hidden`}>
+                  <div className="px-5 py-4 border-b-2 border-[#1a1a1a] dark:border-gray-700 dark:bg-[#141414] flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">
+                      <p className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-0.5">
                         {side === 'A' ? L.topicALabel : L.topicBLabel}
                       </p>
-                      <p className="font-serif font-bold text-base text-[#1a1a1a] leading-tight">{topic}</p>
+                      <p className="font-serif font-bold text-base text-[#1a1a1a] dark:text-white leading-tight">{topic}</p>
                     </div>
                     {score !== null && <PolarBadge score={score} lang={lang} />}
                   </div>
@@ -441,10 +441,10 @@ export const ComparePage: React.FC<Props> = ({ lang }) => {
                   )}
 
                   {result?.coverage_distribution && (
-                    <div className="px-5 py-4">
-                      <p className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-2">{L.coverageLabel}</p>
+                    <div className="px-5 py-4 dark:bg-[#141414]">
+                      <p className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-2">{L.coverageLabel}</p>
                       <StackedBar cd={result.coverage_distribution} />
-                      <div className="flex justify-between font-sans text-[8px] uppercase tracking-widest text-gray-300 mt-1">
+                      <div className="flex justify-between font-sans text-[8px] uppercase tracking-widest text-gray-300 dark:text-gray-600 mt-1">
                         <span>{t.leaningLeft}</span>
                         <span>{t.leaningCenter}</span>
                         <span>{t.leaningRight}</span>
@@ -473,9 +473,9 @@ export const ComparePage: React.FC<Props> = ({ lang }) => {
 
           {/* Per-spectrum comparison table */}
           {(resultA || resultB) && !isLoading && (
-            <div className="border-2 border-[#1a1a1a] overflow-hidden">
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
               {/* Header */}
-              <div className="bg-[#1a1a1a] px-5 py-3 flex items-center gap-4">
+              <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3 flex items-center gap-4">
                 <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white flex-1">{L.perSpectrumLabel}</p>
                 <div className="hidden sm:flex items-center gap-6">
                   <p className="font-sans text-[9px] uppercase tracking-widest text-white/40 max-w-[120px] truncate">{inputA || L.topicALabel}</p>
@@ -484,13 +484,13 @@ export const ComparePage: React.FC<Props> = ({ lang }) => {
               </div>
 
               {/* Column labels (mobile visible) */}
-              <div className="sm:hidden grid grid-cols-2 divide-x-2 divide-[#1a1a1a] border-b-2 border-[#1a1a1a] px-4 py-2 bg-[#f5f0e8]">
-                <p className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-500 pr-2 truncate">{inputA || L.topicALabel}</p>
-                <p className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-500 pl-2 truncate">{inputB || L.topicBLabel}</p>
+              <div className="sm:hidden grid grid-cols-2 divide-x-2 divide-[#1a1a1a] dark:divide-gray-700 border-b-2 border-[#1a1a1a] dark:border-gray-700 px-4 py-2 bg-[#f5f0e8] dark:bg-[#1e1a14]">
+                <p className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 pr-2 truncate">{inputA || L.topicALabel}</p>
+                <p className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 pl-2 truncate">{inputB || L.topicBLabel}</p>
               </div>
 
               {/* Rows */}
-              <div className="divide-y-2 divide-[#1a1a1a]">
+              <div className="divide-y-2 divide-[#1a1a1a] dark:divide-gray-700">
                 {SPECTRUM_ORDER.map(s => {
                   const st = SPECTRUM_STYLE[s];
                   const srcA = resultA?.news_spectrum?.[s];
@@ -501,14 +501,14 @@ export const ComparePage: React.FC<Props> = ({ lang }) => {
                   return (
                     <div key={s}>
                       {/* Spectrum label row */}
-                      <div className={`flex items-center gap-2 px-5 py-2 border-b border-[#1a1a1a]/10 ${st.bg}`}>
+                      <div className={`flex items-center gap-2 px-5 py-2 border-b border-[#1a1a1a]/10 dark:border-gray-700 ${st.bg}`}>
                         <div className={`w-2 h-2 rounded-full ${st.dot} shrink-0`} />
                         <span className={`font-sans text-[9px] font-bold uppercase tracking-widest ${st.text}`}>
                           {leaningLabel[s]}
                         </span>
                       </div>
                       {/* Cards row */}
-                      <div className="grid sm:grid-cols-2 divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-[#1a1a1a]">
+                      <div className="grid sm:grid-cols-2 divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-[#1a1a1a] dark:divide-gray-700">
                         <div className="p-3 sm:p-4">
                           <MiniCard source={_srcA} spectrumKey={s} lang={lang} />
                         </div>

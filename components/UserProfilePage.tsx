@@ -322,11 +322,11 @@ const Field: React.FC<{
   onChange: (v: string) => void; placeholder?: string;
 }> = ({ label, type = 'text', value, onChange, placeholder }) => (
   <div>
-    <label className="block font-sans text-[10px] uppercase tracking-widest text-gray-500 mb-1">{label}</label>
+    <label className="block font-sans text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-1">{label}</label>
     <input
       type={type} value={value} onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full border-b-2 border-[#1a1a1a] bg-transparent py-2 font-sans text-sm focus:outline-none focus:border-blue-600 placeholder:text-gray-300"
+      className="w-full border-b-2 border-[#1a1a1a] dark:border-gray-600 bg-transparent py-2 font-sans text-sm text-[#1a1a1a] dark:text-[#f0ece4] focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 placeholder:text-gray-300 dark:placeholder:text-gray-600"
     />
   </div>
 );
@@ -541,21 +541,21 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
   return (
     <div className="max-w-3xl space-y-5">
 
-      <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200">
+      <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] dark:bg-gray-800 text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200">
         <span className="inline-block group-hover:-translate-x-1 transition-transform duration-200">←</span>
         {pt.back.replace('← ', '')}
       </Link>
 
       {loading ? (
-        <div className="border-2 border-[#1a1a1a] p-14 text-center">
-          <div className="w-8 h-8 border-2 border-[#1a1a1a] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="font-sans text-[10px] uppercase tracking-widest text-gray-400">{pt.loading}</p>
+        <div className="border-2 border-[#1a1a1a] dark:border-gray-700 dark:bg-[#141414] p-14 text-center">
+          <div className="w-8 h-8 border-2 border-[#1a1a1a] dark:border-gray-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="font-sans text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500">{pt.loading}</p>
         </div>
       ) : (<>
 
         {/* ─── Email verification banner ─────────────────────────────── */}
         {!emailVerified && (
-          <div className="border-2 border-amber-400 bg-amber-50 px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
+          <div className="border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/20 px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-2.5">
               <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0 animate-pulse" />
               <p className="font-sans text-[11px] text-amber-800">{pt.verifyBanner}</p>
@@ -571,15 +571,15 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
         )}
 
         {/* ─── Hero Card ────────────────────────────────────────────────── */}
-        <div className="border-2 border-[#1a1a1a] overflow-hidden">
+        <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
           <div className={`h-1.5 w-full ${tc.strip}`} />
-          <div className="px-6 py-5 flex items-start gap-4">
+          <div className="px-6 py-5 dark:bg-[#141414] flex items-start gap-4">
             <Avatar email={user.email} tier={tier} />
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
-                  <p className="font-serif font-black text-xl text-[#1a1a1a] truncate">{user.email.split('@')[0]}</p>
-                  <p className="font-sans text-[10px] text-gray-400 truncate flex items-center gap-1.5">
+                  <p className="font-serif font-black text-xl text-[#1a1a1a] dark:text-white truncate">{user.email.split('@')[0]}</p>
+                  <p className="font-sans text-[10px] text-gray-400 dark:text-gray-500 truncate flex items-center gap-1.5">
                     {user.email}
                     {emailVerified
                       ? <span className="text-emerald-600 text-[9px]">✓</span>
@@ -603,15 +603,15 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
         </div>
 
         {/* ─── Tab Navigation ───────────────────────────────────────────── */}
-        <div className="flex border-b-2 border-[#1a1a1a]">
+        <div className="flex border-b-2 border-[#1a1a1a] dark:border-gray-700">
           {TABS.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`font-sans text-[10px] uppercase tracking-widest px-4 sm:px-6 py-3 transition-colors ${
                 activeTab === tab.id
-                  ? 'bg-[#1a1a1a] text-white'
-                  : 'text-gray-500 hover:text-[#1a1a1a]'
+                  ? 'bg-[#1a1a1a] dark:bg-gray-800 text-white'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-[#1a1a1a] dark:hover:text-white'
               }`}
             >
               {tab.label}
@@ -626,14 +626,14 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
 
           {/* Stats Row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="border-2 border-[#1a1a1a] p-4 flex flex-col items-center gap-2">
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 p-4 flex flex-col items-center gap-2 dark:bg-[#141414]">
               <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400">{pt.usage_title}</p>
               <div className="relative">
                 <UsageRing used={usedToday} limit={dailyLimit} unlimited={unlimited} />
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   {unlimited
                     ? <span className="font-serif font-black text-lg text-sky-500">∞</span>
-                    : <><span className="font-serif font-black text-lg text-[#1a1a1a] leading-none">{usedToday}</span>
+                    : <><span className="font-serif font-black text-lg text-[#1a1a1a] dark:text-[#f0ece4] leading-none">{usedToday}</span>
                        <span className="font-sans text-[9px] text-gray-400">/ {dailyLimit}</span></>}
                 </div>
               </div>
@@ -641,26 +641,26 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
                 ? <span className="font-sans text-[9px] font-bold uppercase tracking-widest text-sky-600">{pt.usage_unlimited}</span>
                 : <span className={`font-sans text-[9px] uppercase tracking-widest font-bold ${remaining === 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{remaining} left</span>}
             </div>
-            <div className="border-2 border-[#1a1a1a] p-4 flex flex-col justify-between">
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 p-4 flex flex-col justify-between dark:bg-[#141414]">
               <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400">{pt.statsTotal}</p>
-              <p className="font-serif font-black text-3xl text-[#1a1a1a]">{history.length}</p>
-              <div className="h-0.5 w-full bg-[#e0d8cf]" />
+              <p className="font-serif font-black text-3xl text-[#1a1a1a] dark:text-[#f0ece4]">{history.length}</p>
+              <div className="h-0.5 w-full bg-[#e0d8cf] dark:bg-gray-700" />
             </div>
-            <div className="border-2 border-[#1a1a1a] p-4 flex flex-col justify-between">
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 p-4 flex flex-col justify-between dark:bg-[#141414]">
               <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400">{pt.statsUnique}</p>
-              <p className="font-serif font-black text-3xl text-[#1a1a1a]">{uniqueTopics}</p>
-              <div className="h-0.5 w-full bg-[#e0d8cf]" />
+              <p className="font-serif font-black text-3xl text-[#1a1a1a] dark:text-[#f0ece4]">{uniqueTopics}</p>
+              <div className="h-0.5 w-full bg-[#e0d8cf] dark:bg-gray-700" />
             </div>
-            <div className="border-2 border-[#1a1a1a] p-4 flex flex-col justify-between">
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 p-4 flex flex-col justify-between dark:bg-[#141414]">
               <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400">{pt.statsStreak}</p>
-              <p className="font-serif font-black text-3xl text-[#1a1a1a]">{activeDays}</p>
-              <p className="font-sans text-[9px] uppercase tracking-widest text-gray-300">{activeDays === 1 ? pt.statsDay : pt.statsDays}</p>
+              <p className="font-serif font-black text-3xl text-[#1a1a1a] dark:text-[#f0ece4]">{activeDays}</p>
+              <p className="font-sans text-[9px] uppercase tracking-widest text-gray-300 dark:text-gray-600">{activeDays === 1 ? pt.statsDay : pt.statsDays}</p>
             </div>
           </div>
 
           {/* Reading Profile */}
-          <div className="border-2 border-[#1a1a1a] overflow-hidden">
-            <div className="bg-[#1a1a1a] px-5 py-3 flex items-center justify-between">
+          <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+            <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3 flex items-center justify-between">
               <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.profileLabel}</p>
               {dominantCamp && (
                 <span className={`font-sans text-[9px] px-2 py-0.5 ${S_STYLE[dominantCamp].bg} ${S_STYLE[dominantCamp].text} border ${S_STYLE[dominantCamp].border}`}>
@@ -669,7 +669,7 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
               )}
             </div>
             {spectrumProfile ? (
-              <div className="px-5 py-5 space-y-3">
+              <div className="px-5 py-5 space-y-3 dark:bg-[#141414]">
                 <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400">{pt.profileSub}</p>
                 {SPECTRUM_KEYS.map(k => {
                   const pct = spectrumProfile[k];
@@ -681,7 +681,7 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
                         <div className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
                         <span className={`font-sans text-[9px] font-bold uppercase tracking-widest ${st.text}`}>{label}</span>
                       </div>
-                      <div className="flex-1 bg-[#e0d8cf] h-2 overflow-hidden">
+                      <div className="flex-1 bg-[#e0d8cf] dark:bg-gray-700 h-2 overflow-hidden">
                         <div className={`h-full ${st.bar} transition-all duration-700`} style={{ width: `${pct}%` }} />
                       </div>
                       <span className="font-sans text-[9px] text-gray-400 w-8 text-right tabular-nums">{pct}%</span>
@@ -700,29 +700,29 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
                 )}
               </div>
             ) : (
-              <div className="px-5 py-6 text-center">
+              <div className="px-5 py-6 text-center dark:bg-[#141414]">
                 <p className="font-serif text-sm text-gray-400">{pt.profileNone}</p>
               </div>
             )}
           </div>
 
           {/* Liked Analyses */}
-          <div className="border-2 border-[#1a1a1a] overflow-hidden">
-            <div className="bg-[#1a1a1a] px-5 py-3 flex items-center gap-2">
+          <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+            <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3 flex items-center gap-2">
               <span className="text-rose-400 text-sm">♥</span>
               <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.likedLabel}</p>
             </div>
             {likedAnalyses.length > 0 ? (
-              <div className="divide-y divide-[#e0d8cf]">
+              <div className="divide-y divide-[#e0d8cf] dark:divide-gray-700 dark:bg-[#141414]">
                 {likedAnalyses.slice(0, 8).map(item => (
                   <button
                     key={item.topic_norm}
                     onClick={() => handleReSearch(item.topic)}
-                    className="w-full flex items-center justify-between px-5 py-3 hover:bg-[#f5f0e8] transition-colors text-left group"
+                    className="w-full flex items-center justify-between px-5 py-3 hover:bg-[#f5f0e8] dark:hover:bg-[#1e1a14] transition-colors text-left group"
                   >
-                    <span className="font-serif text-sm text-[#1a1a1a] group-hover:underline truncate flex-1">{item.topic}</span>
+                    <span className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] group-hover:underline truncate flex-1">{item.topic}</span>
                     <div className="flex items-center gap-2 ml-2 shrink-0">
-                      <span className={`font-sans text-[8px] uppercase tracking-widest px-1 py-0.5 border border-[#e0d8cf] text-gray-400`}>
+                      <span className={`font-sans text-[8px] uppercase tracking-widest px-1 py-0.5 border border-[#e0d8cf] dark:border-gray-600 text-gray-400`}>
                         {item.lang}
                       </span>
                       <span className="text-rose-300 text-[10px]">♥</span>
@@ -731,7 +731,7 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
                 ))}
               </div>
             ) : (
-              <div className="px-5 py-6 text-center">
+              <div className="px-5 py-6 text-center dark:bg-[#141414]">
                 <p className="font-serif text-sm text-gray-400">{pt.likedEmpty}</p>
               </div>
             )}
@@ -739,37 +739,37 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
 
           {/* Top Topics + Suggestions */}
           <div className="grid sm:grid-cols-2 gap-3">
-            <div className="border-2 border-[#1a1a1a] overflow-hidden">
-              <div className="bg-[#1a1a1a] px-5 py-3">
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+              <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3">
                 <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.topicsLabel}</p>
               </div>
               {topTopics.length > 0 ? (
-                <div className="divide-y divide-[#e0d8cf]">
+                <div className="divide-y divide-[#e0d8cf] dark:divide-gray-700 dark:bg-[#141414]">
                   {topTopics.map(({ topic, count }) => (
                     <button key={topic} onClick={() => handleReSearch(topic)}
-                      className="w-full flex items-center justify-between px-5 py-3 hover:bg-[#f5f0e8] transition-colors text-left group">
-                      <span className="font-serif text-sm text-[#1a1a1a] group-hover:underline truncate flex-1">{topic}</span>
-                      <span className="font-sans text-[9px] uppercase tracking-widest text-gray-300 ml-2 shrink-0">
+                      className="w-full flex items-center justify-between px-5 py-3 hover:bg-[#f5f0e8] dark:hover:bg-[#1e1a14] transition-colors text-left group">
+                      <span className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] group-hover:underline truncate flex-1">{topic}</span>
+                      <span className="font-sans text-[9px] uppercase tracking-widest text-gray-300 dark:text-gray-600 ml-2 shrink-0">
                         {count > 1 && pt.topicsTime(count)}
                       </span>
                     </button>
                   ))}
                 </div>
               ) : (
-                <div className="px-5 py-6 text-center">
+                <div className="px-5 py-6 text-center dark:bg-[#141414]">
                   <p className="font-serif text-sm text-gray-400">{pt.historyEmpty}</p>
                 </div>
               )}
             </div>
-            <div className="border-2 border-[#1a1a1a] overflow-hidden">
-              <div className="bg-[#1a1a1a] px-5 py-3">
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+              <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3">
                 <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.suggestionsLabel}</p>
                 <p className="font-sans text-[8px] uppercase tracking-widest text-white/40 mt-0.5">{pt.suggestionsSub}</p>
               </div>
-              <div className="p-3 flex flex-wrap gap-2">
+              <div className="p-3 flex flex-wrap gap-2 dark:bg-[#141414]">
                 {suggestions.map(s => (
                   <button key={s} onClick={() => handleReSearch(s)}
-                    className="font-sans text-[10px] uppercase tracking-wider border-2 border-[#1a1a1a] px-3 py-1.5 hover:bg-[#1a1a1a] hover:text-white transition-colors">
+                    className="font-sans text-[10px] uppercase tracking-wider border-2 border-[#1a1a1a] dark:border-gray-600 dark:text-[#f0ece4] px-3 py-1.5 hover:bg-[#1a1a1a] dark:hover:bg-gray-700 hover:text-white transition-colors">
                     {s} ↗
                   </button>
                 ))}
@@ -779,58 +779,58 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
 
           {/* Plan + Usage */}
           <div className="grid sm:grid-cols-2 gap-3">
-            <div className="border-2 border-[#1a1a1a] overflow-hidden">
-              <div className="bg-[#1a1a1a] px-5 py-3">
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+              <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3">
                 <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.benefits_title}</p>
               </div>
-              <div className="p-4 flex flex-col gap-2">
+              <div className="p-4 flex flex-col gap-2 dark:bg-[#141414]">
                 {tierBenefits.map((b, i) => (
                   <div key={i} className="flex items-center gap-2.5">
                     <span className="w-1 h-1 rounded-full bg-emerald-500 shrink-0" />
-                    <span className="font-sans text-xs text-[#1a1a1a]">{b}</span>
+                    <span className="font-sans text-xs text-[#1a1a1a] dark:text-[#f0ece4]">{b}</span>
                   </div>
                 ))}
               </div>
             </div>
             {unlimited ? (
-              <div className="border-2 border-sky-500 bg-sky-50 overflow-hidden flex flex-col">
+              <div className="border-2 border-sky-500 bg-sky-50 dark:bg-sky-950/30 overflow-hidden flex flex-col">
                 <div className="px-5 py-5 flex items-center gap-4 flex-1">
                   <span className="text-4xl font-black text-sky-300">∞</span>
                   <div>
-                    <p className="font-serif font-black text-base text-sky-800">{pt.unlimited_badge}</p>
-                    <p className="font-sans text-[10px] text-sky-600 uppercase tracking-wider mt-0.5">{tierBenefits[0]}</p>
+                    <p className="font-serif font-black text-base text-sky-800 dark:text-sky-300">{pt.unlimited_badge}</p>
+                    <p className="font-sans text-[10px] text-sky-600 dark:text-sky-400 uppercase tracking-wider mt-0.5">{tierBenefits[0]}</p>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="border-2 border-[#1a1a1a] overflow-hidden">
-                <div className="bg-[#1a1a1a] px-5 py-3 flex items-center justify-between">
+              <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+                <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3 flex items-center justify-between">
                   <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.usage_title}</p>
                   <span className="font-sans text-[10px] text-white/40">{pt.usage_of(usedToday, dailyLimit)}</span>
                 </div>
-                <div className="px-5 py-4 space-y-3">
+                <div className="px-5 py-4 space-y-3 dark:bg-[#141414]">
                   <div className="flex gap-0.5">
                     {Array.from({ length: dailyLimit }).map((_, i) => (
                       <div key={i} className={`h-2.5 flex-1 ${
                         i < usedToday
                           ? i < dailyLimit * 0.5 ? 'bg-emerald-500' : i < dailyLimit * 0.8 ? 'bg-orange-400' : 'bg-rose-500'
-                          : 'bg-[#e0d8cf]'
+                          : 'bg-[#e0d8cf] dark:bg-gray-700'
                       }`} />
                     ))}
                   </div>
-                  <p className="font-sans text-[9px] uppercase tracking-widest text-gray-300">{pt.resets}</p>
+                  <p className="font-sans text-[9px] uppercase tracking-widest text-gray-300 dark:text-gray-600">{pt.resets}</p>
                 </div>
               </div>
             )}
           </div>
 
           {tier === 'free' && (
-            <div className="border-2 border-amber-400 bg-amber-50 overflow-hidden">
-              <div className="bg-amber-400 px-5 py-3">
+            <div className="border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/20 overflow-hidden">
+              <div className="bg-amber-400 dark:bg-amber-900 px-5 py-3">
                 <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.upgrade_title}</p>
               </div>
               <div className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
-                <p className="font-sans text-[10px] text-amber-700 uppercase tracking-wider">{pt.upgrade_sub}</p>
+                <p className="font-sans text-[10px] text-amber-700 dark:text-amber-400 uppercase tracking-wider">{pt.upgrade_sub}</p>
                 <a href={`mailto:${pt.upgrade_cta}`}
                   className="font-sans text-[10px] font-bold uppercase tracking-widest border-2 border-amber-600 text-amber-700 px-4 py-2 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap shrink-0">
                   {pt.upgrade_cta}
@@ -844,37 +844,37 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
             TAB: HISTORY
         ════════════════════════════════════════════════════════════════ */}
         {activeTab === 'history' && (
-          <div className="border-2 border-[#1a1a1a] overflow-hidden">
-            <div className="bg-[#1a1a1a] px-5 py-3 flex items-center justify-between">
+          <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+            <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3 flex items-center justify-between">
               <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.historyLabel}</p>
               <span className="font-sans text-[9px] text-white/40">{history.length}</span>
             </div>
             {history.length === 0 ? (
-              <div className="px-5 py-16 text-center">
-                <p className="font-sans text-[10px] uppercase tracking-widest text-gray-300 mb-3">{pt.historyEmpty}</p>
-                <Link to="/" className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a] underline">
+              <div className="px-5 py-16 text-center dark:bg-[#141414]">
+                <p className="font-sans text-[10px] uppercase tracking-widest text-gray-300 dark:text-gray-600 mb-3">{pt.historyEmpty}</p>
+                <Link to="/" className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a] dark:text-gray-400 underline">
                   {lang === 'de' ? 'Erste Analyse starten →' : lang === 'ru' ? 'Начать первый анализ →' : 'Start your first analysis →'}
                 </Link>
               </div>
             ) : (
-              <div className="divide-y divide-[#e0d8cf] max-h-[70vh] overflow-y-auto">
+              <div className="divide-y divide-[#e0d8cf] dark:divide-gray-700 max-h-[70vh] overflow-y-auto dark:bg-[#141414]">
                 {history.map(entry => {
                   const cd = entry.coverage_json;
                   const dom = cd
                     ? (Object.entries(cd).sort(([,a],[,b]) => (b as {percent:number}).percent - (a as {percent:number}).percent)[0]?.[0] as SpecKey | undefined)
                     : undefined;
                   return (
-                    <div key={entry.id} className="flex items-center gap-3 px-5 py-3 hover:bg-[#f9f5f0] group transition-colors">
+                    <div key={entry.id} className="flex items-center gap-3 px-5 py-3 hover:bg-[#f9f5f0] dark:hover:bg-[#1e1a14] group transition-colors">
                       <div className={`w-2 h-2 rounded-full shrink-0 ${dom ? S_STYLE[dom].dot : 'bg-gray-300'}`} />
                       <div className="flex-1 min-w-0">
-                        <p className="font-serif text-sm text-[#1a1a1a] truncate">{entry.topic}</p>
+                        <p className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] truncate">{entry.topic}</p>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="font-sans text-[9px] uppercase tracking-widest text-gray-300">{entry.lang.toUpperCase()}</span>
-                          <span className="text-gray-200">·</span>
-                          <span className="font-sans text-[9px] text-gray-300">{relativeTime(entry.created_at, lang)}</span>
+                          <span className="font-sans text-[9px] uppercase tracking-widest text-gray-300 dark:text-gray-600">{entry.lang.toUpperCase()}</span>
+                          <span className="text-gray-200 dark:text-gray-700">·</span>
+                          <span className="font-sans text-[9px] text-gray-300 dark:text-gray-600">{relativeTime(entry.created_at, lang)}</span>
                           {dom && (
                             <>
-                              <span className="text-gray-200">·</span>
+                              <span className="text-gray-200 dark:text-gray-700">·</span>
                               <span className={`font-sans text-[8px] uppercase tracking-widest ${S_STYLE[dom].text}`}>
                                 {S_STYLE[dom][`label_${lang === 'de' ? 'de' : lang === 'ru' ? 'ru' : 'en'}`]}
                               </span>
@@ -884,7 +884,7 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
                       </div>
                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                         <button onClick={() => handleReSearch(entry.topic)}
-                          className="font-sans text-[9px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] transition-colors">
+                          className="font-sans text-[9px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] dark:hover:text-white transition-colors">
                           {pt.historySearch}
                         </button>
                         <button onClick={() => handleDelete(entry.id)} disabled={deletingId === entry.id}
@@ -907,39 +907,39 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
           <div className="space-y-4">
 
             {/* Change Password */}
-            <div className="border-2 border-[#1a1a1a] overflow-hidden">
-              <div className="bg-[#1a1a1a] px-5 py-3">
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+              <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3">
                 <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.pwTitle}</p>
               </div>
-              <form onSubmit={handleChangePassword} className="px-5 py-5 space-y-4">
+              <form onSubmit={handleChangePassword} className="px-5 py-5 space-y-4 dark:bg-[#141414]">
                 <Field label={pt.pwCurrent} type="password" value={cpCurrent} onChange={setCpCurrent} />
                 <Field label={pt.pwNew}     type="password" value={cpNew}     onChange={setCpNew}     placeholder="Min. 8 Zeichen" />
                 <Field label={pt.pwConfirm} type="password" value={cpNew2}    onChange={setCpNew2} />
-                {cpError && <p className="font-sans text-[11px] text-rose-600 border border-rose-100 bg-rose-50 px-3 py-2">{cpError}</p>}
-                {cpOk    && <p className="font-sans text-[11px] text-emerald-600 border border-emerald-100 bg-emerald-50 px-3 py-2">{pt.pwSaved}</p>}
+                {cpError && <p className="font-sans text-[11px] text-rose-600 border border-rose-100 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/20 px-3 py-2">{cpError}</p>}
+                {cpOk    && <p className="font-sans text-[11px] text-emerald-600 border border-emerald-100 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2">{pt.pwSaved}</p>}
                 <button type="submit" disabled={cpLoading}
-                  className="bg-[#1a1a1a] text-white font-sans text-[10px] uppercase tracking-widest px-6 py-2.5 hover:opacity-80 transition-opacity disabled:opacity-40">
+                  className="bg-[#1a1a1a] dark:bg-gray-700 text-white font-sans text-[10px] uppercase tracking-widest px-6 py-2.5 hover:opacity-80 transition-opacity disabled:opacity-40">
                   {cpLoading ? '…' : pt.pwSave}
                 </button>
               </form>
             </div>
 
             {/* Change Email */}
-            <div className="border-2 border-[#1a1a1a] overflow-hidden">
-              <div className="bg-[#1a1a1a] px-5 py-3">
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+              <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3">
                 <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.emailTitle}</p>
               </div>
               {ceOk ? (
-                <div className="px-5 py-5">
-                  <p className="font-sans text-[11px] text-emerald-600 border border-emerald-100 bg-emerald-50 px-3 py-2">{pt.emailSaved}</p>
+                <div className="px-5 py-5 dark:bg-[#141414]">
+                  <p className="font-sans text-[11px] text-emerald-600 border border-emerald-100 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2">{pt.emailSaved}</p>
                 </div>
               ) : (
-                <form onSubmit={handleChangeEmail} className="px-5 py-5 space-y-4">
+                <form onSubmit={handleChangeEmail} className="px-5 py-5 space-y-4 dark:bg-[#141414]">
                   <Field label={pt.emailNew} type="email"    value={ceEmail}    onChange={setCeEmail}    placeholder={user.email} />
                   <Field label={pt.emailPw}  type="password" value={cePassword} onChange={setCePassword} />
-                  {ceError && <p className="font-sans text-[11px] text-rose-600 border border-rose-100 bg-rose-50 px-3 py-2">{ceError}</p>}
+                  {ceError && <p className="font-sans text-[11px] text-rose-600 border border-rose-100 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/20 px-3 py-2">{ceError}</p>}
                   <button type="submit" disabled={ceLoading}
-                    className="bg-[#1a1a1a] text-white font-sans text-[10px] uppercase tracking-widest px-6 py-2.5 hover:opacity-80 transition-opacity disabled:opacity-40">
+                    className="bg-[#1a1a1a] dark:bg-gray-700 text-white font-sans text-[10px] uppercase tracking-widest px-6 py-2.5 hover:opacity-80 transition-opacity disabled:opacity-40">
                     {ceLoading ? '…' : pt.emailSave}
                   </button>
                 </form>
@@ -947,42 +947,42 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
             </div>
 
             {/* Data Export */}
-            <div className="border-2 border-[#1a1a1a] overflow-hidden">
-              <div className="bg-[#1a1a1a] px-5 py-3">
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+              <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3">
                 <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.exportTitle}</p>
               </div>
-              <div className="px-5 py-5 flex items-center justify-between gap-4 flex-wrap">
-                <p className="font-sans text-xs text-gray-500">{pt.exportSub}</p>
+              <div className="px-5 py-5 flex items-center justify-between gap-4 flex-wrap dark:bg-[#141414]">
+                <p className="font-sans text-xs text-gray-500 dark:text-gray-400">{pt.exportSub}</p>
                 <button onClick={handleExport} disabled={exportLoading}
-                  className="font-sans text-[10px] uppercase tracking-widest border-2 border-[#1a1a1a] px-5 py-2.5 hover:bg-[#1a1a1a] hover:text-white transition-colors disabled:opacity-40 shrink-0">
+                  className="font-sans text-[10px] uppercase tracking-widest border-2 border-[#1a1a1a] dark:border-gray-600 dark:text-[#f0ece4] px-5 py-2.5 hover:bg-[#1a1a1a] dark:hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-40 shrink-0">
                   {exportLoading ? '…' : `↓ ${pt.exportBtn}`}
                 </button>
               </div>
             </div>
 
             {/* Danger Zone */}
-            <div className="border-2 border-rose-200 overflow-hidden">
-              <div className="bg-rose-600 px-5 py-3">
+            <div className="border-2 border-rose-200 dark:border-rose-900 overflow-hidden">
+              <div className="bg-rose-600 dark:bg-rose-900 px-5 py-3">
                 <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.dangerTitle}</p>
               </div>
-              <div className="px-5 py-5">
-                <p className="font-sans text-xs text-gray-500 mb-4">{pt.dangerSub}</p>
+              <div className="px-5 py-5 dark:bg-[#141414]">
+                <p className="font-sans text-xs text-gray-500 dark:text-gray-400 mb-4">{pt.dangerSub}</p>
                 {!showDel ? (
                   <button onClick={() => setShowDel(true)}
-                    className="font-sans text-[10px] uppercase tracking-widest text-rose-600 border-2 border-rose-300 px-5 py-2.5 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-colors">
+                    className="font-sans text-[10px] uppercase tracking-widest text-rose-600 border-2 border-rose-300 dark:border-rose-800 px-5 py-2.5 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-colors">
                     {pt.dangerOpen}
                   </button>
                 ) : (
-                  <div className="space-y-3 border border-rose-200 bg-rose-50 p-4">
+                  <div className="space-y-3 border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 p-4">
                     <Field label={pt.dangerConfirm} type="password" value={delPw} onChange={setDelPw} />
-                    {delError && <p className="font-sans text-[11px] text-rose-600">{delError}</p>}
+                    {delError && <p className="font-sans text-[11px] text-rose-600 dark:text-rose-400">{delError}</p>}
                     <div className="flex gap-3">
                       <button onClick={handleDeleteAccount} disabled={delLoading || !delPw}
                         className="font-sans text-[10px] uppercase tracking-widest bg-rose-600 text-white px-5 py-2.5 hover:bg-rose-700 transition-colors disabled:opacity-40">
                         {delLoading ? '…' : pt.dangerBtn}
                       </button>
                       <button onClick={() => { setShowDel(false); setDelPw(''); setDelError(''); }}
-                        className="font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] transition-colors px-3">
+                        className="font-sans text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-[#1a1a1a] dark:hover:text-white transition-colors px-3">
                         {pt.dangerCancel}
                       </button>
                     </div>
@@ -995,7 +995,7 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
         )}
 
         {/* ─── Logout ────────────────────────────────────────────────────── */}
-        <div className="border-t-2 border-[#1a1a1a] pt-4">
+        <div className="border-t-2 border-[#1a1a1a] dark:border-gray-700 pt-4">
           <button onClick={handleLogout}
             className="font-sans text-[10px] uppercase tracking-widest text-gray-400 hover:text-rose-600 transition-colors flex items-center gap-2">
             <span>×</span> {pt.logout}
