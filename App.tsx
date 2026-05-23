@@ -2,13 +2,15 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useSearchParams } from 'react-router-dom';
 import * as Sentry from "@sentry/react";
 import posthog from 'posthog-js';
+import { Sun, Moon } from 'lucide-react';
+import { useTheme } from './contexts/ThemeContext';
 
 import { SearchBar } from './components/SearchBar';
 import { AnalysisDashboard } from './components/AnalysisDashboard';
 import { TrendingTopics } from './components/TrendingTopics';
 import { SearchHistory } from './components/SearchHistory';
 import { useSearchHistory } from './hooks/useSearchHistory';
-import { CookieBanner } from './components/CookieBanner';
+import { CookieConsent, hasAnalyticsConsent, ConsentLevel } from './components/CookieConsent';
 import { LegalPage } from './components/LegalPages';
 import { AboutPage } from './components/AboutPage';
 import { MethodologyPage } from './components/MethodologyPage';
@@ -49,7 +51,7 @@ function MainApp() {
   const [status, setStatus] = useState<FetchStatus>('idle');
   const [data, setData] = useState<NewsAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showCookieBanner, setShowCookieBanner] = useState(false);
+  // Cookie consent is handled by CookieConsent component itself via localStorage
   const [lastQuery, setLastQuery] = useState<string | null>(null);
   const [deepLoading, setDeepLoading] = useState(false);
   const [dailyRemaining, setDailyRemaining] = useState<number | null>(null);
@@ -88,6 +90,7 @@ function MainApp() {
 
   const t = translations[lang];
   const { history, addToHistory, clearHistory } = useSearchHistory();
+  const { theme, toggleTheme } = useTheme();
 
   // Close mobile menu on outside click
   useEffect(() => {
@@ -132,10 +135,8 @@ function MainApp() {
   }, []);
 
   useEffect(() => {
-    const consent = localStorage.getItem('cookie-consent');
-    if (!consent) {
-      setShowCookieBanner(true);
-    } else if (consent === 'accepted') {
+    // Initialize PostHog if analytics consent was already given
+    if (hasAnalyticsConsent()) {
       initPostHog();
     }
   }, []);
@@ -194,16 +195,11 @@ function MainApp() {
     }
   };
 
-  const handleAcceptCookies = () => {
-    localStorage.setItem('cookie-consent', 'accepted');
-    setShowCookieBanner(false);
-    initPostHog();
-    posthog.capture('cookie_consent_accepted');
-  };
-
-  const handleEssentialCookies = () => {
-    localStorage.setItem('cookie-consent', 'essential');
-    setShowCookieBanner(false);
+  const handleConsentChange = (level: ConsentLevel) => {
+    if (level === 'analytics' || level === 'all') {
+      initPostHog();
+      posthog.capture('cookie_consent_given', { level });
+    }
   };
 
   const handleAuthSuccess = (token: string, user: AuthUser) => {
@@ -324,15 +320,15 @@ function MainApp() {
   );
 
   return (
-    <div className="min-h-screen bg-[#FFF8F0] text-[#1a1a1a] flex flex-col font-serif">
+    <div className="min-h-screen bg-[#FFF8F0] dark:bg-[#0f0f0f] text-[#1a1a1a] dark:text-[#f0ece4] flex flex-col font-serif">
 
       {/* Top info strip */}
-      <div className="bg-[#1a1a1a] text-white text-center py-1.5 font-sans text-[10px] uppercase tracking-widest">
+      <div className="bg-[#1a1a1a] dark:bg-[#0a0a0a] text-white text-center py-1.5 font-sans text-[10px] uppercase tracking-widest">
         {t.heroSub}
       </div>
 
       {/* Navbar */}
-      <nav className="bg-[#FFF8F0] border-b-2 border-[#1a1a1a] sticky top-0 z-50" ref={menuRef}>
+      <nav className="bg-[#FFF8F0] dark:bg-[#141414] border-b-2 border-[#1a1a1a] dark:border-gray-700 sticky top-0 z-50" ref={menuRef}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
 
           {/* Left: hamburger (mobile) / date (desktop) */}
@@ -343,12 +339,12 @@ function MainApp() {
               onClick={() => setMobileMenuOpen(o => !o)}
               aria-label="Menu"
             >
-              <span className={`block h-0.5 bg-[#1a1a1a] transition-all duration-200 ${mobileMenuOpen ? 'rotate-45 translate-y-[7px]' : ''}`} />
-              <span className={`block h-0.5 bg-[#1a1a1a] transition-all duration-200 ${mobileMenuOpen ? 'opacity-0' : ''}`} />
-              <span className={`block h-0.5 bg-[#1a1a1a] transition-all duration-200 ${mobileMenuOpen ? '-rotate-45 -translate-y-[7px]' : ''}`} />
+              <span className={`block h-0.5 bg-[#1a1a1a] dark:bg-[#f0ece4] transition-all duration-200 ${mobileMenuOpen ? 'rotate-45 translate-y-[7px]' : ''}`} />
+              <span className={`block h-0.5 bg-[#1a1a1a] dark:bg-[#f0ece4] transition-all duration-200 ${mobileMenuOpen ? 'opacity-0' : ''}`} />
+              <span className={`block h-0.5 bg-[#1a1a1a] dark:bg-[#f0ece4] transition-all duration-200 ${mobileMenuOpen ? '-rotate-45 -translate-y-[7px]' : ''}`} />
             </button>
             {/* Date — desktop only */}
-            <span className="font-sans text-[10px] uppercase tracking-widest text-gray-500 hidden sm:block">{dateStr}</span>
+            <span className="font-sans text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 hidden sm:block">{dateStr}</span>
           </div>
 
           {/* Logo — centered, always navigates home */}
@@ -358,17 +354,17 @@ function MainApp() {
             title={lang === 'de' ? 'Zur Hauptseite' : lang === 'ru' ? 'На главную' : 'Go to home'}
             className="absolute left-1/2 -translate-x-1/2 group flex items-center gap-1.5 whitespace-nowrap"
           >
-            <span className="font-serif font-black text-xl tracking-tight text-[#1a1a1a] group-hover:text-rose-600 transition-colors duration-200">
+            <span className="font-serif font-black text-xl tracking-tight text-[#1a1a1a] dark:text-[#f0ece4] group-hover:text-rose-600 transition-colors duration-200">
               {t.title}
             </span>
-            <span className="font-sans text-[10px] text-gray-300 group-hover:text-rose-400 transition-colors duration-200 hidden sm:inline">⌂</span>
+            <span className="font-sans text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-rose-400 transition-colors duration-200 hidden sm:inline">⌂</span>
           </Link>
 
           {/* Right controls */}
           <div className="flex items-center gap-2 sm:gap-3 ml-auto">
             <Link
               to="/compare"
-              className="hidden sm:block font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] transition-colors"
+              className="hidden sm:block font-sans text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-[#1a1a1a] dark:hover:text-white transition-colors"
             >
               ⚖ {t.nav.compare}
             </Link>
@@ -378,7 +374,7 @@ function MainApp() {
               <div className="hidden sm:flex items-center gap-1.5">
                 <Link
                   to="/profile"
-                  className="font-sans text-[10px] text-gray-500 hover:text-[#1a1a1a] transition-colors max-w-[100px] truncate"
+                  className="font-sans text-[10px] text-gray-500 dark:text-gray-400 hover:text-[#1a1a1a] dark:hover:text-white transition-colors max-w-[100px] truncate"
                   title={authUser.email}
                 >
                   {authUser.email.split('@')[0]}
@@ -401,14 +397,23 @@ function MainApp() {
               </button>
             )}
 
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="flex items-center justify-center w-7 h-7 text-gray-500 dark:text-gray-400 hover:text-[#1a1a1a] dark:hover:text-white transition-colors"
+            >
+              {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+
             {/* Language switcher — always visible */}
-            <div className="flex gap-0 border border-[#1a1a1a]">
+            <div className="flex gap-0 border border-[#1a1a1a] dark:border-gray-600">
               {(['de', 'en', 'ru'] as Language[]).map((l) => (
                 <button
                   key={l}
                   onClick={() => handleLanguageSwitch(l)}
                   className={`px-2 sm:px-2.5 py-1 font-sans text-[10px] font-bold uppercase tracking-wide transition-colors ${
-                    lang === l ? 'bg-[#1a1a1a] text-white' : 'text-gray-600 hover:bg-[#1a1a1a] hover:text-white'
+                    lang === l ? 'bg-[#1a1a1a] dark:bg-gray-700 text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-[#1a1a1a] dark:hover:bg-gray-700 hover:text-white'
                   }`}
                 >
                   {l.toUpperCase()}
@@ -420,16 +425,16 @@ function MainApp() {
 
         {/* Mobile drawer */}
         {mobileMenuOpen && (
-          <div className="sm:hidden border-t-2 border-[#1a1a1a] bg-[#FFF8F0] px-4 py-4 space-y-0 divide-y divide-[#e0d8cf]">
+          <div className="sm:hidden border-t-2 border-[#1a1a1a] dark:border-gray-700 bg-[#FFF8F0] dark:bg-[#141414] px-4 py-4 space-y-0 divide-y divide-[#e0d8cf] dark:divide-gray-700">
             <div className="pb-3">
-              <p className="font-sans text-[9px] uppercase tracking-widest text-gray-300 mb-2">{dateStr}</p>
+              <p className="font-sans text-[9px] uppercase tracking-widest text-gray-300 dark:text-gray-600 mb-2">{dateStr}</p>
             </div>
             {authUser ? (
               <div className="py-3 space-y-2">
                 <Link
                   to="/profile"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-2 font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]"
+                  className="flex items-center gap-2 font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a] dark:text-[#f0ece4]"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                   {authUser.email.split('@')[0]}
@@ -452,6 +457,14 @@ function MainApp() {
               </div>
             )}
             <div className="pt-3 space-y-2.5">
+              {/* Theme toggle — mobile */}
+              <button
+                onClick={() => { toggleTheme(); setMobileMenuOpen(false); }}
+                className="flex items-center gap-2 font-sans text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-[#1a1a1a] dark:hover:text-white transition-colors"
+              >
+                {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
+                {theme === 'dark' ? (lang === 'de' ? 'Helles Design' : lang === 'ru' ? 'Светлая тема' : 'Light mode') : (lang === 'de' ? 'Dunkles Design' : lang === 'ru' ? 'Тёмная тема' : 'Dark mode')}
+              </button>
               {[
                 { to: '/compare', label: `⚖ ${t.nav.compare}` },
                 { to: '/about', label: t.nav.about },
@@ -462,7 +475,7 @@ function MainApp() {
                   key={to}
                   to={to}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="block font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] transition-colors"
+                  className="block font-sans text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-[#1a1a1a] dark:hover:text-white transition-colors"
                 >
                   {label}
                 </Link>
@@ -487,8 +500,8 @@ function MainApp() {
             <>
               {status === 'idle' && (
                 <div className="mb-6 sm:mb-10 animate-slide-down">
-                  <p className="font-sans text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-3 sm:mb-4">Medienanalyse</p>
-                  <h1 className="font-serif font-black text-2xl sm:text-4xl md:text-5xl text-[#1a1a1a] leading-[1.05] mb-4 sm:mb-5">
+                  <p className="font-sans text-[10px] uppercase tracking-[0.25em] text-gray-400 dark:text-gray-500 mb-3 sm:mb-4">Medienanalyse</p>
+                  <h1 className="font-serif font-black text-2xl sm:text-4xl md:text-5xl text-[#1a1a1a] dark:text-white leading-[1.05] mb-4 sm:mb-5">
                     {t.subtitle}
                   </h1>
                   {/* Spectrum accent rule */}
@@ -499,7 +512,7 @@ function MainApp() {
                     <div className="w-5 sm:w-6 h-[3px] bg-sky-500" />
                     <div className="w-5 sm:w-6 h-[3px] bg-blue-700" />
                   </div>
-                  <p className="font-sans text-gray-500 text-sm sm:text-base">{t.description}</p>
+                  <p className="font-sans text-gray-500 dark:text-gray-400 text-sm sm:text-base">{t.description}</p>
                 </div>
               )}
 
@@ -558,12 +571,12 @@ function MainApp() {
               {status === 'loading' && !data && (
                 <div className="flex flex-col items-center justify-center py-16 sm:py-20 max-w-sm mx-auto w-full animate-fade-in">
                   {/* Newspaper-style spinner */}
-                  <div className="w-12 h-12 mb-8 border-2 border-[#1a1a1a] border-t-transparent rounded-full animate-spin" />
+                  <div className="w-12 h-12 mb-8 border-2 border-[#1a1a1a] dark:border-gray-400 border-t-transparent rounded-full animate-spin" />
 
                   {/* Stage text */}
                   <div className="h-7 mb-6 flex items-center justify-center">
                     <p
-                      className="font-sans text-[#1a1a1a] text-sm text-center transition-opacity duration-300"
+                      className="font-sans text-[#1a1a1a] dark:text-[#f0ece4] text-sm text-center transition-opacity duration-300"
                       style={{ opacity: stageVisible ? 1 : 0 }}
                     >
                       {t.loadingStages[loadingStage]}
@@ -571,9 +584,9 @@ function MainApp() {
                   </div>
 
                   {/* Progress bar — flat like a rule */}
-                  <div className="w-full bg-[#e8e0d5] h-0.5 mb-4 overflow-hidden">
+                  <div className="w-full bg-[#e8e0d5] dark:bg-gray-700 h-0.5 mb-4 overflow-hidden">
                     <div
-                      className="bg-[#1a1a1a] h-0.5 transition-all duration-200 ease-out"
+                      className="bg-[#1a1a1a] dark:bg-gray-300 h-0.5 transition-all duration-200 ease-out"
                       style={{ width: `${loadingProgress}%` }}
                     />
                   </div>
@@ -587,7 +600,7 @@ function MainApp() {
                         style={{
                           width: i === loadingStage ? '20px' : '6px',
                           height: '3px',
-                          backgroundColor: i <= loadingStage ? '#1a1a1a' : '#d5ccbf',
+                          backgroundColor: i <= loadingStage ? (document.documentElement.classList.contains('dark') ? '#d1d5db' : '#1a1a1a') : (document.documentElement.classList.contains('dark') ? '#374151' : '#d5ccbf'),
                         }}
                       />
                     ))}
@@ -649,21 +662,21 @@ function MainApp() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t-2 border-[#1a1a1a] bg-[#FFF8F0] py-8 mt-auto">
+      <footer className="border-t-2 border-[#1a1a1a] dark:border-gray-700 bg-[#FFF8F0] dark:bg-[#141414] py-8 mt-auto">
         <div className="max-w-5xl mx-auto px-4">
           <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 font-sans text-xs uppercase tracking-widest text-gray-500">
-              <Link to="/about" className="hover:text-[#1a1a1a] transition-colors">{t.nav.about}</Link>
-              <Link to="/methodology" className="hover:text-[#1a1a1a] transition-colors">{t.nav.methodology}</Link>
-              <Link to="/compare" className="hover:text-[#1a1a1a] transition-colors">{t.nav.compare}</Link>
-              <Link to="/suggest" className="hover:text-[#1a1a1a] transition-colors">{t.nav.suggest}</Link>
-              <span className="text-gray-300">·</span>
-              <Link to="/imprint" className="hover:text-[#1a1a1a] transition-colors">{t.imprint}</Link>
-              <Link to="/privacy" className="hover:text-[#1a1a1a] transition-colors">{t.privacy}</Link>
-              <Link to="/terms" className="hover:text-[#1a1a1a] transition-colors">{t.terms}</Link>
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 font-sans text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400">
+              <Link to="/about" className="hover:text-[#1a1a1a] dark:hover:text-white transition-colors">{t.nav.about}</Link>
+              <Link to="/methodology" className="hover:text-[#1a1a1a] dark:hover:text-white transition-colors">{t.nav.methodology}</Link>
+              <Link to="/compare" className="hover:text-[#1a1a1a] dark:hover:text-white transition-colors">{t.nav.compare}</Link>
+              <Link to="/suggest" className="hover:text-[#1a1a1a] dark:hover:text-white transition-colors">{t.nav.suggest}</Link>
+              <span className="text-gray-300 dark:text-gray-600">·</span>
+              <Link to="/imprint" className="hover:text-[#1a1a1a] dark:hover:text-white transition-colors">{t.imprint}</Link>
+              <Link to="/privacy" className="hover:text-[#1a1a1a] dark:hover:text-white transition-colors">{t.privacy}</Link>
+              <Link to="/terms" className="hover:text-[#1a1a1a] dark:hover:text-white transition-colors">{t.terms}</Link>
             </div>
-            <div className="h-px bg-[#1a1a1a] opacity-10" />
-            <p className="text-center font-sans text-[10px] uppercase tracking-widest text-gray-400">
+            <div className="h-px bg-[#1a1a1a] dark:bg-gray-600 opacity-10 dark:opacity-100" />
+            <p className="text-center font-sans text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500">
               &copy; {new Date().getFullYear()} {t.footerText}
             </p>
           </div>
@@ -688,13 +701,7 @@ function MainApp() {
         authToken={authToken}
       />
 
-      {showCookieBanner && (
-        <CookieBanner
-          lang={lang}
-          onAccept={handleAcceptCookies}
-          onEssential={handleEssentialCookies}
-        />
-      )}
+      <CookieConsent lang={lang} onConsentChange={handleConsentChange} />
 
       {showAuthModal && (
         <AuthModal

@@ -10,18 +10,18 @@ const LegalShell: React.FC<{ title: string; subtitle: string; lang: Language; ch
   const t = translations[lang];
   return (
     <div className="max-w-3xl mx-auto py-10 px-4">
-      <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 mb-8">
+      <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] dark:bg-gray-800 text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 mb-8">
         <span className="inline-block group-hover:-translate-x-1 transition-transform duration-200">←</span>
         {t.backToHome}
       </Link>
-      <div className="border-b-2 border-[#1a1a1a] pb-6 mb-8">
+      <div className="border-b-2 border-[#1a1a1a] dark:border-gray-700 pb-6 mb-8">
         <div className="h-[3px] flex mb-5">
           <div className="flex-1 bg-rose-600" /><div className="flex-1 bg-orange-400" />
           <div className="flex-1 bg-slate-400" /><div className="flex-1 bg-sky-500" />
           <div className="flex-1 bg-blue-700" />
         </div>
-        <p className="font-sans text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2">{subtitle}</p>
-        <h1 className="font-serif font-black text-3xl text-[#1a1a1a]">{title}</h1>
+        <p className="font-sans text-[10px] uppercase tracking-[0.25em] text-gray-400 dark:text-gray-500 mb-2">{subtitle}</p>
+        <h1 className="font-serif font-black text-3xl text-[#1a1a1a] dark:text-white">{title}</h1>
       </div>
       <div className="space-y-8">{children}</div>
     </div>
@@ -29,11 +29,11 @@ const LegalShell: React.FC<{ title: string; subtitle: string; lang: Language; ch
 };
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <section className="border-2 border-[#1a1a1a] overflow-hidden">
-    <div className="bg-[#1a1a1a] px-5 py-3">
+  <section className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+    <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3">
       <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{title}</p>
     </div>
-    <div className="px-5 py-5 font-serif text-sm text-[#1a1a1a] leading-relaxed space-y-3">
+    <div className="px-5 py-5 dark:bg-[#141414] font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] leading-relaxed space-y-3">
       {children}
     </div>
   </section>
@@ -47,7 +47,7 @@ export const PrivacyPage: React.FC<Props> = ({ lang }) => (
 
     <Section title="1. Verantwortlicher">
       <p>Verantwortlicher im Sinne der DSGVO für die Verarbeitung personenbezogener Daten auf dieser Website:</p>
-      <p className="font-sans text-xs text-gray-600">
+      <p className="font-sans text-xs text-gray-600 dark:text-gray-400">
         NeutraleNachrichten<br />
         vertreten durch: Bogdan Mardyshev, Romeo Giorgio Spadaro, Frederic Hallier<br />
         E-Mail: feedback@neutralnachrichten.com<br />
@@ -376,7 +376,7 @@ export const ImprintPage: React.FC<Props> = ({ lang }) => (
     </Section>
 
     <Section title="Redaktionell verantwortlich">
-      <p className="font-sans text-xs text-gray-700">
+      <p className="font-sans text-xs text-gray-700 dark:text-gray-300">
         Bogdan Mardyshev (CTO)<br />
         Romeo Giorgio Spadaro (CEO)<br />
         Anschrift wie oben
