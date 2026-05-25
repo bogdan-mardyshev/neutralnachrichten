@@ -116,18 +116,29 @@ function MainApp() {
   }, [mobileMenuOpen]);
 
   // Auto-trigger analysis from shared URL (?topic=...&lang=...)
-  // Also handle Google OAuth callback (?auth_token=...)
+  // Also handle Google OAuth callback (?oauth_code=...)
   useEffect(() => {
-    // Google OAuth: pick up token from URL and clear it
-    const authTokenParam = searchParams.get('auth_token');
-    if (authTokenParam) {
-      try {
-        // Decode payload to get user info (no verify needed — server already verified with Google)
-        const payload = JSON.parse(atob(authTokenParam.split('.')[1]));
-        const user: AuthUser = { id: payload.id, email: payload.email, tier: payload.tier ?? 'free', daily_limit: payload.daily_limit ?? 10 };
-        handleAuthSuccess(authTokenParam, user);
-      } catch { /* malformed token — ignore */ }
+    // Google OAuth: exchange one-time code for JWT — code is never the JWT itself
+    const oauthCode = searchParams.get('oauth_code');
+    if (oauthCode) {
+      // Strip from URL immediately so it never sits in history
       setSearchParams({}, { replace: true });
+      fetch('/api/auth/google/exchange', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: oauthCode }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok && data.token && data.user) {
+            handleAuthSuccess(data.token, data.user as AuthUser);
+          } else {
+            setError(lang === 'de' ? 'Google-Anmeldung fehlgeschlagen. Bitte versuche es erneut.' : 'Google sign-in failed. Please try again.');
+          }
+        })
+        .catch(() => {
+          setError(lang === 'de' ? 'Google-Anmeldung fehlgeschlagen. Bitte versuche es erneut.' : 'Google sign-in failed. Please try again.');
+        });
       return;
     }
 

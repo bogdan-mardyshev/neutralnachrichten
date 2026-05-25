@@ -10,6 +10,9 @@
     "build": "vite build",
     "postinstall": "npm run build",
     "start": "node server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "deploy:staging": "bash scripts/deploy-staging.sh",
     "deploy:prod": "bash scripts/deploy-prod.sh",
     "logs:prod": "$HOME/.railway/bin/railway logs --environment production --tail",
@@ -49,7 +52,10 @@
     "vite": "^6.2.0"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0"
+    "@types/node": "^22.14.0",
+    "@vitest/coverage-v8": "^4.1.7",
+    "supertest": "^7.2.2",
+    "vitest": "^4.1.7"
   },
   "engines": {
     "node": ">=22"
