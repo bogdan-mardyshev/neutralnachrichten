@@ -18,8 +18,8 @@ import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
 import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
 import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
 import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverageVolume } from './lib/rssSearch.js';
-import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts } from './db.js';
-import { sendVerificationEmail, sendPasswordResetEmail } from './lib/email.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference } from './db.js';
+import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, getRedisClient, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
 dotenv.config();
@@ -2101,6 +2101,104 @@ app.get('/api/auth/export', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[Auth/export]', err.message);
     res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// ── Saved Topics (Bookmarks) ──────────────────────────────────────────────────
+
+app.get('/api/saved-topics', requireAuth, async (req, res) => {
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+  try {
+    const topics = await getSavedTopics(req.user.id);
+    res.json({ saved: topics });
+  } catch (err) {
+    console.error('[SavedTopics/GET]', err.message);
+    res.status(500).json({ error: 'Failed to fetch saved topics' });
+  }
+});
+
+app.post('/api/saved-topics', requireAuth, async (req, res) => {
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+  const { topic, topicNorm, lang } = req.body;
+  if (!topic || !topicNorm) return res.status(400).json({ error: 'topic and topicNorm required' });
+  try {
+    const saved = await saveTopic(req.user.id, topic, topicNorm.toLowerCase().trim(), lang || 'de');
+    res.json({ saved });
+  } catch (err) {
+    console.error('[SavedTopics/POST]', err.message);
+    res.status(500).json({ error: 'Failed to save topic' });
+  }
+});
+
+app.delete('/api/saved-topics/:norm', requireAuth, async (req, res) => {
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+  const topicNorm = decodeURIComponent(req.params.norm);
+  try {
+    const result = await unsaveTopic(req.user.id, topicNorm.toLowerCase().trim());
+    res.json(result);
+  } catch (err) {
+    console.error('[SavedTopics/DELETE]', err.message);
+    res.status(500).json({ error: 'Failed to remove saved topic' });
+  }
+});
+
+// ── Email Digest Preference ───────────────────────────────────────────────────
+
+app.put('/api/auth/digest', requireAuth, async (req, res) => {
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+  const { enabled } = req.body;
+  if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled (boolean) required' });
+  try {
+    await setDigestPreference(req.user.id, enabled);
+    res.json({ ok: true, email_digest: enabled });
+  } catch (err) {
+    console.error('[Digest/PUT]', err.message);
+    res.status(500).json({ error: 'Failed to update digest preference' });
+  }
+});
+
+// ── Admin: Send Weekly Digest ─────────────────────────────────────────────────
+
+app.post('/api/admin/send-digest', async (req, res) => {
+  const key = req.headers['x-admin-key'] || req.query.key;
+  if (!ADMIN_KEY || key !== ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+
+  try {
+    // Get top topics from last 7 days
+    const allTopics = await getTopTopicsDB(5);
+    if (!allTopics || allTopics.length === 0) {
+      return res.json({ ok: true, sent: 0, message: 'No topics found' });
+    }
+
+    // Enrich with display names from cache
+    const topicsForEmail = allTopics.slice(0, 3).map(t => ({
+      topic: t.topic || t.topic_norm,
+      topic_norm: t.topic_norm || t.topic,
+    }));
+
+    const subscribers = await getDigestSubscribers();
+    if (subscribers.length === 0) {
+      return res.json({ ok: true, sent: 0, message: 'No subscribers' });
+    }
+
+    let sent = 0;
+    let errors = 0;
+    for (const user of subscribers) {
+      try {
+        await sendWeeklyDigest(user.email, topicsForEmail);
+        sent++;
+      } catch (e) {
+        console.error(`[Digest] Failed to send to ${user.email}:`, e.message);
+        errors++;
+      }
+    }
+
+    console.log(`[Digest] Sent to ${sent} subscribers (${errors} errors)`);
+    res.json({ ok: true, sent, errors, topics: topicsForEmail });
+  } catch (err) {
+    console.error('[Digest/send]', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

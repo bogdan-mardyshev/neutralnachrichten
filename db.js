@@ -155,6 +155,25 @@ async function runMigrations() {
     ALTER TABLE content_cache ADD COLUMN IF NOT EXISTS view_count BIGINT DEFAULT 0;
   `);
 
+  // Saved topics (bookmarks)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS saved_topics (
+      id         BIGSERIAL PRIMARY KEY,
+      user_id    BIGINT REFERENCES users(id) ON DELETE CASCADE,
+      topic      TEXT NOT NULL,
+      topic_norm TEXT NOT NULL,
+      lang       TEXT DEFAULT 'de',
+      saved_at   TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(user_id, topic_norm)
+    );
+    CREATE INDEX IF NOT EXISTS saved_topics_user_id ON saved_topics(user_id);
+  `);
+
+  // Email digest preference
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_digest BOOLEAN DEFAULT false;
+  `);
+
   console.log('[DB] Migrations done ✓');
 }
 
@@ -464,7 +483,7 @@ export async function findUserByEmail(email) {
 export async function findUserById(id) {
   if (!pool) return null;
   const { rows } = await pool.query(
-    `SELECT id, email, tier, daily_limit, created_at, email_verified FROM users WHERE id = $1 AND is_active = true`,
+    `SELECT id, email, tier, daily_limit, created_at, email_verified, email_digest FROM users WHERE id = $1 AND is_active = true`,
     [id]
   );
   return rows[0] || null;
@@ -703,6 +722,99 @@ export async function clearLoginAttempts(email) {
   );
 }
 
+// ── Saved Topics (Bookmarks) ──────────────────────────────────────────────────
+
+export async function getSavedTopics(userId) {
+  if (!pool) return [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, topic, topic_norm, lang, saved_at
+       FROM saved_topics WHERE user_id = $1
+       ORDER BY saved_at DESC LIMIT 100`,
+      [userId]
+    );
+    return rows;
+  } catch (err) {
+    console.error('[DB:getSavedTopics]', err.message);
+    return [];
+  }
+}
+
+export async function saveTopic(userId, topic, topicNorm, lang) {
+  if (!pool) throw new Error('DB not available');
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO saved_topics (user_id, topic, topic_norm, lang)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id, topic_norm) DO UPDATE
+         SET topic = $2, lang = $4, saved_at = now()
+       RETURNING id, topic, topic_norm, lang, saved_at`,
+      [userId, topic, topicNorm, lang || 'de']
+    );
+    return rows[0];
+  } catch (err) {
+    console.error('[DB:saveTopic]', err.message);
+    throw err;
+  }
+}
+
+export async function unsaveTopic(userId, topicNorm) {
+  if (!pool) return { ok: false };
+  try {
+    await pool.query(
+      `DELETE FROM saved_topics WHERE user_id = $1 AND topic_norm = $2`,
+      [userId, topicNorm]
+    );
+    return { ok: true };
+  } catch (err) {
+    console.error('[DB:unsaveTopic]', err.message);
+    return { ok: false };
+  }
+}
+
+export async function isTopicSaved(userId, topicNorm) {
+  if (!pool) return false;
+  try {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM saved_topics WHERE user_id = $1 AND topic_norm = $2`,
+      [userId, topicNorm]
+    );
+    return rows.length > 0;
+  } catch (err) {
+    console.error('[DB:isTopicSaved]', err.message);
+    return false;
+  }
+}
+
+// ── Email Digest ──────────────────────────────────────────────────────────────
+
+export async function getDigestSubscribers() {
+  if (!pool) return [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, email FROM users WHERE email_digest = true AND is_active = true AND email_verified = true`
+    );
+    return rows;
+  } catch (err) {
+    console.error('[DB:getDigestSubscribers]', err.message);
+    return [];
+  }
+}
+
+export async function setDigestPreference(userId, enabled) {
+  if (!pool) throw new Error('DB not available');
+  try {
+    await pool.query(
+      `UPDATE users SET email_digest = $1 WHERE id = $2`,
+      [Boolean(enabled), userId]
+    );
+    return { ok: true };
+  } catch (err) {
+    console.error('[DB:setDigestPreference]', err.message);
+    throw err;
+  }
+}
+
 export async function closeDB() {
   if (pool) {
     await pool.end().catch(e => console.error('[DB] pool.end error:', e.message));
@@ -711,4 +823,4 @@ export async function closeDB() {
   }
 }
 
-export default { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getTopTopicsDB, getAdminStats, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch };
+export default { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getTopTopicsDB, getAdminStats, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference };

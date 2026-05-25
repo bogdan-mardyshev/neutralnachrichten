@@ -1,11 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Bookmark, X } from 'lucide-react';
 import { Language } from '../translations';
 import { AuthUser } from './AuthModal';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+type SavedTopic = {
+  id: number;
+  topic: string;
+  topic_norm: string;
+  lang: string;
+  saved_at: string;
+};
 
 type HistoryEntry = {
   id: number;
@@ -206,6 +215,9 @@ const Avatar: React.FC<{ email: string; tier: string }> = ({ email, tier }) => {
 
 const PT = {
   de: {
+    savedTitle: 'Gespeicherte Themen', savedEmpty: 'Noch keine gespeicherten Themen',
+    digestLabel: 'Wöchentliche Zusammenfassung per E-Mail erhalten',
+    digestDesc: 'Jeden Montag: die 3 meistdiskutierten Themen der Woche',
     back: '← Zurück', title: 'Mein Konto', member_since: 'Mitglied seit',
     plan_label: 'Plan', email_label: 'E-Mail', usage_title: 'Tagesnutzung',
     usage_unlimited: 'Unbegrenzt', usage_of: (u: number, l: number) => `${u} / ${l} Analysen heute`,
@@ -244,6 +256,9 @@ const PT = {
     dangerCancel: 'Abbrechen', dangerOpen: 'Konto löschen…',
   },
   en: {
+    savedTitle: 'Saved Topics', savedEmpty: 'No saved topics yet',
+    digestLabel: 'Receive weekly email digest',
+    digestDesc: 'Every Monday: the 3 most-discussed topics of the week',
     back: '← Back', title: 'My Account', member_since: 'Member since',
     plan_label: 'Plan', email_label: 'Email', usage_title: 'Daily Usage',
     usage_unlimited: 'Unlimited', usage_of: (u: number, l: number) => `${u} / ${l} analyses today`,
@@ -279,6 +294,9 @@ const PT = {
     dangerCancel: 'Cancel', dangerOpen: 'Delete account…',
   },
   ru: {
+    savedTitle: 'Сохранённые темы', savedEmpty: 'Пока нет сохранённых тем',
+    digestLabel: 'Получать еженедельный дайджест на email',
+    digestDesc: 'Каждый понедельник: 3 самые обсуждаемые темы недели',
     back: '← Назад', title: 'Мой аккаунт', member_since: 'С нами с',
     plan_label: 'Тариф', email_label: 'E-mail', usage_title: 'Использование сегодня',
     usage_unlimited: 'Безлимитно', usage_of: (u: number, l: number) => `${u} / ${l} анализов сегодня`,
@@ -333,9 +351,9 @@ const Field: React.FC<{
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-interface Props { lang: Language; authToken: string | null; authUser: AuthUser | null; onLogout: () => void; onAuthUpdate?: (token: string, user: AuthUser) => void; }
+interface Props { lang: Language; authToken: string | null; authUser: AuthUser | null; onLogout: () => void; onAuthUpdate?: (token: string, user: AuthUser) => void; onNavigateToTopic?: (topic: string) => void; }
 
-export default function UserProfilePage({ lang, authToken, authUser, onLogout, onAuthUpdate }: Props) {
+export default function UserProfilePage({ lang, authToken, authUser, onLogout, onAuthUpdate, onNavigateToTopic }: Props) {
   const pt = PT[lang];
   const navigate = useNavigate();
 
@@ -383,6 +401,15 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
   // Liked analyses
   const [likedAnalyses, setLikedAnalyses] = useState<{ topic_norm: string; topic: string; lang: string; liked_at: string }[]>([]);
 
+  // Saved topics (bookmarks)
+  const [savedTopics, setSavedTopics] = useState<SavedTopic[]>([]);
+  const [unsavingId, setUnsavingId] = useState<number | null>(null);
+
+  // Email digest
+  const [emailDigest, setEmailDigest] = useState(false);
+  const [digestLoading, setDigestLoading] = useState(false);
+  const [digestSaved, setDigestSaved] = useState(false);
+
   useEffect(() => {
     if (!authToken) { navigate('/', { replace: true }); return; }
     const h = { Authorization: `Bearer ${authToken}` };
@@ -392,15 +419,53 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
       fetch(`${API_BASE}/api/history`,               { headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(`${API_BASE}/api/profile/media-spectrum`,{ headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(`${API_BASE}/api/profile/liked-analyses`,{ headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([meRes, usageRes, histRes, spectrumRes, likedRes]) => {
-      if (meRes?.user)      setUserData(meRes.user);
+      fetch(`${API_BASE}/api/saved-topics`,          { headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([meRes, usageRes, histRes, spectrumRes, likedRes, savedRes]) => {
+      if (meRes?.user)      { setUserData(meRes.user); setEmailDigest(meRes.user.email_digest ?? false); }
       if (usageRes)         setUsageData(usageRes);
       if (histRes?.history) setHistory(histRes.history);
       if (spectrumRes)      setServerSpectrum(spectrumRes);
       if (likedRes?.liked)  setLikedAnalyses(likedRes.liked);
+      if (savedRes?.saved)  setSavedTopics(savedRes.saved);
       setLoading(false);
     });
   }, [authToken, navigate]);
+
+  const handleUnsaveTopic = async (item: SavedTopic) => {
+    setUnsavingId(item.id);
+    try {
+      await fetch(`${API_BASE}/api/saved-topics/${encodeURIComponent(item.topic_norm)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      setSavedTopics(prev => prev.filter(t => t.id !== item.id));
+    } finally { setUnsavingId(null); }
+  };
+
+  const handleToggleDigest = async (enabled: boolean) => {
+    setDigestLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/digest`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ enabled }),
+      });
+      if (res.ok) {
+        setEmailDigest(enabled);
+        setDigestSaved(true);
+        setTimeout(() => setDigestSaved(false), 2500);
+      }
+    } finally { setDigestLoading(false); }
+  };
+
+  const handleSavedTopicClick = (item: SavedTopic) => {
+    if (onNavigateToTopic) {
+      onNavigateToTopic(item.topic);
+      navigate('/', { replace: false });
+    } else {
+      navigate(`/?topic=${encodeURIComponent(item.topic)}&lang=${lang}`);
+    }
+  };
 
   if (!authUser) return null;
 
@@ -737,6 +802,39 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
             )}
           </div>
 
+          {/* Saved Topics */}
+          <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+            <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3 flex items-center gap-2">
+              <Bookmark size={12} className="text-amber-400" fill="currentColor" />
+              <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{pt.savedTitle}</p>
+            </div>
+            {savedTopics.length > 0 ? (
+              <div className="p-3 flex flex-wrap gap-2 dark:bg-[#141414]">
+                {savedTopics.map(item => (
+                  <div key={item.id} className="flex items-center gap-0 border-2 border-[#1a1a1a] dark:border-gray-600 group overflow-hidden">
+                    <button
+                      onClick={() => handleSavedTopicClick(item)}
+                      className="font-sans text-[10px] uppercase tracking-wider px-3 py-1.5 dark:text-[#f0ece4] hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                    >
+                      {item.topic}
+                    </button>
+                    <button
+                      onClick={() => handleUnsaveTopic(item)}
+                      disabled={unsavingId === item.id}
+                      className="px-2 py-1.5 text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors border-l-2 border-[#1a1a1a] dark:border-gray-600 disabled:opacity-40"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="px-5 py-6 text-center dark:bg-[#141414]">
+                <p className="font-serif text-sm text-gray-400">{pt.savedEmpty}</p>
+              </div>
+            )}
+          </div>
+
           {/* Top Topics + Suggestions */}
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
@@ -944,6 +1042,42 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
                   </button>
                 </form>
               )}
+            </div>
+
+            {/* Email Digest */}
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+              <div className="bg-[#1a1a1a] dark:bg-gray-900 px-5 py-3">
+                <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">
+                  {lang === 'de' ? 'Benachrichtigungen' : lang === 'ru' ? 'Уведомления' : 'Notifications'}
+                </p>
+              </div>
+              <div className="px-5 py-5 dark:bg-[#141414] space-y-1">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-sans text-sm text-[#1a1a1a] dark:text-[#f0ece4]">{pt.digestLabel}</p>
+                    <p className="font-sans text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{pt.digestDesc}</p>
+                  </div>
+                  <button
+                    onClick={() => handleToggleDigest(!emailDigest)}
+                    disabled={digestLoading}
+                    className={`relative shrink-0 w-11 h-6 rounded-full transition-colors duration-200 disabled:opacity-50 ${emailDigest ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-gray-700'}`}
+                    role="switch"
+                    aria-checked={emailDigest}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${emailDigest ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+                {digestSaved && (
+                  <p className="font-sans text-[11px] text-emerald-600">
+                    {lang === 'de' ? 'Gespeichert ✓' : lang === 'ru' ? 'Сохранено ✓' : 'Saved ✓'}
+                  </p>
+                )}
+                {!user.email_verified && emailDigest && (
+                  <p className="font-sans text-[10px] text-amber-600 dark:text-amber-400">
+                    {lang === 'de' ? '⚠ Bitte bestätige zuerst deine E-Mail-Adresse.' : lang === 'ru' ? '⚠ Сначала подтвердите email.' : '⚠ Please verify your email first.'}
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Data Export */}
