@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useSearchParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import * as Sentry from "@sentry/react";
 import posthog from 'posthog-js';
 import { Sun, Moon } from 'lucide-react';
@@ -29,6 +30,7 @@ import AdminPage from './components/AdminPage';
 import UserProfilePage from './components/UserProfilePage';
 import VerifyEmailPage from './components/VerifyEmailPage';
 import ResetPasswordPage from './components/ResetPasswordPage';
+import { AnalysisPage } from './components/AnalysisPage';
 
 import { analyzeTopicStream, fetchDeepAnalysis } from './services/geminiService';
 import { NewsAnalysisResult, FetchStatus } from './types';
@@ -319,8 +321,40 @@ function MainApp() {
     { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
   );
 
+  // Dynamic Helmet meta based on analysis state
+  const helmetTitle = lastQuery && (status === 'success' || (status === 'loading' && data))
+    ? `${lastQuery} – Medienspektrum-Analyse | NeutralNachrichten`
+    : 'NeutralNachrichten – KI-Analyse der deutschen Medien';
+  const helmetDescription = lastQuery && (status === 'success' || (status === 'loading' && data))
+    ? `Wie berichten deutsche Medien über "${lastQuery}"? KI-Analyse von taz, Spiegel, FAZ, Bild und 14 weiteren Quellen.`
+    : 'Analysiere wie deutsche Medien über jedes Thema berichten. Echtzeit-Vergleich von 18 Quellen quer durch das politische Spektrum – links bis rechts.';
+
   return (
     <div className="min-h-screen bg-[#FFF8F0] dark:bg-[#0f0f0f] text-[#1a1a1a] dark:text-[#f0ece4] flex flex-col font-serif">
+
+      <Helmet>
+        <title>{helmetTitle}</title>
+        <meta name="description" content={helmetDescription} />
+        <link rel="canonical" href="https://www.neutralenachrichten.com/" />
+        <meta property="og:title" content={helmetTitle} />
+        <meta property="og:description" content={helmetDescription} />
+        <meta property="og:url" content="https://www.neutralenachrichten.com/" />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://www.neutralenachrichten.com/og-image.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={helmetTitle} />
+        <meta name="twitter:description" content={helmetDescription} />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebApplication",
+          "name": "NeutralNachrichten",
+          "description": "KI-gestützte Analyse des deutschen Medienspektrums",
+          "url": "https://www.neutralenachrichten.com",
+          "applicationCategory": "NewsApplication",
+          "operatingSystem": "Web",
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" }
+        })}</script>
+      </Helmet>
 
       {/* Top info strip */}
       <div className="bg-[#1a1a1a] dark:bg-[#0a0a0a] text-white text-center py-1.5 font-sans text-[10px] uppercase tracking-widest">
@@ -658,6 +692,7 @@ function MainApp() {
           <Route path="/reset-password" element={
             <ResetPasswordPage onAuthSuccess={handleAuthSuccess} />
           } />
+          <Route path="/a/:slug" element={<AnalysisPage lang={lang} />} />
         </Routes>
       </main>
 

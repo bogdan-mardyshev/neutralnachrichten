@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Link, useSearchParams } from 'react-router-dom';
 import { translations, Language } from '../translations';
 import { analyzeTopic } from '../services/geminiService';
@@ -263,8 +264,32 @@ export const ComparePage: React.FC<Props> = ({ lang }) => {
     },
   }[lang];
 
+  const compareTitle = lang === 'de'
+    ? 'Themenvergleich – Zwei Themen gegenüberstellen | NeutralNachrichten'
+    : lang === 'ru'
+    ? 'Сравнение тем – Сопоставить два события | NeutralNachrichten'
+    : 'Topic comparison – Compare two topics side by side | NeutralNachrichten';
+  const compareDesc = lang === 'de'
+    ? 'Vergleiche, wie deutsche Medien zwei verschiedene Themen behandeln. Sehen Sie die Unterschiede in der Berichterstattung auf einen Blick.'
+    : lang === 'ru'
+    ? 'Сравните, как немецкие СМИ освещают два разных события. Увидьте различия в подаче материала с первого взгляда.'
+    : 'Compare how German media cover two different topics. See the differences in coverage at a glance.';
+
   return (
     <div className="max-w-5xl mx-auto pb-16 px-4">
+      <Helmet>
+        <title>{compareTitle}</title>
+        <meta name="description" content={compareDesc} />
+        <link rel="canonical" href="https://www.neutralenachrichten.com/compare" />
+        <meta property="og:title" content={compareTitle} />
+        <meta property="og:description" content={compareDesc} />
+        <meta property="og:url" content="https://www.neutralenachrichten.com/compare" />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://www.neutralenachrichten.com/og-image.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={compareTitle} />
+        <meta name="twitter:description" content={compareDesc} />
+      </Helmet>
 
       {/* ── Back ── */}
       <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] dark:bg-gray-800 text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 mb-8">

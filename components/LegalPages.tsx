@@ -1,4 +1,5 @@
 import React from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
 import { Language, translations } from '../translations';
 
@@ -430,7 +431,36 @@ export const ImprintPage: React.FC<Props> = ({ lang }) => (
 // Legacy export for backward compatibility
 // ════════════════════════════════════════════════════════════════════════════
 export const LegalPage: React.FC<Props & { type: 'imprint' | 'privacy' | 'terms' }> = ({ lang, type }) => {
-  if (type === 'privacy') return <PrivacyPage lang={lang} />;
-  if (type === 'terms')   return <TermsPage lang={lang} />;
-  return <ImprintPage lang={lang} />;
+  const metaMap: Record<string, { title: string; desc: string; canonical: string }> = {
+    privacy: {
+      title: 'Datenschutzerklärung – NeutralNachrichten',
+      desc: 'Datenschutzerklärung von NeutralNachrichten. Informationen zur Verarbeitung personenbezogener Daten gemäß DSGVO.',
+      canonical: 'https://www.neutralenachrichten.com/privacy',
+    },
+    terms: {
+      title: 'Nutzungsbedingungen – NeutralNachrichten',
+      desc: 'Nutzungsbedingungen für NeutralNachrichten. Bitte lesen Sie diese vor der Nutzung unserer Dienste.',
+      canonical: 'https://www.neutralenachrichten.com/terms',
+    },
+    imprint: {
+      title: 'Impressum – NeutralNachrichten',
+      desc: 'Impressum von NeutralNachrichten gemäß § 5 TMG.',
+      canonical: 'https://www.neutralenachrichten.com/imprint',
+    },
+  };
+  const meta = metaMap[type] || metaMap.imprint;
+  return (
+    <>
+      <Helmet>
+        <title>{meta.title}</title>
+        <meta name="description" content={meta.desc} />
+        <link rel="canonical" href={meta.canonical} />
+        <meta property="og:title" content={meta.title} />
+        <meta property="og:description" content={meta.desc} />
+        <meta property="og:url" content={meta.canonical} />
+        <meta name="robots" content="noindex, follow" />
+      </Helmet>
+      {type === 'privacy' ? <PrivacyPage lang={lang} /> : type === 'terms' ? <TermsPage lang={lang} /> : <ImprintPage lang={lang} />}
+    </>
+  );
 };

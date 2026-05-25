@@ -2386,6 +2386,128 @@ function buildOGHtml(topic, lang, baseUrl) {
 </html>`;
 }
 
+// ── GET /api/public/analysis/:slug — load a specific cached analysis ─────────
+app.get('/api/public/analysis/:slug', async (req, res) => {
+  const slug = req.params.slug;
+  if (!slug || slug.length > 200) return res.status(400).json({ error: 'Invalid slug' });
+
+  // Try to find in cache by topic_norm
+  const topicNorm = slug.replace(/-/g, ' ').toLowerCase();
+  // Try multiple key variants
+  const keys = [`analysis:de:${topicNorm}`, `analysis:en:${topicNorm}`];
+  for (const key of keys) {
+    const data = await cacheGetLayered(key);
+    if (data?.germanAnalysis) {
+      return res.json({ analysis: data.germanAnalysis, topic: topicNorm });
+    }
+  }
+
+  // Fallback: check public analyses list
+  try {
+    const analyses = await getPublicAnalyses(200, null);
+    const match = analyses.find(a =>
+      (a.topic_norm || '').toLowerCase() === topicNorm ||
+      (a.topic_norm || '').replace(/\s+/g, '-').toLowerCase() === slug.toLowerCase()
+    );
+    if (match) return res.json({ analysis: match, topic: match.topic_norm });
+  } catch {}
+
+  res.status(404).json({ error: 'Analysis not found' });
+});
+
+// ── sitemap.xml ───────────────────────────────────────────────────────────────
+app.get('/sitemap.xml', async (req, res) => {
+  const base = 'https://www.neutralenachrichten.com';
+  const staticPages = [
+    { url: '/', priority: '1.0', changefreq: 'hourly' },
+    { url: '/about', priority: '0.7', changefreq: 'monthly' },
+    { url: '/methodology', priority: '0.7', changefreq: 'monthly' },
+    { url: '/analyses', priority: '0.8', changefreq: 'daily' },
+    { url: '/compare', priority: '0.6', changefreq: 'monthly' },
+  ];
+
+  let dynamicUrls = '';
+  try {
+    const analyses = await getPublicAnalyses(200, null);
+    dynamicUrls = analyses.map(a => {
+      const slug = (a.topic_norm || '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-äöüß]/g, '');
+      if (!slug) return '';
+      const lastmod = a.last_searched ? new Date(a.last_searched).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+      return `  <url><loc>${base}/a/${encodeURIComponent(slug)}</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq><priority>0.6</priority></url>`;
+    }).filter(Boolean).join('\n');
+  } catch {}
+
+  const staticUrls = staticPages.map(p =>
+    `  <url><loc>${base}${p.url}</loc><changefreq>${p.changefreq}</changefreq><priority>${p.priority}</priority></url>`
+  ).join('\n');
+
+  res.header('Content-Type', 'application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${staticUrls}
+${dynamicUrls}
+</urlset>`);
+});
+
+// ── robots.txt ────────────────────────────────────────────────────────────────
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain');
+  res.send(`User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin
+
+Sitemap: https://www.neutralenachrichten.com/sitemap.xml`);
+});
+
+// ── Bot pre-rendering middleware (inject meta tags server-side for crawlers) ──
+app.use(async (req, res, next) => {
+  // Only for HTML page requests from bots
+  if (!BOT_UA.test(req.headers['user-agent'] || '')) return next();
+  if (req.path.startsWith('/api/') || req.path.includes('.')) return next();
+
+  // Read base index.html
+  const indexPath = path.join(__dirname, 'dist', 'index.html');
+  if (!fs.existsSync(indexPath)) return next();
+  let html = fs.readFileSync(indexPath, 'utf8');
+
+  // Determine page-specific meta
+  let title = 'NeutralNachrichten – KI-Analyse der deutschen Medien';
+  let description = 'Analysiere wie deutsche Medien über jedes Thema berichten. Echtzeit-Vergleich von 18 Quellen quer durch das politische Spektrum.';
+  const canonical = `https://www.neutralenachrichten.com${req.path}`;
+
+  // Analysis page
+  const analysisMatch = req.path.match(/^\/a\/(.+)$/);
+  if (analysisMatch) {
+    const topic = decodeURIComponent(analysisMatch[1]).replace(/-/g, ' ');
+    title = `${topic} – Medienspektrum | NeutralNachrichten`;
+    description = `Wie berichten deutsche Medien über "${topic}"? KI-Analyse von taz, Spiegel, FAZ, Bild und weiteren Quellen.`;
+  } else if (req.path === '/about') {
+    title = 'Über uns – NeutralNachrichten';
+    description = 'NeutralNachrichten analysiert das deutsche Medienspektrum. Erfahre mehr über unser Team, unsere Prinzipien und unsere Vision.';
+  } else if (req.path === '/methodology') {
+    title = 'Methodik – NeutralNachrichten';
+    description = 'Erfahre, wie NeutralNachrichten 18 deutsche Medien aus 5 politischen Lagern in Echtzeit analysiert.';
+  }
+
+  // Inject meta tags after <title>
+  const metaTags = `
+  <title>${title}</title>
+  <meta name="description" content="${description.replace(/"/g, '&quot;')}">
+  <link rel="canonical" href="${canonical}">
+  <meta property="og:title" content="${title.replace(/"/g, '&quot;')}">
+  <meta property="og:description" content="${description.replace(/"/g, '&quot;')}">
+  <meta property="og:url" content="${canonical}">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://www.neutralenachrichten.com/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${title.replace(/"/g, '&quot;')}">
+  <meta name="twitter:description" content="${description.replace(/"/g, '&quot;')}">`;
+
+  html = html.replace(/<title>.*?<\/title>/s, metaTags);
+  res.send(html);
+});
+
 const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath, {
   setHeaders: (res, filePath) => {

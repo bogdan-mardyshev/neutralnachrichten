@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
 import { translations, Language } from '../translations';
 
@@ -210,8 +211,32 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
     },
   }[lang];
 
+  const aboutTitle = lang === 'de'
+    ? 'Über uns – NeutralNachrichten'
+    : lang === 'ru'
+    ? 'О нас – NeutralNachrichten'
+    : 'About – NeutralNachrichten';
+  const aboutDesc = lang === 'de'
+    ? 'NeutralNachrichten analysiert das deutsche Medienspektrum. Erfahre mehr über unser Team, unsere Prinzipien und unsere Vision für unabhängigen Journalismus.'
+    : lang === 'ru'
+    ? 'NeutralNachrichten анализирует немецкий медиаспектр. Узнайте о нашей команде, принципах и видении независимой журналистики.'
+    : 'NeutralNachrichten analyses the German media spectrum. Learn about our team, principles and vision for independent journalism.';
+
   return (
     <div className="max-w-4xl mx-auto pb-16">
+      <Helmet>
+        <title>{aboutTitle}</title>
+        <meta name="description" content={aboutDesc} />
+        <link rel="canonical" href="https://www.neutralenachrichten.com/about" />
+        <meta property="og:title" content={aboutTitle} />
+        <meta property="og:description" content={aboutDesc} />
+        <meta property="og:url" content="https://www.neutralenachrichten.com/about" />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://www.neutralenachrichten.com/og-image.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={aboutTitle} />
+        <meta name="twitter:description" content={aboutDesc} />
+      </Helmet>
 
       {/* ── Back ── */}
       <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] dark:bg-gray-800 text-white px-5 py-3 hover:bg-rose-600 dark:hover:bg-rose-600 transition-colors duration-200 mb-8">

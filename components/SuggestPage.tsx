@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
 import { CheckCircle } from 'lucide-react';
 import { translations, Language } from '../translations';
@@ -66,8 +67,27 @@ export const SuggestPage: React.FC<Props> = ({ lang }) => {
       errors[field] ? 'border-red-400 bg-red-50 dark:bg-red-950/20' : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-[#1e1a14]'
     }`;
 
+  const suggestTitle = lang === 'de'
+    ? 'Quelle vorschlagen – NeutralNachrichten'
+    : lang === 'ru'
+    ? 'Предложить источник – NeutralNachrichten'
+    : 'Suggest a source – NeutralNachrichten';
+  const suggestDesc = lang === 'de'
+    ? 'Schlage eine neue Medienquelle für NeutralNachrichten vor. Wir analysieren ständig neue Quellen aus dem deutschen Medienspektrum.'
+    : lang === 'ru'
+    ? 'Предложите новый медиаисточник для NeutralNachrichten. Мы постоянно анализируем новые источники из немецкого медиаспектра.'
+    : 'Suggest a new media source for NeutralNachrichten. We constantly analyse new sources from the German media spectrum.';
+
   return (
     <div className="max-w-lg mx-auto py-12 px-4">
+      <Helmet>
+        <title>{suggestTitle}</title>
+        <meta name="description" content={suggestDesc} />
+        <link rel="canonical" href="https://www.neutralenachrichten.com/suggest" />
+        <meta property="og:title" content={suggestTitle} />
+        <meta property="og:description" content={suggestDesc} />
+        <meta property="og:url" content="https://www.neutralenachrichten.com/suggest" />
+      </Helmet>
       <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] dark:bg-gray-800 text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 mb-8">
         <span className="inline-block group-hover:-translate-x-1 transition-transform duration-200">←</span>
         {t.backToHome}
