@@ -139,6 +139,16 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
           setError('__unverified__');
           return;
         }
+        // Special case: account temporarily locked
+        if (data.error === 'account_locked') {
+          const min = data.minutesLeft ?? 30;
+          setError(
+            lang === 'de' ? `Konto gesperrt — noch ${min} Min. warten oder Passwort zurücksetzen.` :
+            lang === 'ru' ? `Аккаунт заблокирован — подождите ${min} мин. или сбросьте пароль.` :
+            `Account locked — wait ${min} min. or reset your password.`
+          );
+          return;
+        }
         setError(data.error || t.errorNetwork);
         return;
       }

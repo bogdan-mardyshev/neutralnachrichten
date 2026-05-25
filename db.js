@@ -82,11 +82,16 @@ async function runMigrations() {
       email         TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       tier          TEXT DEFAULT 'free' CHECK (tier IN ('free', 'pro', 'enterprise')),
-      daily_limit   INTEGER DEFAULT 10,
-      created_at    TIMESTAMPTZ DEFAULT now(),
-      last_login    TIMESTAMPTZ,
-      is_active     BOOLEAN DEFAULT true
+      daily_limit      INTEGER DEFAULT 10,
+      created_at       TIMESTAMPTZ DEFAULT now(),
+      last_login       TIMESTAMPTZ,
+      is_active        BOOLEAN DEFAULT true,
+      login_attempts   INTEGER DEFAULT 0,
+      locked_until     TIMESTAMPTZ
     );
+    -- Safe migration: add columns if they don't exist yet (idempotent)
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS login_attempts INTEGER DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until   TIMESTAMPTZ;
 
     CREATE TABLE IF NOT EXISTS searches (
       id          BIGSERIAL PRIMARY KEY,
@@ -634,6 +639,68 @@ export async function exportUserData(userId) {
     searches: searchesRes.rows,
     saved_analyses: historyRes.rows,
   };
+}
+
+// ── Login brute-force protection ─────────────────────────────────────────────
+
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_MINUTES    = 30;
+
+/**
+ * Call after a FAILED login attempt.
+ * Returns { locked: true, lockedUntil: Date } if the account is now locked,
+ * or { locked: false, attemptsLeft: N } otherwise.
+ */
+export async function recordFailedLogin(email) {
+  if (!pool) return { locked: false, attemptsLeft: MAX_LOGIN_ATTEMPTS };
+  const now = new Date();
+  const lockedUntil = new Date(now.getTime() + LOCKOUT_MINUTES * 60 * 1000);
+
+  const res = await pool.query(`
+    UPDATE users
+    SET login_attempts = login_attempts + 1,
+        locked_until   = CASE
+          WHEN login_attempts + 1 >= $1 THEN $2
+          ELSE locked_until
+        END
+    WHERE email = $3
+    RETURNING login_attempts, locked_until
+  `, [MAX_LOGIN_ATTEMPTS, lockedUntil, email.toLowerCase().trim()]);
+
+  if (!res.rows[0]) return { locked: false, attemptsLeft: MAX_LOGIN_ATTEMPTS };
+  const { login_attempts, locked_until } = res.rows[0];
+  if (locked_until && new Date(locked_until) > now) {
+    return { locked: true, lockedUntil: new Date(locked_until) };
+  }
+  return { locked: false, attemptsLeft: Math.max(0, MAX_LOGIN_ATTEMPTS - login_attempts) };
+}
+
+/**
+ * Check if an account is currently locked.
+ * Returns { locked: true, lockedUntil, minutesLeft } or { locked: false }.
+ */
+export async function checkAccountLock(email) {
+  if (!pool) return { locked: false };
+  const res = await pool.query(
+    `SELECT locked_until FROM users WHERE email = $1`,
+    [email.toLowerCase().trim()]
+  );
+  if (!res.rows[0]?.locked_until) return { locked: false };
+  const lockedUntil = new Date(res.rows[0].locked_until);
+  if (lockedUntil <= new Date()) return { locked: false }; // expired
+  const minutesLeft = Math.ceil((lockedUntil - new Date()) / 60000);
+  return { locked: true, lockedUntil, minutesLeft };
+}
+
+/**
+ * Call after a SUCCESSFUL login — resets attempt counter and clears lock.
+ */
+export async function clearLoginAttempts(email) {
+  if (!pool) return;
+  await pool.query(
+    `UPDATE users SET login_attempts = 0, locked_until = NULL WHERE email = $1`,
+    [email.toLowerCase().trim()]
+  );
 }
 
 export async function closeDB() {
