@@ -17,6 +17,8 @@ import bcrypt from 'bcryptjs';
 import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
 import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
 import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
+import { SPECTRUMS, validateAnalysisStructure, buildDeepAnalysisPrompt } from './lib/analysisValidator.js';
+import { createOAuthCode, consumeOAuthCode } from './lib/oauthCodes.js';
 import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverageVolume } from './lib/rssSearch.js';
 import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
@@ -37,6 +39,18 @@ initRedis().then(ok => {
 const JWT_SECRET  = process.env.JWT_SECRET  || 'dev-secret-change-in-prod';
 const JWT_EXPIRES = '30d';
 const BASE_URL    = process.env.BASE_URL    || 'http://localhost:5173';
+
+// ── Startup security checks ───────────────────────────────────────────────────
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.JWT_SECRET) {
+    console.error('[FATAL] JWT_SECRET env variable is not set in production. Refusing to start.');
+    process.exit(1);
+  }
+  if (process.env.JWT_SECRET === 'dev-secret-change-in-prod') {
+    console.error('[FATAL] JWT_SECRET is using the default dev value in production. Refusing to start.');
+    process.exit(1);
+  }
+}
 const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID     || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 
@@ -91,24 +105,7 @@ app.get('/api/health', (req, res) => {
 // Default 24h TTL; overridden per-item for degraded results
 const cache = new NodeCache({ stdTTL: 86400 });
 
-const SPECTRUMS = ['left', 'center_left', 'center', 'center_right', 'right'];
-
-function validateAnalysisStructure(data) {
-  if (!data || typeof data !== 'object') return false;
-  if (!data.overall_non_partisan_analysis || !data.news_spectrum) return false;
-  if (typeof data.news_spectrum !== 'object') return false;
-  // Normalize: missing spectrum keys → empty array (RSS will fill gaps later)
-  for (const key of SPECTRUMS) {
-    if (!Array.isArray(data.news_spectrum[key])) {
-      data.news_spectrum[key] = [];
-    }
-  }
-  // At least one spectrum must have actual article content (or overall analysis is non-empty)
-  const hasArticles = SPECTRUMS.some(key => data.news_spectrum[key].length > 0);
-  const hasAnalysis = typeof data.overall_non_partisan_analysis === 'string'
-    && data.overall_non_partisan_analysis.length > 20;
-  return hasArticles || hasAnalysis;
-}
+// SPECTRUMS, validateAnalysisStructure, buildDeepAnalysisPrompt imported from lib/analysisValidator.js
 
 // ── Gemini Concurrency Limiter ────────────────────────────────────────────────
 // Semaphore prevents thundering-herd: at most MAX_CONCURRENT_GEMINI simultaneous
@@ -296,6 +293,8 @@ function generateToken() {
 function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
+
+// createOAuthCode / consumeOAuthCode imported from lib/oauthCodes.js
 
 // ── JWT auth middleware ────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
@@ -619,91 +618,7 @@ REQUIRED JSON STRUCTURE (each spectrum is an ARRAY of 2-4 article objects):
 }`;
 }
 
-function buildDeepAnalysisPrompt(analysis) {
-  const ns = analysis.news_spectrum;
-  const EMPTY = { source_name: 'n/a', summary_of_perspective: 'Keine Berichterstattung gefunden.' };
-  const first = s => {
-    const arr = Array.isArray(ns[s]) ? ns[s] : (ns[s] ? [ns[s]] : []);
-    return arr.find(a => a && a.source_name && a.source_name !== 'Kein Artikel gefunden') || arr[0] || EMPTY;
-  };
-
-  return `Analyze how five German media outlets across the full political spectrum cover the same topic.
-
-TOPIC: "${analysis.analysis_topic}"
-
-LEFT (${first('left').source_name}): ${first('left').summary_of_perspective}
-CENTER_LEFT (${first('center_left').source_name}): ${first('center_left').summary_of_perspective}
-CENTER (${first('center').source_name}): ${first('center').summary_of_perspective}
-CENTER_RIGHT (${first('center_right').source_name}): ${first('center_right').summary_of_perspective}
-RIGHT (${first('right').source_name}): ${first('right').summary_of_perspective}
-
-OUTPUT RULES:
-- Output ONLY the JSON object. No markdown, no code fences, no preamble.
-- Response must start with { and end with }.
-- Use EXACTLY these English keys — never translate them.
-- All text VALUES must be in German.
-
-REQUIRED JSON:
-{
-  "shared_facts": [
-    { "claim": "<factual statement all five agree on>" }
-  ],
-  "diverging_points": [
-    {
-      "topic": "<area of divergence>",
-      "left_view": "<how far-left frames it, 1 sentence>",
-      "center_left_view": "<how center-left frames it, 1 sentence>",
-      "center_view": "<how center frames it, 1 sentence>",
-      "center_right_view": "<how center-right frames it, 1 sentence>",
-      "right_view": "<how far-right frames it, 1 sentence>"
-    }
-  ],
-  "silenced_topics": [
-    {
-      "topic": "<angle barely mentioned>",
-      "only_in": "<left|center_left|center|center_right|right|none>",
-      "description": "<1 sentence why this is notable>"
-    }
-  ],
-  "keywords": {
-    "left":         ["<word1>", "<word2>", "<word3>", "<word4>", "<word5>", "<word6>"],
-    "center_left":  ["<word1>", "<word2>", "<word3>", "<word4>", "<word5>", "<word6>"],
-    "center":       ["<word1>", "<word2>", "<word3>", "<word4>", "<word5>", "<word6>"],
-    "center_right": ["<word1>", "<word2>", "<word3>", "<word4>", "<word5>", "<word6>"],
-    "right":        ["<word1>", "<word2>", "<word3>", "<word4>", "<word5>", "<word6>"]
-  },
-  "sentiment": {
-    "left":         "<positive|neutral|negative>",
-    "center_left":  "<positive|neutral|negative>",
-    "center":       "<positive|neutral|negative>",
-    "center_right": "<positive|neutral|negative>",
-    "right":        "<positive|neutral|negative>"
-  },
-  "experts_cited": {
-    "left":         ["<Full Name or Institution>"],
-    "center_left":  ["<Full Name or Institution>"],
-    "center":       ["<Full Name or Institution>"],
-    "center_right": ["<Full Name or Institution>"],
-    "right":        ["<Full Name or Institution>"]
-  },
-  "coverage_volume": {
-    "left":         { "week": <int>, "month": <int> },
-    "center_left":  { "week": <int>, "month": <int> },
-    "center":       { "week": <int>, "month": <int> },
-    "center_right": { "week": <int>, "month": <int> },
-    "right":        { "week": <int>, "month": <int> }
-  }
-}
-
-RULES:
-- shared_facts: 2-4 facts ALL five sides accept as true
-- diverging_points: 2-4 areas where framing clearly differs
-- silenced_topics: 1-3 angles present in only one outlet or absent from all
-- keywords: 5-6 most characteristic/loaded words or phrases each outlet uses (in German)
-- sentiment: overall tone of the outlet's coverage (positive/neutral/negative)
-- experts_cited: real names of politicians, scientists, officials, or institutions explicitly mentioned in each outlet's coverage (empty array [] if none)
-- coverage_volume: estimated number of articles published on this topic in the past week/month by outlets in that spectrum (realistic estimate based on typical coverage intensity)`;
-}
+// buildDeepAnalysisPrompt imported from lib/analysisValidator.js
 
 async function callDeepAnalysis(analysis, timeoutMs = 15000) {
   // Text-only call — no googleSearch tool, so we can use responseMimeType: 'application/json'
@@ -2381,11 +2296,32 @@ app.get('/api/auth/google/callback', async (req, res) => {
     const jwtToken = jwt.sign({ id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
     console.log(`[Auth/Google] ${email} signed in`);
 
-    // Redirect frontend — picks up token from URL param
-    res.redirect(`${BASE_URL}/?auth_token=${encodeURIComponent(jwtToken)}`);
+    // Security: NEVER put JWT in URL (logs, history, Referer headers, analytics).
+    // Instead, issue a one-time 30-second exchange code — frontend swaps it for the JWT via POST.
+    const oauthCode = createOAuthCode(jwtToken);
+    res.redirect(`${BASE_URL}/?oauth_code=${oauthCode}`);
   } catch (err) {
     console.error('[Auth/Google] Error:', err.message);
     res.redirect(`${BASE_URL}/?auth_error=oauth_failed`);
+  }
+});
+
+// ── OAuth token exchange (one-time code → JWT) ────────────────────────────────
+app.post('/api/auth/google/exchange', (req, res) => {
+  const { code } = req.body;
+  if (!code || typeof code !== 'string') {
+    return res.status(400).json({ error: 'code required' });
+  }
+  const jwtToken = consumeOAuthCode(code);
+  if (!jwtToken) {
+    return res.status(400).json({ error: 'Invalid or expired OAuth code' });
+  }
+  try {
+    const payload = jwt.verify(jwtToken, JWT_SECRET);
+    const user = { id: payload.id, email: payload.email, tier: payload.tier, daily_limit: payload.daily_limit };
+    res.json({ ok: true, token: jwtToken, user });
+  } catch {
+    res.status(400).json({ error: 'Token verification failed' });
   }
 });
 
