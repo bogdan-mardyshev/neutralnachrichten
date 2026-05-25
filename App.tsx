@@ -31,6 +31,7 @@ import UserProfilePage from './components/UserProfilePage';
 import VerifyEmailPage from './components/VerifyEmailPage';
 import ResetPasswordPage from './components/ResetPasswordPage';
 import { AnalysisPage } from './components/AnalysisPage';
+import { OnboardingModal } from './components/OnboardingModal';
 
 import { analyzeTopicStream, fetchDeepAnalysis } from './services/geminiService';
 import { NewsAnalysisResult, FetchStatus } from './types';
@@ -90,6 +91,9 @@ function MainApp() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
 
+  // Onboarding modal — show once for new visitors who are not logged in
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
   const t = translations[lang];
   const { history, addToHistory, clearHistory } = useSearchHistory();
   const { theme, toggleTheme } = useTheme();
@@ -141,6 +145,15 @@ function MainApp() {
     if (hasAnalyticsConsent()) {
       initPostHog();
     }
+  }, []);
+
+  // Show onboarding modal once for new visitors (not logged in)
+  useEffect(() => {
+    if (authToken) return; // experienced/logged-in users skip onboarding
+    if (localStorage.getItem('nn-onboarded')) return;
+    const timer = setTimeout(() => setShowOnboarding(true), 800);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fetch daily usage on mount so UsageBar shows immediately
@@ -313,6 +326,17 @@ function MainApp() {
     if (lastQuery && (status === 'success' || (status === 'loading' && data !== null))) {
       handleSearch(lastQuery, newLang);
     }
+  };
+
+  const handleOnboardingSelect = (topic: string) => {
+    localStorage.setItem('nn-onboarded', '1');
+    setShowOnboarding(false);
+    handleSearch(topic);
+  };
+
+  const handleOnboardingDismiss = () => {
+    localStorage.setItem('nn-onboarded', '1');
+    setShowOnboarding(false);
   };
 
   // Newspaper date string
@@ -556,6 +580,26 @@ function MainApp() {
                   <div className="flex-1 min-w-0">
                     <SearchBar onSearch={handleSearch} status={status} lang={lang} inputRef={searchInputRef} />
 
+                    {/* Beliebte Themen — shown for returning visitors (onboarded) */}
+                    {typeof window !== 'undefined' && localStorage.getItem('nn-onboarded') && (
+                      <div className="mt-4 mb-2 animate-fade-in">
+                        <p className="font-sans text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-2">
+                          {lang === 'de' ? 'Beliebte Themen' : lang === 'ru' ? 'Популярные темы' : 'Popular Topics'}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {['AfD Umfragewerte', 'Klimawandel Deutschland', 'Migration 2025', 'Bürgergeld', 'Ukraine Krieg', 'Wirtschaftskrise'].map((topic) => (
+                            <button
+                              key={topic}
+                              onClick={() => handleSearch(topic)}
+                              className="px-3 py-1.5 rounded-full border border-slate-200 dark:border-gray-600 bg-slate-100 dark:bg-[#2a2a2a] text-xs font-sans text-slate-600 dark:text-gray-300 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 dark:hover:bg-rose-950 dark:hover:border-rose-800 dark:hover:text-rose-300 transition-colors press-scale"
+                            >
+                              {topic}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Daily usage indicator */}
                     {dailyRemaining !== null && (
                       <UsageBar
@@ -744,6 +788,14 @@ function MainApp() {
           onClose={() => setShowAuthModal(false)}
           onSuccess={handleAuthSuccess}
           lang={lang}
+        />
+      )}
+
+      {showOnboarding && (
+        <OnboardingModal
+          lang={lang}
+          onSelectTopic={handleOnboardingSelect}
+          onDismiss={handleOnboardingDismiss}
         />
       )}
     </div>
