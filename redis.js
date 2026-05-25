@@ -15,6 +15,9 @@ export function isRedisAvailable() {
   return client !== null && client.status === 'ready';
 }
 
+// Expose raw client for rate-limit-redis RedisStore
+export function getRedisClient() { return client; }
+
 export async function initRedis() {
   const url = process.env.REDIS_URL || process.env.UPSTASH_REDIS_URL;
   if (!url) {

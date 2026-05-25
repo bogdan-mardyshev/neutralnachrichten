@@ -1,7 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
+import { rateLimit } from 'express-rate-limit';
+import { RedisStore } from 'rate-limit-redis';
 import NodeCache from 'node-cache';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import crypto from 'crypto';
@@ -17,9 +18,9 @@ import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
 import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
 import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
 import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverageVolume } from './lib/rssSearch.js';
-import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData } from './db.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from './lib/email.js';
-import { initRedis, isRedisAvailable, closeRedis, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
+import { initRedis, isRedisAvailable, closeRedis, getRedisClient, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
 dotenv.config();
 
@@ -234,25 +235,50 @@ function getTopTopics(limit = 10) {
 // ── Auth Rate Limiters ────────────────────────────────────────────────────────
 // Applied per-IP. Separate buckets for login, register, and password-reset
 // so a brute-force on login doesn't consume the reset quota.
+// Build a RedisStore lazily — falls back to memory if Redis not ready yet.
+// Rate-limit-redis v5 uses sendCommand (ioredis-compatible).
+function makeRedisStore(prefix) {
+  return () => {
+    const rc = getRedisClient();
+    if (!rc || rc.status !== 'ready') return undefined; // memory fallback
+    return new RedisStore({
+      sendCommand: (...args) => rc.call(...args),
+      prefix: `rl:${prefix}:`,
+    });
+  };
+}
+
+// Login: 5 attempts per 15 min per IP (account lockout handled separately in handler)
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 10,
-  standardHeaders: true, legacyHeaders: false,
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
   keyGenerator: getClientIP,
-  message: { error: 'Zu viele Anmeldeversuche. Bitte versuche es in 15 Minuten erneut.' },
+  store: makeRedisStore('login')(),
+  message: { error: 'Zu viele Anmeldeversuche. Bitte warte 15 Minuten.' },
   skip: (req) => !!(req.headers['x-admin-key'] && req.headers['x-admin-key'] === ADMIN_KEY),
 });
 
+// Register: 3 per hour per IP
 const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, max: 5,
-  standardHeaders: true, legacyHeaders: false,
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
   keyGenerator: getClientIP,
-  message: { error: 'Zu viele Registrierungen. Bitte versuche es später erneut.' },
+  store: makeRedisStore('register')(),
+  message: { error: 'Zu viele Registrierungen. Bitte versuche es in einer Stunde erneut.' },
 });
 
+// Forgot / resend-verification: 3 per hour per IP
 const forgotLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, max: 3,
-  standardHeaders: true, legacyHeaders: false,
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
   keyGenerator: getClientIP,
+  store: makeRedisStore('forgot')(),
   message: { error: 'Zu viele Anfragen. Bitte versuche es in einer Stunde erneut.' },
 });
 
@@ -1781,17 +1807,41 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
   if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
 
   try {
-    const user = await findUserByEmail(email);
-    if (!user || !user.is_active) return res.status(401).json({ error: 'Invalid credentials' });
+    // ── Account lockout check (before any DB user lookup to avoid timing leak) ──
+    const lockStatus = await checkAccountLock(email);
+    if (lockStatus.locked) {
+      return res.status(423).json({
+        error: 'account_locked',
+        minutesLeft: lockStatus.minutesLeft,
+        message: `Konto vorübergehend gesperrt. Bitte warte ${lockStatus.minutesLeft} Minuten oder setze dein Passwort zurück.`,
+      });
+    }
 
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+    const user = await findUserByEmail(email);
+    // Always run bcrypt to prevent user enumeration via timing
+    const dummyHash = '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012345';
+    const ok = user?.is_active
+      ? await bcrypt.compare(password, user.password_hash)
+      : await bcrypt.compare(password, dummyHash).then(() => false);
+
+    if (!user || !user.is_active || !ok) {
+      // Record failed attempt (fire-and-forget, non-blocking)
+      if (user?.is_active) {
+        recordFailedLogin(email).catch(() => {});
+      }
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
 
     if (!user.email_verified) {
       return res.status(403).json({ error: 'email_not_verified', email: user.email });
     }
 
-    await updateLastLogin(user.id);
+    // Successful login — clear lockout counter
+    await Promise.all([
+      updateLastLogin(user.id),
+      clearLoginAttempts(email),
+    ]);
+
     const token = jwt.sign(
       { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit, email_verified: user.email_verified ?? false },
       JWT_SECRET, { expiresIn: JWT_EXPIRES }
