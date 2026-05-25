@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useSearchParams } from 'r
 import { Helmet } from 'react-helmet-async';
 import * as Sentry from "@sentry/react";
 import posthog from 'posthog-js';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, Bookmark } from 'lucide-react';
 import { useTheme } from './contexts/ThemeContext';
 
 import { SearchBar } from './components/SearchBar';
@@ -97,6 +97,11 @@ function MainApp() {
   const t = translations[lang];
   const { history, addToHistory, clearHistory } = useSearchHistory();
   const { theme, toggleTheme } = useTheme();
+
+  // Bookmark state
+  const [isSaved, setIsSaved] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const API_BASE = import.meta.env.VITE_API_BASE || '';
 
   // Close mobile menu on outside click
   useEffect(() => {
@@ -314,7 +319,74 @@ function MainApp() {
     setDeepLoading(false);
     setAnalysisLoading(false);
     setLastQuery(null);
+    setIsSaved(false);
     setSearchParams({}, { replace: true });
+  };
+
+  // Check if current topic is saved (when analysis is shown)
+  useEffect(() => {
+    if (!lastQuery) { setIsSaved(false); return; }
+    const norm = lastQuery.toLowerCase().trim();
+    if (authToken) {
+      // Check server
+      fetch(`${API_BASE}/api/saved-topics`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (d?.saved) setIsSaved(d.saved.some((s: { topic_norm: string }) => s.topic_norm === norm));
+        })
+        .catch(() => {});
+    } else {
+      // Check localStorage for guests
+      try {
+        const ls: string[] = JSON.parse(localStorage.getItem('nn-saved-topics') || '[]');
+        setIsSaved(ls.includes(norm));
+      } catch { setIsSaved(false); }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastQuery, authToken]);
+
+  const handleToggleSave = async () => {
+    if (!lastQuery) return;
+    const norm = lastQuery.toLowerCase().trim();
+
+    if (!authToken) {
+      // Guest: use localStorage, prompt login
+      try {
+        const ls: string[] = JSON.parse(localStorage.getItem('nn-saved-topics') || '[]');
+        if (isSaved) {
+          localStorage.setItem('nn-saved-topics', JSON.stringify(ls.filter(t => t !== norm)));
+          setIsSaved(false);
+        } else {
+          localStorage.setItem('nn-saved-topics', JSON.stringify([...ls, norm]));
+          setIsSaved(true);
+        }
+      } catch { /* ignore */ }
+      return;
+    }
+
+    setSaveLoading(true);
+    try {
+      if (isSaved) {
+        setIsSaved(false); // optimistic
+        await fetch(`${API_BASE}/api/saved-topics/${encodeURIComponent(norm)}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+      } else {
+        setIsSaved(true); // optimistic
+        await fetch(`${API_BASE}/api/saved-topics`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ topic: lastQuery, topicNorm: norm, lang }),
+        });
+      }
+    } catch {
+      setIsSaved(prev => !prev); // revert on error
+    } finally {
+      setSaveLoading(false);
+    }
   };
 
   const handleLanguageSwitch = (newLang: Language) => {
@@ -696,13 +768,27 @@ function MainApp() {
               {/* Dashboard shown as soon as RSS data arrives (~2s) and after full result */}
               {(status === 'success' || (status === 'loading' && data)) && data && (
                 <div className="animate-slide-up">
-                  <div className="mb-6">
+                  <div className="mb-6 flex items-center gap-3 flex-wrap">
                     <button
                       onClick={handleReset}
-                      className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 animate-fade-in"
+                      className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] dark:bg-gray-800 text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 animate-fade-in"
                     >
                       <span className="inline-block group-hover:-translate-x-1 transition-transform duration-200">←</span>
                       {t.backToHome}
+                    </button>
+                    {/* Bookmark button */}
+                    <button
+                      onClick={handleToggleSave}
+                      disabled={saveLoading}
+                      title={isSaved ? t.saved.unsave : (authToken ? t.saved.save : t.saved.loginPrompt)}
+                      className={`inline-flex items-center gap-1.5 font-sans text-[10px] font-bold uppercase tracking-widest px-4 py-3 border-2 transition-colors duration-200 disabled:opacity-50 ${
+                        isSaved
+                          ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50'
+                          : 'border-[#1a1a1a] dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-amber-500 hover:text-amber-600 dark:hover:text-amber-400'
+                      }`}
+                    >
+                      <Bookmark size={12} fill={isSaved ? 'currentColor' : 'none'} />
+                      {isSaved ? t.saved.saved : t.saved.save}
                     </button>
                   </div>
                   <AnalysisDashboard
@@ -730,6 +816,7 @@ function MainApp() {
               authUser={authUser}
               onLogout={handleLogout}
               onAuthUpdate={handleAuthSuccess}
+              onNavigateToTopic={(topic: string) => handleSearch(topic)}
             />
           } />
           <Route path="/verify-email" element={<VerifyEmailPage />} />

@@ -310,6 +310,18 @@ export const translations = {
       pwNum: "Eine Zahl",
       pwUpper: "Ein Großbuchstabe",
     },
+    saved: {
+      save: "Merken",
+      saved: "Gespeichert",
+      unsave: "Entfernen",
+      loginPrompt: "Melde dich an, um Themen zu speichern",
+      title: "Gespeicherte Themen",
+      empty: "Noch keine gespeicherten Themen",
+    },
+    profile: {
+      digest: "Wöchentliche Zusammenfassung per E-Mail erhalten",
+      digestDesc: "Jeden Montag: die 3 meistdiskutierten Themen der Woche",
+    },
     onboarding: {
       step1Title: "Was ist NeutralNachrichten?",
       step1Body: "Wir analysieren 18 deutsche Nachrichtenquellen — von links bis rechts — und zeigen dir, wie jedes Lager über ein Thema berichtet.",
@@ -644,6 +656,18 @@ export const translations = {
       pwNum: "One number",
       pwUpper: "One uppercase letter",
     },
+    saved: {
+      save: "Save",
+      saved: "Saved",
+      unsave: "Remove",
+      loginPrompt: "Sign in to save topics",
+      title: "Saved Topics",
+      empty: "No saved topics yet",
+    },
+    profile: {
+      digest: "Receive weekly email digest",
+      digestDesc: "Every Monday: the 3 most-discussed topics of the week",
+    },
     onboarding: {
       step1Title: "What is NeutralNachrichten?",
       step1Body: "We analyze 18 German news sources — from left to right — and show you how each camp covers a topic.",
@@ -977,6 +1001,18 @@ export const translations = {
       pwLen: "Минимум 8 символов",
       pwNum: "Одна цифра",
       pwUpper: "Одна заглавная буква",
+    },
+    saved: {
+      save: "Сохранить",
+      saved: "Сохранено",
+      unsave: "Удалить",
+      loginPrompt: "Войдите, чтобы сохранять темы",
+      title: "Сохранённые темы",
+      empty: "Пока нет сохранённых тем",
+    },
+    profile: {
+      digest: "Получать еженедельный дайджест на email",
+      digestDesc: "Каждый понедельник: 3 самые обсуждаемые темы недели",
     },
     onboarding: {
       step1Title: "Что такое NeutralNachrichten?",
