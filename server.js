@@ -95,12 +95,19 @@ const SPECTRUMS = ['left', 'center_left', 'center', 'center_right', 'right'];
 
 function validateAnalysisStructure(data) {
   if (!data || typeof data !== 'object') return false;
-  const topLevel = ['overall_non_partisan_analysis', 'news_spectrum'];
-  if (!topLevel.every(key => key in data)) return false;
-  // All 5 spectrum keys must exist and be arrays (empty arrays are OK — RSS fills gaps)
-  if (!SPECTRUMS.every(key => Array.isArray(data.news_spectrum?.[key]))) return false;
-  // At least one spectrum must have actual article content
-  return SPECTRUMS.some(key => data.news_spectrum[key].length > 0);
+  if (!data.overall_non_partisan_analysis || !data.news_spectrum) return false;
+  if (typeof data.news_spectrum !== 'object') return false;
+  // Normalize: missing spectrum keys → empty array (RSS will fill gaps later)
+  for (const key of SPECTRUMS) {
+    if (!Array.isArray(data.news_spectrum[key])) {
+      data.news_spectrum[key] = [];
+    }
+  }
+  // At least one spectrum must have actual article content (or overall analysis is non-empty)
+  const hasArticles = SPECTRUMS.some(key => data.news_spectrum[key].length > 0);
+  const hasAnalysis = typeof data.overall_non_partisan_analysis === 'string'
+    && data.overall_non_partisan_analysis.length > 20;
+  return hasArticles || hasAnalysis;
 }
 
 // ── Gemini Concurrency Limiter ────────────────────────────────────────────────
@@ -614,7 +621,11 @@ REQUIRED JSON STRUCTURE (each spectrum is an ARRAY of 2-4 article objects):
 
 function buildDeepAnalysisPrompt(analysis) {
   const ns = analysis.news_spectrum;
-  const first = s => Array.isArray(ns[s]) ? ns[s][0] : ns[s];
+  const EMPTY = { source_name: 'n/a', summary_of_perspective: 'Keine Berichterstattung gefunden.' };
+  const first = s => {
+    const arr = Array.isArray(ns[s]) ? ns[s] : (ns[s] ? [ns[s]] : []);
+    return arr.find(a => a && a.source_name && a.source_name !== 'Kein Artikel gefunden') || arr[0] || EMPTY;
+  };
 
   return `Analyze how five German media outlets across the full political spectrum cover the same topic.
 
