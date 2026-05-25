@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
 import { translations, Language } from '../translations';
 
@@ -159,8 +160,32 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
 
   const totalSources = Object.values(SOURCES).reduce((s, arr) => s + arr.length, 0);
 
+  const methTitle = lang === 'de'
+    ? 'Methodik – Wie wir analysieren | NeutralNachrichten'
+    : lang === 'ru'
+    ? 'Методология – Как мы анализируем | NeutralNachrichten'
+    : 'Methodology – How we analyse | NeutralNachrichten';
+  const methDesc = lang === 'de'
+    ? 'Erfahre, wie NeutralNachrichten 18 deutsche Medien aus 5 politischen Lagern in Echtzeit analysiert – mit KI, RSS-Streaming und voller Transparenz.'
+    : lang === 'ru'
+    ? 'Узнайте, как NeutralNachrichten анализирует 18 немецких изданий из 5 политических лагерей в реальном времени – с помощью ИИ, RSS-стриминга и полной прозрачности.'
+    : 'Learn how NeutralNachrichten analyses 18 German outlets from 5 political camps in real time – with AI, RSS streaming and full transparency.';
+
   return (
     <div className="max-w-4xl mx-auto pb-16">
+      <Helmet>
+        <title>{methTitle}</title>
+        <meta name="description" content={methDesc} />
+        <link rel="canonical" href="https://www.neutralenachrichten.com/methodology" />
+        <meta property="og:title" content={methTitle} />
+        <meta property="og:description" content={methDesc} />
+        <meta property="og:url" content="https://www.neutralenachrichten.com/methodology" />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://www.neutralenachrichten.com/og-image.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={methTitle} />
+        <meta name="twitter:description" content={methDesc} />
+      </Helmet>
 
       {/* Back */}
       <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] dark:bg-gray-800 text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200 mb-8">
