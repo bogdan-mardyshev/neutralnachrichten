@@ -53,7 +53,8 @@ export const PrivacyPage: React.FC<Props> = ({ lang }) => (
       </p>
       <p className="font-sans text-xs leading-6 text-gray-700 dark:text-gray-300">
         <strong>Bogdan Mardyshev</strong><br />
-        [Anschrift — bitte vor Veröffentlichung eintragen]<br />
+        Schnellersstrasse 112a<br />
+        12439 Berlin<br />
         Deutschland<br />
         E-Mail: <strong>bogdan.mardyshev@gmail.com</strong><br />
         Website: <strong>www.neutralenachrichten.com</strong>
@@ -490,7 +491,8 @@ export const ImprintPage: React.FC<Props> = ({ lang }) => (
     <Section title="Angaben gemäß § 5 TMG">
       <p className="font-sans text-xs leading-7 text-gray-700 dark:text-gray-300">
         <strong>Bogdan Mardyshev</strong><br />
-        [Anschrift — bitte vor Veröffentlichung eintragen]<br />
+        Schnellersstrasse 112a<br />
+        12439 Berlin<br />
         Deutschland<br />
         <br />
         E-Mail: <strong>bogdan.mardyshev@gmail.com</strong><br />
