@@ -20,6 +20,7 @@ import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
 import { SPECTRUMS, validateAnalysisStructure, buildDeepAnalysisPrompt } from './lib/analysisValidator.js';
 import { createOAuthCode, consumeOAuthCode } from './lib/oauthCodes.js';
 import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverageVolume } from './lib/rssSearch.js';
+import { callGeminiWithRSSContext } from './lib/rssDirectAnalysis.js';
 import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, getRedisClient, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
@@ -2461,6 +2462,193 @@ app.get('/api/public/analysis/:slug', async (req, res) => {
   } catch {}
 
   res.status(404).json({ error: 'Analysis not found' });
+});
+
+// ── A/B Experiment: RSS-direct vs Grounding ───────────────────────────────────
+// GET /api/experiment/rss-vs-grounding?topic=X&lang=de
+//
+// Runs BOTH analysis paths in parallel on the SAME RSS data:
+//   - "grounding" path: callGeminiWithRetry (Google Search grounding)
+//   - "rss_direct" path: callGeminiWithRSSContext (RSS articles as context, no grounding)
+//
+// Returns a side-by-side comparison with latency, token estimates, cost projections,
+// summary quality heuristics, and URL accuracy metrics.
+//
+// Protected by ADMIN_SECRET to prevent abuse (each call costs 2× Gemini requests).
+// Usage: curl "https://.../api/experiment/rss-vs-grounding?topic=Klimawandel&secret=ADMIN_SECRET"
+
+app.get('/api/experiment/rss-vs-grounding', async (req, res) => {
+  const { topic, lang = 'de', secret, max_per_spectrum } = req.query;
+
+  // Admin-only: prevent accidental public exposure
+  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Forbidden — ADMIN_SECRET required' });
+  }
+  if (!topic || topic.trim().length < 2) {
+    return res.status(400).json({ error: 'topic query param required (min 2 chars)' });
+  }
+
+  const maxPerSpectrum = parseInt(max_per_spectrum, 10) || 3;
+  const experimentStart = Date.now();
+
+  // ── Step 1: Fetch RSS articles (shared input for both paths) ──────────────
+  const rssKeywords = extractSearchKeywords(topic.trim());
+  console.log(`[Experiment] topic="${topic}" keywords=${JSON.stringify(rssKeywords)}`);
+
+  let rssData = null;
+  const rssStart = Date.now();
+  try {
+    rssData = await searchAllFeeds(rssKeywords);
+    console.log(`[Experiment] RSS done in ${Date.now() - rssStart}ms — ${rssData.total_articles} articles`);
+  } catch (err) {
+    console.warn('[Experiment] RSS fetch failed:', err.message);
+  }
+
+  const rssSpectra = rssData?.spectra ?? {};
+  const rssElapsedMs = Date.now() - rssStart;
+
+  // ── Step 2: Run both paths in parallel ────────────────────────────────────
+  const [groundingResult, rssDirectResult] = await Promise.allSettled([
+    callGeminiWithRetry(topic.trim(), lang, 1), // 1 attempt only — this is a test
+    callGeminiWithRSSContext(topic.trim(), lang, rssSpectra, { maxPerSpectrum }),
+  ]);
+
+  const totalElapsedMs = Date.now() - experimentStart;
+
+  // ── Step 3: Extract results ───────────────────────────────────────────────
+  function extractResult(settled, label) {
+    if (settled.status === 'rejected') {
+      return { ok: false, error: settled.reason?.message || 'unknown', label };
+    }
+    const { analysis, degraded, meta } = settled.value;
+    return { ok: true, degraded, label, analysis, meta };
+  }
+
+  const grounding  = extractResult(groundingResult,  'grounding');
+  const rssDirect  = extractResult(rssDirectResult,  'rss_direct');
+
+  // ── Step 4: Quality metrics ───────────────────────────────────────────────
+  function qualityMetrics(result) {
+    if (!result.ok || result.degraded) return null;
+    const { analysis } = result;
+    const spectra = analysis.news_spectrum || {};
+
+    let totalArticles = 0, articlesWithUrl = 0, articlesWithSummary = 0, summaryCharTotal = 0;
+    for (const sp of ['left', 'center_left', 'center', 'center_right', 'right']) {
+      for (const art of (spectra[sp] || [])) {
+        totalArticles++;
+        if (art.article_url && !art.url_is_search_fallback) articlesWithUrl++;
+        if (art.summary_of_perspective && art.summary_of_perspective.length > 20) {
+          articlesWithSummary++;
+          summaryCharTotal += art.summary_of_perspective.length;
+        }
+      }
+    }
+
+    const overallLen = (analysis.overall_non_partisan_analysis || '').length;
+    const avgSummaryLen = articlesWithSummary > 0 ? Math.round(summaryCharTotal / articlesWithSummary) : 0;
+
+    return {
+      totalArticlesInOutput: totalArticles,
+      urlAccuracyPct: totalArticles > 0 ? Math.round((articlesWithUrl / totalArticles) * 100) : 0,
+      summaryCompletePct: totalArticles > 0 ? Math.round((articlesWithSummary / totalArticles) * 100) : 0,
+      avgSummaryLengthChars: avgSummaryLen,
+      overallAnalysisLengthChars: overallLen,
+      overallAnalysisQuality: overallLen > 200 ? 'good' : overallLen > 80 ? 'ok' : 'short',
+    };
+  }
+
+  // ── Step 5: Cost projections ──────────────────────────────────────────────
+  const GROUNDING_COST_PER_REQUEST = 0.035; // USD — Google Search grounding fee
+  const INPUT_TOKEN_COST  = 0.075 / 1_000_000;
+  const OUTPUT_TOKEN_COST = 0.30  / 1_000_000;
+
+  const rssInputTokens = rssDirect.meta?.inputTokensEstimate ?? 0;
+  const rssOutputEst   = 1200; // typical analysis JSON tokens
+  const rssPerRequest  = (rssInputTokens * INPUT_TOKEN_COST) + (rssOutputEst * OUTPUT_TOKEN_COST);
+
+  const costComparison = {
+    groundingCostPerRequest_usd: GROUNDING_COST_PER_REQUEST,
+    rssDirectCostPerRequest_usd: parseFloat(rssPerRequest.toFixed(6)),
+    savingsPerRequest_usd:       parseFloat((GROUNDING_COST_PER_REQUEST - rssPerRequest).toFixed(6)),
+    savingsMultiplier:           Math.round(GROUNDING_COST_PER_REQUEST / rssPerRequest),
+    projections: {
+      daily_1k_requests: {
+        grounding_usd:  parseFloat((1000 * GROUNDING_COST_PER_REQUEST).toFixed(2)),
+        rss_direct_usd: parseFloat((1000 * rssPerRequest).toFixed(2)),
+        savings_usd:    parseFloat((1000 * (GROUNDING_COST_PER_REQUEST - rssPerRequest)).toFixed(2)),
+      },
+      monthly_10k_requests: {
+        grounding_usd:  parseFloat((10000 * GROUNDING_COST_PER_REQUEST).toFixed(2)),
+        rss_direct_usd: parseFloat((10000 * rssPerRequest).toFixed(2)),
+        savings_usd:    parseFloat((10000 * (GROUNDING_COST_PER_REQUEST - rssPerRequest)).toFixed(2)),
+      },
+    },
+  };
+
+  // ── Step 6: Speed comparison ──────────────────────────────────────────────
+  const speedComparison = {
+    rss_fetch_ms:      rssElapsedMs,
+    grounding_ms:      grounding.meta?.elapsedMs ?? null,
+    rss_direct_ms:     rssDirect.meta?.elapsedMs ?? null,
+    total_experiment_ms: totalElapsedMs,
+    // RSS-direct includes rss_fetch in its wall time (both run in parallel in prod)
+    // so compare grounding_ms vs rss_direct_ms for a fair Gemini-only comparison
+    note: 'In production both paths fetch RSS in parallel — rss_direct latency ≈ max(rss_fetch, gemini_call)',
+  };
+
+  // ── Step 7: RSS coverage report ───────────────────────────────────────────
+  const rssReport = {
+    total_articles: rssData?.total_articles ?? 0,
+    per_spectrum: Object.fromEntries(
+      ['left', 'center_left', 'center', 'center_right', 'right'].map(s => [
+        s, rssSpectra[s]?.articles?.length ?? 0
+      ])
+    ),
+    covered_spectra: ['left', 'center_left', 'center', 'center_right', 'right']
+      .filter(s => (rssSpectra[s]?.articles?.length ?? 0) > 0).length,
+    fetch_ms: rssElapsedMs,
+  };
+
+  // ── Response ──────────────────────────────────────────────────────────────
+  console.log(`[Experiment] ✅ Complete in ${totalElapsedMs}ms — grounding: ${grounding.degraded ? 'degraded' : 'ok'}, rss_direct: ${rssDirect.degraded ? 'degraded' : 'ok'}`);
+
+  res.json({
+    experiment: {
+      topic: topic.trim(),
+      lang,
+      timestamp: new Date().toISOString(),
+      total_elapsed_ms: totalElapsedMs,
+    },
+    rss_input: rssReport,
+    cost_comparison: costComparison,
+    speed_comparison: speedComparison,
+    grounding: {
+      ok:       grounding.ok,
+      degraded: grounding.degraded ?? null,
+      error:    grounding.error ?? null,
+      latency_ms: grounding.meta?.elapsedMs ?? null,
+      quality:    qualityMetrics(grounding),
+      meta:       grounding.meta ?? null,
+    },
+    rss_direct: {
+      ok:       rssDirect.ok,
+      degraded: rssDirect.degraded ?? null,
+      error:    rssDirect.error ?? null,
+      latency_ms: rssDirect.meta?.elapsedMs ?? null,
+      quality:    qualityMetrics(rssDirect),
+      meta:       rssDirect.meta ?? null,
+    },
+    // Full analysis objects for manual side-by-side review
+    grounding_analysis:  grounding.analysis  ?? null,
+    rss_direct_analysis: rssDirect.analysis ?? null,
+    verdict: {
+      cost_winner:   'rss_direct',
+      speed_winner:  (rssDirect.meta?.elapsedMs ?? Infinity) <= (grounding.meta?.elapsedMs ?? Infinity)
+                     ? 'rss_direct' : 'grounding',
+      quality_note:  'Compare grounding_analysis vs rss_direct_analysis manually for summary depth',
+    },
+  });
 });
 
 // ── sitemap.xml ───────────────────────────────────────────────────────────────
