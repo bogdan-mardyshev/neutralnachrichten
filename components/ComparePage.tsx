@@ -9,12 +9,12 @@ interface Props { lang: Language }
 
 const SPECTRUM_ORDER: SpectrumKey[] = ['left', 'center_left', 'center', 'center_right', 'right'];
 
-const SPECTRUM_STYLE: Record<SpectrumKey, { bar: string; text: string; bg: string; border: string; dot: string }> = {
-  left:         { bar: 'bg-rose-500',   text: 'text-rose-600',   bg: 'bg-rose-50',   border: 'border-rose-200',   dot: 'bg-rose-500'  },
-  center_left:  { bar: 'bg-orange-400', text: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200', dot: 'bg-orange-400' },
-  center:       { bar: 'bg-slate-400',  text: 'text-slate-600',  bg: 'bg-slate-50',  border: 'border-slate-200',  dot: 'bg-slate-400'  },
-  center_right: { bar: 'bg-sky-500',    text: 'text-sky-600',    bg: 'bg-sky-50',    border: 'border-sky-200',    dot: 'bg-sky-500'    },
-  right:        { bar: 'bg-blue-700',   text: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-200',   dot: 'bg-blue-700'   },
+const SPECTRUM_STYLE: Record<SpectrumKey, { bar: string; text: string; bg: string; darkBg: string; border: string; darkBorder: string; dot: string }> = {
+  left:         { bar: 'bg-rose-500',   text: 'text-rose-600',   bg: 'bg-rose-50',   darkBg: 'dark:bg-rose-950/20',   border: 'border-rose-200',   darkBorder: 'dark:border-rose-900/40',   dot: 'bg-rose-500'  },
+  center_left:  { bar: 'bg-orange-400', text: 'text-orange-600', bg: 'bg-orange-50', darkBg: 'dark:bg-orange-950/20', border: 'border-orange-200', darkBorder: 'dark:border-orange-900/40', dot: 'bg-orange-400' },
+  center:       { bar: 'bg-slate-400',  text: 'text-slate-600',  bg: 'bg-slate-50',  darkBg: 'dark:bg-slate-900/30',  border: 'border-slate-200',  darkBorder: 'dark:border-slate-700/60',  dot: 'bg-slate-400'  },
+  center_right: { bar: 'bg-sky-500',    text: 'text-sky-600',    bg: 'bg-sky-50',    darkBg: 'dark:bg-sky-950/20',    border: 'border-sky-200',    darkBorder: 'dark:border-sky-900/40',    dot: 'bg-sky-500'    },
+  right:        { bar: 'bg-blue-700',   text: 'text-blue-700',   bg: 'bg-blue-50',   darkBg: 'dark:bg-blue-950/20',   border: 'border-blue-200',   darkBorder: 'dark:border-blue-900/40',   dot: 'bg-blue-700'   },
 };
 
 // Example topic pairs — clickable chips to pre-fill inputs
@@ -92,7 +92,7 @@ function MiniCard({ source, spectrumKey, lang }: { source: NewsSource | undefine
   const c = SPECTRUM_STYLE[spectrumKey];
   if (!source) {
     return (
-      <div className={`border-2 ${c.border} ${c.bg} p-3 flex items-center justify-center min-h-[80px]`}>
+      <div className={`border-2 ${c.border} ${c.darkBorder} ${c.bg} ${c.darkBg} p-3 flex items-center justify-center min-h-[80px]`}>
         <span className="font-sans text-[9px] uppercase tracking-widest text-gray-300">
           {translations[lang].compare.noData}
         </span>
@@ -104,7 +104,7 @@ function MiniCard({ source, spectrumKey, lang }: { source: NewsSource | undefine
       href={source.article_url}
       target="_blank"
       rel="noopener noreferrer"
-      className={`border-2 border-[#1a1a1a] border-l-4 ${c.border.replace('border-', 'border-l-')} ${c.bg} p-3 flex flex-col gap-1.5 hover:border-[#1a1a1a] transition-colors group`}
+      className={`border-2 border-[#1a1a1a] dark:border-[#2d2d2d] border-l-4 ${c.border.replace('border-', 'border-l-')} ${c.bg} ${c.darkBg} p-3 flex flex-col gap-1.5 hover:border-[#1a1a1a] transition-colors group`}
     >
       <p className={`font-sans text-[9px] font-bold uppercase tracking-widest ${c.text}`}>{source.source_name}</p>
       <p className="font-serif text-xs font-bold text-[#1a1a1a] dark:text-[#f0ece4] leading-snug line-clamp-2 group-hover:underline">{source.article_title}</p>

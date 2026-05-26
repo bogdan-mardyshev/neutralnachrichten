@@ -53,11 +53,11 @@ export const ShareButtons: React.FC<ShareButtonsProps> = ({ topic, lang }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const btnCls = 'flex items-center gap-2 px-3 py-2 border-2 border-[#1a1a1a] text-sm font-sans text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-[#FFF8F0] transition-colors';
+  const btnCls = 'flex items-center gap-2 px-3 py-2 border-2 border-[#1a1a1a] dark:border-[#2d2d2d] text-sm font-sans text-[#1a1a1a] dark:text-[#f0ece4] hover:bg-[#1a1a1a] dark:hover:bg-[#f0ece4] hover:text-[#FFF8F0] dark:hover:text-[#1a1a1a] transition-colors';
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-2">
-      <span className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 sm:mr-1 whitespace-nowrap">
+      <span className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-[#f0ece4]/40 sm:mr-1 whitespace-nowrap">
         {s.label}
       </span>
       <div className="flex flex-wrap gap-2">

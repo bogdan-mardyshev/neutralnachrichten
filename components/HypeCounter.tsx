@@ -89,7 +89,7 @@ export const HypeCounter: React.FC<Props> = ({ lang, coverage, topic }) => {
   const titleMap = { de: 'Hype-Niveau', en: 'Hype Level', ru: 'Хайп-уровень' };
 
   return (
-    <div className="border-2 border-[#1a1a1a] flex items-stretch overflow-hidden">
+    <div className="border-2 border-[#1a1a1a] dark:border-[#2d2d2d] flex items-stretch overflow-hidden bg-[#FFF8F0] dark:bg-[#141414]">
       {/* Left — colored score box */}
       <div className={`${accent.bg} text-white px-5 py-4 flex flex-col items-center justify-center shrink-0 w-24`}>
         <span className="font-sans text-2xl font-black tabular-nums leading-none">{animated}</span>
@@ -98,23 +98,23 @@ export const HypeCounter: React.FC<Props> = ({ lang, coverage, topic }) => {
       </div>
 
       {/* Vertical rule */}
-      <div className="w-px bg-[#1a1a1a]" />
+      <div className="w-px bg-[#1a1a1a] dark:bg-[#2d2d2d]" />
 
       {/* Right — details */}
       <div className="flex-1 px-5 py-4 flex flex-col justify-center gap-1.5">
-        <p className="font-sans text-[10px] uppercase tracking-[0.2em] text-gray-400">{titleMap[lang]}</p>
-        <p className="font-serif font-bold text-base text-[#1a1a1a] leading-tight">
+        <p className="font-sans text-[10px] uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">{titleMap[lang]}</p>
+        <p className="font-serif font-bold text-base text-[#1a1a1a] dark:text-[#f0ece4] leading-tight">
           <span className={`${accent.text}`}>{label}</span> · {topic}
         </p>
 
         {/* Progress bar */}
-        <div className="h-1.5 bg-[#e8e0d5] overflow-hidden mt-1">
+        <div className="h-1.5 bg-[#e8e0d5] dark:bg-[#252525] overflow-hidden mt-1">
           <div
             className={`h-full ${accent.bar} transition-all duration-700`}
             style={{ width: `${animated}%` }}
           />
         </div>
-        <div className="flex justify-between font-sans text-[9px] text-gray-300 uppercase tracking-widest">
+        <div className="flex justify-between font-sans text-[9px] text-gray-300 dark:text-gray-600 uppercase tracking-widest">
           <span>0</span>
           <span>100</span>
         </div>

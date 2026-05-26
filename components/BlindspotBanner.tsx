@@ -51,7 +51,7 @@ export const BlindspotBanner: React.FC<BlindspotBannerProps> = ({ coverage, news
   };
 
   return (
-    <div className="border-2 border-[#1a1a1a] overflow-hidden">
+    <div className="border-2 border-[#1a1a1a] dark:border-[#2d2d2d] overflow-hidden bg-[#FFF8F0] dark:bg-[#141414]">
       {/* Header */}
       <div className="bg-[#1a1a1a] px-5 py-3 flex items-center gap-2">
         <span className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">
@@ -61,12 +61,12 @@ export const BlindspotBanner: React.FC<BlindspotBannerProps> = ({ coverage, news
 
       <div className="px-5 py-4 space-y-2">
         {allLow ? (
-          <p className="font-sans text-sm text-[#1a1a1a] leading-relaxed">{t.blindspot.allLow}</p>
+          <p className="font-sans text-sm text-[#1a1a1a] dark:text-[#f0ece4] leading-relaxed">{t.blindspot.allLow}</p>
         ) : (
           missing.map((spectrum) => (
             <div key={spectrum} className="flex items-start gap-3">
               <span className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${SPECTRUM_DOT[spectrum]}`} />
-              <p className="font-sans text-sm text-[#1a1a1a] leading-relaxed">
+              <p className="font-sans text-sm text-[#1a1a1a] dark:text-[#f0ece4] leading-relaxed">
                 <span className="font-bold">{subheaderMap[spectrum]}</span>{' '}
                 {bodyMap[spectrum](topic)}
               </p>

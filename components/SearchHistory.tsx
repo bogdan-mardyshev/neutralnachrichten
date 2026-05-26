@@ -23,14 +23,14 @@ export const SearchHistory: React.FC<SearchHistoryProps> = ({ history, onSelect,
           <button
             key={i}
             onClick={() => onSelect(entry.topic)}
-            className="font-sans text-xs px-2.5 py-1 border border-gray-300 text-gray-600 hover:border-[#1a1a1a] hover:text-[#1a1a1a] transition-colors"
+            className="font-sans text-xs px-2.5 py-1 border border-gray-300 dark:border-[#2d2d2d] text-gray-600 dark:text-gray-400 hover:border-[#1a1a1a] dark:hover:border-[#f0ece4] hover:text-[#1a1a1a] dark:hover:text-[#f0ece4] transition-colors"
           >
             {entry.topic}
           </button>
         ))}
         <button
           onClick={onClear}
-          className="font-sans text-[10px] text-gray-300 hover:text-red-500 transition-colors uppercase tracking-wider"
+          className="font-sans text-[10px] text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 transition-colors uppercase tracking-wider"
           title={t.searchHistory.clear}
         >
           × {t.searchHistory.clear}

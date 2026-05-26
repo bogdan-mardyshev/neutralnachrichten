@@ -48,7 +48,7 @@ const SpectrumStrip = () => (
 
 // ── Spectrum progress bar (fills left→right across 5 colors) ─────────────────
 const SpectrumProgress = ({ pct }: { pct: number }) => (
-  <div className="relative w-full h-[5px] bg-[#e0d8cf] overflow-hidden">
+  <div className="relative w-full h-[5px] bg-[#e0d8cf] dark:bg-[#252525] overflow-hidden">
     <div
       className="absolute inset-y-0 left-0 transition-all duration-700"
       style={{
@@ -118,20 +118,20 @@ export function UsageBar({ remaining, limit, lang, tier, onUpgradeClick }: Props
   // ── LIMIT REACHED ─────────────────────────────────────────────────────────
   if (out) {
     return (
-      <div className="mt-3 border-2 border-[#1a1a1a] bg-[#FFF8F0] overflow-hidden">
+      <div className="mt-3 border-2 border-[#1a1a1a] dark:border-[#2d2d2d] bg-[#FFF8F0] dark:bg-[#141414] overflow-hidden">
         <SpectrumStrip />
         <div className="px-4 pt-3 pb-4">
           {/* Header */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-rose-600 animate-pulse" />
-              <span className="font-sans text-[10px] uppercase tracking-widest font-bold text-[#1a1a1a]">
+              <span className="font-sans text-[10px] uppercase tracking-widest font-bold text-[#1a1a1a] dark:text-[#f0ece4]">
                 {t.limitHit}
               </span>
             </div>
-            <div className="font-sans text-[11px] text-gray-500 tabular-nums">
+            <div className="font-sans text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
               {t.resetsIn}{' '}
-              <span className="font-black text-[#1a1a1a] font-mono">{countdown}</span>
+              <span className="font-black text-[#1a1a1a] dark:text-[#f0ece4] font-mono">{countdown}</span>
             </div>
           </div>
 
@@ -141,12 +141,12 @@ export function UsageBar({ remaining, limit, lang, tier, onUpgradeClick }: Props
           {/* Pro upsell block */}
           <div className="mt-4 flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="font-serif font-black text-base text-[#1a1a1a] leading-tight mb-1">
+              <p className="font-serif font-black text-base text-[#1a1a1a] dark:text-[#f0ece4] leading-tight mb-1">
                 {t.proHead}
               </p>
               <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                 {t.proBenefits.map(b => (
-                  <span key={b} className="font-sans text-[10px] text-gray-500 flex items-center gap-1">
+                  <span key={b} className="font-sans text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1">
                     <span className="text-rose-500">✦</span> {b}
                   </span>
                 ))}
@@ -154,7 +154,7 @@ export function UsageBar({ remaining, limit, lang, tier, onUpgradeClick }: Props
             </div>
             <button
               onClick={onUpgradeClick}
-              className="shrink-0 bg-[#1a1a1a] text-[#FFF8F0] font-sans text-[10px] uppercase tracking-widest px-4 py-2.5 hover:bg-rose-600 transition-colors whitespace-nowrap border-2 border-transparent hover:border-rose-600"
+              className="shrink-0 bg-[#1a1a1a] dark:bg-white text-[#FFF8F0] dark:text-[#1a1a1a] font-sans text-[10px] uppercase tracking-widest px-4 py-2.5 hover:bg-rose-600 dark:hover:bg-rose-600 dark:hover:text-white transition-colors whitespace-nowrap border-2 border-transparent hover:border-rose-600"
             >
               {t.proBtn}
             </button>
@@ -167,14 +167,14 @@ export function UsageBar({ remaining, limit, lang, tier, onUpgradeClick }: Props
   // ── LOW (≤ 2 remaining) ───────────────────────────────────────────────────
   if (low) {
     return (
-      <div className="mt-3 border-2 border-orange-400 bg-[#FFF8F0] overflow-hidden">
+      <div className="mt-3 border-2 border-orange-400 dark:border-orange-800/60 bg-[#FFF8F0] dark:bg-[#141414] overflow-hidden">
         <SpectrumStrip />
         <div className="px-4 pt-3 pb-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="font-serif font-black text-sm text-[#1a1a1a]">
+            <span className="font-serif font-black text-sm text-[#1a1a1a] dark:text-[#f0ece4]">
               {t.lowHead(remaining)}
             </span>
-            <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400">
+            <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500">
               {t.remaining(remaining, limit)}
             </span>
           </div>
@@ -182,7 +182,7 @@ export function UsageBar({ remaining, limit, lang, tier, onUpgradeClick }: Props
           <SpectrumProgress pct={pct} />
 
           <div className="mt-3 flex items-center justify-between gap-3">
-            <p className="font-sans text-[11px] text-gray-500">{t.lowSub}</p>
+            <p className="font-sans text-[11px] text-gray-500 dark:text-gray-400">{t.lowSub}</p>
             <button
               onClick={onUpgradeClick}
               className="shrink-0 bg-orange-400 text-white font-sans text-[10px] uppercase tracking-widest px-3 py-2 hover:bg-orange-500 transition-colors whitespace-nowrap"
@@ -197,15 +197,15 @@ export function UsageBar({ remaining, limit, lang, tier, onUpgradeClick }: Props
 
   // ── NORMAL ────────────────────────────────────────────────────────────────
   return (
-    <div className="mt-3 border border-[#1a1a1a] bg-[#FFF8F0] overflow-hidden">
+    <div className="mt-3 border border-[#1a1a1a] dark:border-[#2d2d2d] bg-[#FFF8F0] dark:bg-[#141414] overflow-hidden">
       <SpectrumStrip />
       <div className="px-4 pt-3 pb-3">
         {/* Count + label */}
         <div className="flex items-center justify-between mb-2">
-          <span className="font-sans text-[10px] uppercase tracking-widest font-bold text-[#1a1a1a]">
+          <span className="font-sans text-[10px] uppercase tracking-widest font-bold text-[#1a1a1a] dark:text-[#f0ece4]">
             {t.remaining(remaining, limit)}
           </span>
-          <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400">
+          <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500">
             {t.freeLabel}
           </span>
         </div>
@@ -220,19 +220,19 @@ export function UsageBar({ remaining, limit, lang, tier, onUpgradeClick }: Props
               key={i}
               className={`flex-1 h-1.5 transition-all duration-300 ${
                 i < used
-                  ? 'bg-[#1a1a1a]'
-                  : 'bg-[#e0d8cf]'
+                  ? 'bg-[#1a1a1a] dark:bg-[#f0ece4]'
+                  : 'bg-[#e0d8cf] dark:bg-[#252525]'
               }`}
             />
           ))}
         </div>
 
         {/* Upgrade nudge */}
-        <div className="flex items-center justify-between gap-3 border-t border-[#e0d8cf] pt-2.5">
-          <p className="font-sans text-[10px] text-gray-400">{t.upgradeNudge}</p>
+        <div className="flex items-center justify-between gap-3 border-t border-[#e0d8cf] dark:border-[#252525] pt-2.5">
+          <p className="font-sans text-[10px] text-gray-400 dark:text-gray-500">{t.upgradeNudge}</p>
           <button
             onClick={onUpgradeClick}
-            className="shrink-0 bg-[#1a1a1a] text-[#FFF8F0] font-sans text-[10px] uppercase tracking-widest px-3 py-1.5 hover:bg-rose-600 transition-colors whitespace-nowrap"
+            className="shrink-0 bg-[#1a1a1a] dark:bg-white text-[#FFF8F0] dark:text-[#1a1a1a] font-sans text-[10px] uppercase tracking-widest px-3 py-1.5 hover:bg-rose-600 dark:hover:bg-rose-600 dark:hover:text-white transition-colors whitespace-nowrap"
           >
             {t.upgradeBtn} ↗
           </button>

@@ -11,21 +11,21 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ lang, onAccept, onEs
   const t = translations[lang];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white p-4 md:p-6 z-[100] animate-slide-up">
+    <div className="fixed bottom-0 left-0 right-0 bg-[#1a1a1a] text-white p-4 md:p-6 z-[100] animate-slide-up border-t-2 border-[#2d2d2d]">
       <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-        <p className="text-sm text-slate-300">
+        <p className="font-sans text-xs text-white/70">
           {t.cookieText}
         </p>
         <div className="flex gap-3 whitespace-nowrap">
-          <button 
+          <button
             onClick={onEssential}
-            className="text-xs font-medium text-slate-400 hover:text-white transition-colors"
+            className="font-sans text-[10px] uppercase tracking-widest text-white/40 hover:text-white/80 transition-colors"
           >
             {t.cookieEssential}
           </button>
-          <button 
+          <button
             onClick={onAccept}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-bold transition-colors"
+            className="font-sans text-[10px] uppercase tracking-widest bg-white text-[#1a1a1a] px-5 py-2 hover:bg-[#f0ece4] transition-colors"
           >
             {t.cookieAccept}
           </button>

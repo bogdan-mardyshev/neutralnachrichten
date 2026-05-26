@@ -129,7 +129,7 @@ const DeepAnalysisSkeleton: React.FC<{ lang: Language; t: Translations }> = ({ l
   }, [msgs.length]);
 
   return (
-    <div className="space-y-0 border-2 border-[#1a1a1a] overflow-hidden">
+    <div className="space-y-0 border-2 border-[#1a1a1a] dark:border-[#2d2d2d] overflow-hidden bg-[#FFF8F0] dark:bg-[#141414]">
       {/* Header */}
       <div className="bg-[#1a1a1a] px-5 py-3 flex items-center justify-between">
         <span className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{da.title}</span>
@@ -142,14 +142,14 @@ const DeepAnalysisSkeleton: React.FC<{ lang: Language; t: Translations }> = ({ l
       </div>
 
       {SKEL_SECTIONS.map((s, i) => (
-        <div key={i} className="border-b border-[#e0d8cf] last:border-0 px-5 py-4 animate-pulse">
+        <div key={i} className="border-b border-[#e0d8cf] dark:border-[#252525] last:border-0 px-5 py-4 animate-pulse">
           <div className="flex items-center justify-between mb-3">
-            <div className="h-3 bg-[#e0d8cf] rounded w-40" />
-            <div className="h-3 bg-[#e0d8cf] rounded w-5" />
+            <div className="h-3 bg-[#e0d8cf] dark:bg-[#252525] rounded w-40" />
+            <div className="h-3 bg-[#e0d8cf] dark:bg-[#252525] rounded w-5" />
           </div>
           <div className="space-y-2">
-            <div className="h-2.5 bg-[#e8e0d5] rounded w-full" />
-            <div className="h-2.5 bg-[#e8e0d5] rounded w-4/5" />
+            <div className="h-2.5 bg-[#e8e0d5] dark:bg-[#2d2d2d] rounded w-full" />
+            <div className="h-2.5 bg-[#e8e0d5] dark:bg-[#2d2d2d] rounded w-4/5" />
           </div>
         </div>
       ))}
@@ -186,11 +186,11 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
 
       {/* ── AI Loading Banner — ticker + insights + countdown ────────────────── */}
       {analysisLoading && (
-        <div className="border border-[#e0d8cf] bg-[#FFF8F0] px-5 py-4 space-y-3 animate-fade-in">
+        <div className="border border-[#e0d8cf] dark:border-[#252525] bg-[#FFF8F0] dark:bg-[#141414] px-5 py-4 space-y-3 animate-fade-in">
           {/* Source ticker */}
           <div className="flex items-center gap-2.5">
             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0" />
-            <span className="font-sans text-[11px] text-gray-500">
+            <span className="font-sans text-[11px] text-gray-500 dark:text-gray-400">
               {lang === 'de' ? 'Analysiere:' : lang === 'en' ? 'Analysing:' : 'Анализируем:'}
             </span>
             <span className="font-sans text-[11px] font-bold text-emerald-700 transition-all duration-500">
@@ -202,12 +202,12 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
           {getInsights(data.coverage_distribution, lang).map((insight, i) => (
             <div key={i} className="flex items-start gap-2">
               <span className="text-[9px] text-emerald-400 mt-0.5 shrink-0">◆</span>
-              <p className="font-sans text-[11px] text-gray-600">{insight}</p>
+              <p className="font-sans text-[11px] text-gray-600 dark:text-gray-400">{insight}</p>
             </div>
           ))}
 
           {/* Countdown */}
-          <div className="flex items-center gap-2 pt-2 border-t border-[#e0d8cf]">
+          <div className="flex items-center gap-2 pt-2 border-t border-[#e0d8cf] dark:border-[#252525]">
             <div className="w-1 h-1 bg-gray-300 rounded-full animate-pulse" />
             <span className="font-sans text-[10px] uppercase tracking-widest text-gray-400">
               {lang === 'de'
@@ -223,13 +223,13 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
 
       {/* Degraded warning — newspaper style */}
       {data._meta?.degraded && (
-        <div className="border-l-4 border-amber-600 bg-amber-50 px-5 py-3">
-          <p className="font-sans text-xs text-amber-800">{t.degraded_warning}</p>
+        <div className="border-l-4 border-amber-600 bg-amber-50 dark:bg-amber-950/30 px-5 py-3">
+          <p className="font-sans text-xs text-amber-800 dark:text-amber-300">{t.degraded_warning}</p>
         </div>
       )}
 
       {/* ── Header + Fact Check ── */}
-      <div className="border-2 border-[#1a1a1a] overflow-hidden">
+      <div className="border-2 border-[#1a1a1a] dark:border-[#2d2d2d] overflow-hidden bg-[#FFF8F0] dark:bg-[#141414]">
         {/* Black header with topic */}
         <div className="bg-[#1a1a1a] px-4 sm:px-6 py-4 sm:py-5">
           <p className="font-sans text-[10px] uppercase tracking-[0.25em] text-white/50 mb-1">{t.topic}</p>
@@ -268,12 +268,12 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
           {analysisLoading && !overall_non_partisan_analysis ? (
             /* Skeleton while waiting for AI analysis */
             <div className="border-l-2 border-emerald-400 pl-4 space-y-2 animate-pulse">
-              <div className="h-3 bg-[#e8e0d5] rounded w-full" />
-              <div className="h-3 bg-[#e8e0d5] rounded w-5/6" />
-              <div className="h-3 bg-[#e8e0d5] rounded w-4/5" />
+              <div className="h-3 bg-[#e8e0d5] dark:bg-[#252525] rounded w-full" />
+              <div className="h-3 bg-[#e8e0d5] dark:bg-[#252525] rounded w-5/6" />
+              <div className="h-3 bg-[#e8e0d5] dark:bg-[#252525] rounded w-4/5" />
             </div>
           ) : (
-            <p className="font-serif text-base text-[#1a1a1a] leading-relaxed border-l-2 border-emerald-400 pl-4">
+            <p className="font-serif text-base text-[#1a1a1a] dark:text-[#f0ece4] leading-relaxed border-l-2 border-emerald-400 pl-4">
               {typewriterText}
               {typewriterText.length < (overall_non_partisan_analysis?.length ?? 0) && (
                 <span className="inline-block w-0.5 h-[1em] bg-emerald-500 animate-pulse ml-0.5 align-middle" />
@@ -319,7 +319,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
       )}
 
       {/* ── Share ── */}
-      <div className="border-t-2 border-[#1a1a1a] pt-6">
+      <div className="border-t-2 border-[#1a1a1a] dark:border-[#2d2d2d] pt-6">
         <ShareButtons topic={analysis_topic} lang={lang} />
       </div>
     </div>

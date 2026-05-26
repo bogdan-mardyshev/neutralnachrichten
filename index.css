@@ -3,17 +3,65 @@
 /* ── Dark mode (Tailwind v4 class strategy) ─────────────────────────────────── */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ── Design tokens ───────────────────────────────────────────────────────────── */
+:root {
+  --nn-bg:          #FFF8F0;
+  --nn-surface:     #ffffff;
+  --nn-surface-2:   #f5ede3;
+  --nn-border:      #1a1a1a;
+  --nn-border-soft: #e0d8cf;
+  --nn-text:        #1a1a1a;
+  --nn-text-2:      #4a4540;
+  --nn-text-muted:  #9a9490;
+  --nn-accent:      #e11d48;
+  --nn-emerald:     #10b981;
+  --nn-skeleton:    #e0d8cf;
+  --nn-skeleton-2:  #ede6dc;
+}
+
+.dark {
+  --nn-bg:          #0a0a0a;
+  --nn-surface:     #141414;
+  --nn-surface-2:   #1c1c1c;
+  --nn-border:      #2d2d2d;
+  --nn-border-soft: #252525;
+  --nn-text:        #f0ece4;
+  --nn-text-2:      #b0a89e;
+  --nn-text-muted:  #6a6460;
+  --nn-accent:      #f43f5e;
+  --nn-emerald:     #34d399;
+  --nn-skeleton:    #252525;
+  --nn-skeleton-2:  #2d2d2d;
+}
+
+/* ── Smooth theme transitions ────────────────────────────────────────────────── */
+html {
+  color-scheme: light dark;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+*, *::before, *::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+}
+
+/* Animations must stay snappy — no transitions */
+.animate-slide-up, .animate-slide-down, .animate-fade-in, .animate-scale-in,
+.animate-sheet-up, .animate-nav-bounce, .animate-scan, .animate-pulse,
+.animate-spin, .animate-ping {
+  transition: none !important;
+}
+
 /* ── Fonts ─────────────────────────────────────────────────────────────────── */
 body {
   font-family: 'Inter', sans-serif;
-  background-color: #FFF8F0;
+  background-color: var(--nn-bg);
+  color: var(--nn-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-.dark body {
-  background-color: #0f0f0f;
-  color: #f0ece4;
-}
+
 h1, h2, h3, .serif {
   font-family: 'Merriweather', serif;
 }
@@ -34,12 +82,6 @@ button, a, input, select, textarea {
   input, textarea, select {
     font-size: 16px !important;
   }
-}
-
-/* iOS momentum scrolling */
-html {
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
 }
 
 /* ── Safe area helpers ─────────────────────────────────────────────────────── */
@@ -110,7 +152,7 @@ html {
 
 /* ── Shimmer skeleton ──────────────────────────────────────────────────────── */
 .skeleton {
-  background: linear-gradient(90deg, #e0d8cf 25%, #ede6dc 50%, #e0d8cf 75%);
+  background: linear-gradient(90deg, var(--nn-skeleton) 25%, var(--nn-skeleton-2) 50%, var(--nn-skeleton) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s ease infinite;
 }
@@ -143,10 +185,13 @@ html {
 /* ── Custom scrollbar (desktop only) ───────────────────────────────────────── */
 @media (min-width: 640px) {
   ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: #FFF8F0; }
-  ::-webkit-scrollbar-thumb { background: #e0d8cf; }
+  ::-webkit-scrollbar-track { background: var(--nn-bg); }
+  ::-webkit-scrollbar-thumb { background: var(--nn-border-soft); }
   ::-webkit-scrollbar-thumb:hover { background: #1a1a1a; }
 }
+
+.dark ::-webkit-scrollbar-track { background: var(--nn-bg); }
+.dark ::-webkit-scrollbar-thumb { background: var(--nn-border-soft); }
 
 /* ── Focus ring ────────────────────────────────────────────────────────────── */
 :focus-visible {

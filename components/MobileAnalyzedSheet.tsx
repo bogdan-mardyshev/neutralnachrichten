@@ -65,7 +65,7 @@ export function MobileAnalyzedSheet({ open, onClose, lang, onSelect, recentSearc
     >
       <div
         ref={sheetRef}
-        className="absolute bottom-0 left-0 right-0 bg-[#FFF8F0] rounded-t-2xl border-t-2 border-[#1a1a1a] animate-sheet-up overflow-hidden"
+        className="absolute bottom-0 left-0 right-0 bg-[#FFF8F0] dark:bg-[#141414] rounded-t-2xl border-t-2 border-[#1a1a1a] dark:border-[#2d2d2d] animate-sheet-up overflow-hidden"
         style={{
           maxHeight: '85vh',
           paddingBottom: 'env(safe-area-inset-bottom)',
@@ -86,17 +86,17 @@ export function MobileAnalyzedSheet({ open, onClose, lang, onSelect, recentSearc
 
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 bg-[#e0d8cf] rounded-full" />
+          <div className="w-10 h-1 bg-[#e0d8cf] dark:bg-[#2d2d2d] rounded-full" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#e0d8cf]">
-          <h2 className="font-sans text-[11px] font-bold uppercase tracking-widest text-[#1a1a1a]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#e0d8cf] dark:border-[#252525]">
+          <h2 className="font-sans text-[11px] font-bold uppercase tracking-widest text-[#1a1a1a] dark:text-[#f0ece4]">
             {L[lang]}
           </h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-[#1a1a1a] text-xl leading-none"
+            className="w-8 h-8 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-[#1a1a1a] dark:hover:text-[#f0ece4] text-xl leading-none"
           >
             ×
           </button>

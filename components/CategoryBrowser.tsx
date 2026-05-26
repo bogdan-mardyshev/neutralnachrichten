@@ -103,7 +103,7 @@ export const CategoryBrowser: React.FC<Props> = ({ lang, onSelect }) => {
               className={`font-sans text-[10px] uppercase tracking-wider px-2.5 py-1 border transition-all ${
                 isActive
                   ? `${st.pillActive} border-transparent`
-                  : 'border-gray-300 text-gray-600 hover:border-[#1a1a1a] hover:text-[#1a1a1a]'
+                  : 'border-gray-300 dark:border-[#2d2d2d] text-gray-600 dark:text-[#f0ece4]/60 hover:border-[#1a1a1a] dark:hover:border-[#f0ece4] hover:text-[#1a1a1a] dark:hover:text-[#f0ece4]'
               }`}
             >
               <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${isActive ? 'bg-white/80' : st.dot}`} />
@@ -115,7 +115,7 @@ export const CategoryBrowser: React.FC<Props> = ({ lang, onSelect }) => {
 
       {/* Stories panel */}
       {active && (
-        <div ref={panelRef} className="border-2 border-[#1a1a1a] overflow-hidden">
+        <div ref={panelRef} className="border-2 border-[#1a1a1a] dark:border-[#2d2d2d] overflow-hidden bg-[#FFF8F0] dark:bg-[#141414]">
           {/* Panel header */}
           <div className="px-4 py-2 bg-[#1a1a1a] flex items-center justify-between">
             <span className="font-sans text-[10px] font-bold text-white uppercase tracking-widest">
@@ -131,13 +131,13 @@ export const CategoryBrowser: React.FC<Props> = ({ lang, onSelect }) => {
 
           {/* Loading */}
           {loading && (
-            <div className="divide-y divide-[#e8e0d5]">
+            <div className="divide-y divide-[#e8e0d5] dark:divide-[#252525]">
               {[...Array(5)].map((_, i) => (
                 <div key={i} className="px-4 py-3 flex gap-3 items-start animate-pulse">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#e0d8cf] mt-1.5 shrink-0" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#e0d8cf] dark:bg-[#252525] mt-1.5 shrink-0" />
                   <div className="flex-1 space-y-1.5">
-                    <div className="h-2.5 bg-[#e8e0d5] rounded w-full" />
-                    <div className="h-2.5 bg-[#e8e0d5] rounded w-3/4" />
+                    <div className="h-2.5 bg-[#e8e0d5] dark:bg-[#252525] rounded w-full" />
+                    <div className="h-2.5 bg-[#e8e0d5] dark:bg-[#252525] rounded w-3/4" />
                   </div>
                 </div>
               ))}
@@ -146,31 +146,31 @@ export const CategoryBrowser: React.FC<Props> = ({ lang, onSelect }) => {
 
           {/* Story list */}
           {!loading && stories.length > 0 && (
-            <div className="divide-y divide-[#e8e0d5]">
+            <div className="divide-y divide-[#e8e0d5] dark:divide-[#252525]">
               {stories.map((story, i) => (
                 <button
                   key={i}
                   onClick={() => onSelect(story.search_topic)}
-                  className="w-full text-left px-4 py-3 flex gap-3 items-start hover:bg-[#f0e8dc] transition-colors group"
+                  className="w-full text-left px-4 py-3 flex gap-3 items-start hover:bg-[#f0e8dc] dark:hover:bg-[#1c1c1c] transition-colors group"
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${CAT_STYLE[active].dot} mt-1.5 shrink-0`} />
                   <div className="flex-1 min-w-0">
-                    <p className="font-serif text-xs font-semibold text-[#1a1a1a] leading-snug line-clamp-2">
+                    <p className="font-serif text-xs font-semibold text-[#1a1a1a] dark:text-[#f0ece4] leading-snug line-clamp-2">
                       {headline(story)}
                     </p>
-                    <p className="font-sans text-[10px] text-gray-400 leading-relaxed line-clamp-1 mt-0.5">
+                    <p className="font-sans text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed line-clamp-1 mt-0.5">
                       {summary(story)}
                     </p>
-                    <span className="font-sans text-[10px] text-gray-300 mt-1 inline-block">{story.source}</span>
+                    <span className="font-sans text-[10px] text-gray-300 dark:text-gray-600 mt-1 inline-block">{story.source}</span>
                   </div>
-                  <span className="font-sans text-[10px] text-gray-300 group-hover:text-[#1a1a1a] mt-0.5 shrink-0 transition-colors">→</span>
+                  <span className="font-sans text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-[#1a1a1a] dark:group-hover:text-[#f0ece4] mt-0.5 shrink-0 transition-colors">→</span>
                 </button>
               ))}
             </div>
           )}
 
           {!loading && stories.length === 0 && (
-            <p className="px-4 py-6 text-center font-sans text-xs text-gray-400">{cb.loading}</p>
+            <p className="px-4 py-6 text-center font-sans text-xs text-gray-400 dark:text-gray-500">{cb.loading}</p>
           )}
         </div>
       )}
