@@ -46,7 +46,7 @@ const GoogleIcon = () => (
 // ── Check icon ────────────────────────────────────────────────────────────────
 const Check = ({ ok }: { ok: boolean }) => (
   <span className={`inline-block w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center transition-all ${
-    ok ? 'bg-emerald-600 border-emerald-600' : 'border-gray-300 bg-transparent'
+    ok ? 'bg-emerald-600 border-emerald-600' : 'border-gray-300 dark:border-gray-600 bg-transparent'
   }`}>
     {ok && (
       <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -62,7 +62,7 @@ const StrengthBar = ({ score }: { score: number }) => {
   return (
     <div className="flex gap-1 mt-1.5">
       {[0, 1, 2].map(i => (
-        <div key={i} className={`flex-1 h-1 transition-all duration-300 ${i < score ? colors[score - 1] : 'bg-[#e0d8cf]'}`} />
+        <div key={i} className={`flex-1 h-1 transition-all duration-300 ${i < score ? colors[score - 1] : 'bg-[#e0d8cf] dark:bg-[#2d2d2d]'}`} />
       ))}
     </div>
   );
@@ -219,7 +219,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
       <div className="absolute inset-0 bg-[#1a1a1a]/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md bg-[#FFF8F0] border-2 border-[#1a1a1a] shadow-[4px_4px_0_#1a1a1a]">
+      <div className="relative w-full max-w-md bg-[#FFF8F0] dark:bg-[#141414] border-2 border-[#1a1a1a] dark:border-[#2d2d2d] shadow-[4px_4px_0_#1a1a1a] dark:shadow-[4px_4px_0_#2d2d2d]">
 
         {/* Header */}
         <div className="bg-[#1a1a1a] px-6 py-4 flex items-center justify-between">
@@ -249,22 +249,22 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
               </svg>
             </div>
-            <h3 className="font-serif font-black text-xl text-[#1a1a1a] mb-2">
+            <h3 className="font-serif font-black text-xl text-[#1a1a1a] dark:text-[#f0ece4] mb-2">
               {lang === 'de' ? 'E-Mail bestätigen' : lang === 'ru' ? 'Подтвердите почту' : 'Confirm your email'}
             </h3>
-            <p className="font-sans text-sm text-gray-500 mb-1">
+            <p className="font-sans text-sm text-gray-500 dark:text-gray-400 mb-1">
               {lang === 'de' ? 'Wir haben einen Bestätigungslink gesendet an:' :
                lang === 'ru' ? 'Мы отправили ссылку для подтверждения на:' :
                'We sent a confirmation link to:'}
             </p>
-            <p className="font-serif font-bold text-[#1a1a1a] mb-5 break-all">{registeredEmail}</p>
-            <p className="font-sans text-[11px] text-gray-400 mb-6">
+            <p className="font-serif font-bold text-[#1a1a1a] dark:text-[#f0ece4] mb-5 break-all">{registeredEmail}</p>
+            <p className="font-sans text-[11px] text-gray-400 dark:text-gray-500 mb-6">
               {lang === 'de' ? 'Klicke auf den Link in der E-Mail, um dein Konto zu aktivieren. Danach kannst du dich anmelden.' :
                lang === 'ru' ? 'Нажмите на ссылку в письме, чтобы активировать аккаунт. После этого вы сможете войти.' :
                'Click the link in the email to activate your account. You can then log in.'}
             </p>
-            <div className="h-px bg-[#e0d8cf] mb-5" />
-            <p className="font-sans text-[11px] text-gray-400 mb-3">
+            <div className="h-px bg-[#e0d8cf] dark:bg-[#252525] mb-5" />
+            <p className="font-sans text-[11px] text-gray-400 dark:text-gray-500 mb-3">
               {lang === 'de' ? 'Keine E-Mail erhalten?' : lang === 'ru' ? 'Не получили письмо?' : "Didn't receive an email?"}
             </p>
             <button
@@ -277,7 +277,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                 setResendSent(true);
               }}
               disabled={resendSent}
-              className="font-sans text-[10px] uppercase tracking-widest text-gray-500 underline hover:no-underline hover:text-[#1a1a1a] transition-colors disabled:opacity-50"
+              className="font-sans text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 underline hover:no-underline hover:text-[#1a1a1a] dark:hover:text-[#f0ece4] transition-colors disabled:opacity-50"
             >
               {resendSent
                 ? (lang === 'de' ? '✓ Gesendet' : lang === 'ru' ? '✓ Отправлено' : '✓ Sent')
@@ -296,18 +296,18 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <p className="font-serif font-bold text-[#1a1a1a] mb-1">{t.forgotSent}</p>
-                <p className="font-sans text-[11px] text-gray-400 mb-5">{forgotEmail}</p>
-                <button onClick={() => switchMode('login')} className="font-sans text-[10px] uppercase tracking-widest text-gray-500 hover:text-[#1a1a1a] transition-colors">
+                <p className="font-serif font-bold text-[#1a1a1a] dark:text-[#f0ece4] mb-1">{t.forgotSent}</p>
+                <p className="font-sans text-[11px] text-gray-400 dark:text-gray-500 mb-5">{forgotEmail}</p>
+                <button onClick={() => switchMode('login')} className="font-sans text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-[#1a1a1a] dark:hover:text-[#f0ece4] transition-colors">
                   {t.backToLogin}
                 </button>
               </div>
             ) : (
               <>
-                <p className="font-sans text-sm text-gray-500">{t.forgotDesc}</p>
+                <p className="font-sans text-sm text-gray-500 dark:text-gray-400">{t.forgotDesc}</p>
                 <form onSubmit={handleForgot} className="space-y-4">
                   <div>
-                    <label className="block font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/60 mb-1">{t.email}</label>
+                    <label className="block font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/60 dark:text-[#f0ece4]/60 mb-1">{t.email}</label>
                     <input
                       type="email"
                       value={forgotEmail}
@@ -315,16 +315,16 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                       required
                       autoComplete="email"
                       placeholder="name@beispiel.de"
-                      className="w-full border-2 border-[#1a1a1a] bg-white px-3 py-2.5 font-serif text-[#1a1a1a] placeholder:text-[#1a1a1a]/30 focus:outline-none focus:ring-2 focus:ring-[#1a1a1a] focus:ring-offset-1"
+                      className="w-full border-2 border-[#1a1a1a] dark:border-[#2d2d2d] bg-white dark:bg-[#1c1c1c] px-3 py-2.5 font-serif text-[#1a1a1a] dark:text-[#f0ece4] placeholder:text-[#1a1a1a]/30 dark:placeholder:text-[#f0ece4]/30 focus:outline-none focus:border-rose-500 dark:focus:border-rose-500"
                     />
                   </div>
-                  {forgotError && <div className="border border-rose-400 bg-rose-50 px-3 py-2 font-serif text-sm text-rose-700">{forgotError}</div>}
-                  <button type="submit" disabled={forgotLoading} className="w-full bg-[#1a1a1a] text-[#FFF8F0] py-3 font-sans text-xs uppercase tracking-widest hover:bg-[#333] transition-colors disabled:opacity-50">
+                  {forgotError && <div className="border border-rose-400 dark:border-rose-500/50 bg-rose-50 dark:bg-rose-950/30 px-3 py-2 font-serif text-sm text-rose-700 dark:text-rose-300">{forgotError}</div>}
+                  <button type="submit" disabled={forgotLoading} className="w-full bg-[#1a1a1a] dark:bg-white text-[#FFF8F0] dark:text-[#1a1a1a] py-3 font-sans text-xs uppercase tracking-widest hover:bg-rose-600 dark:hover:bg-rose-600 dark:hover:text-white transition-colors disabled:opacity-50">
                     {forgotLoading ? t.loading : t.forgotSubmit}
                   </button>
                 </form>
                 <div className="text-center">
-                  <button onClick={() => switchMode('login')} className="font-sans text-[10px] uppercase tracking-widest text-gray-400 hover:text-[#1a1a1a] transition-colors">
+                  <button onClick={() => switchMode('login')} className="font-sans text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 hover:text-[#1a1a1a] dark:hover:text-[#f0ece4] transition-colors">
                     {t.backToLogin}
                   </button>
                 </div>
@@ -336,11 +336,11 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
 
           /* ── 3. LOGIN / REGISTER ── */
           <>
-            <div className="flex border-b-2 border-[#1a1a1a]">
+            <div className="flex border-b-2 border-[#1a1a1a] dark:border-[#2d2d2d]">
               {(['login', 'register'] as Mode[]).map(m => (
                 <button key={m} onClick={() => switchMode(m)}
                   className={`flex-1 py-2.5 font-sans text-xs uppercase tracking-widest transition-colors ${
-                    mode === m ? 'bg-[#1a1a1a] text-[#FFF8F0]' : 'text-[#1a1a1a]/60 hover:text-[#1a1a1a] hover:bg-[#e8e0d5]'
+                    mode === m ? 'bg-[#1a1a1a] text-[#FFF8F0]' : 'text-[#1a1a1a]/60 dark:text-[#f0ece4]/60 hover:text-[#1a1a1a] dark:hover:text-[#f0ece4] hover:bg-[#e8e0d5] dark:hover:bg-[#252525]'
                   }`}
                 >
                   {m === 'login' ? t.login : t.register}
@@ -351,7 +351,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
             <div className="p-6 space-y-4">
               {/* Google OAuth */}
               <button onClick={handleGoogleLogin} type="button"
-                className="w-full flex items-center justify-center gap-3 border-2 border-[#1a1a1a] py-2.5 font-sans text-xs uppercase tracking-widest hover:bg-[#e8e0d5] transition-colors"
+                className="w-full flex items-center justify-center gap-3 border-2 border-[#1a1a1a] dark:border-[#2d2d2d] py-2.5 font-sans text-xs uppercase tracking-widest text-[#1a1a1a] dark:text-[#f0ece4] hover:bg-[#e8e0d5] dark:hover:bg-[#252525] transition-colors"
               >
                 <GoogleIcon />
                 {t.googleBtn}
@@ -359,30 +359,30 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
 
               {/* Divider */}
               <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-[#e0d8cf]" />
-                <span className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/40">{t.orDivider}</span>
-                <div className="flex-1 h-px bg-[#e0d8cf]" />
+                <div className="flex-1 h-px bg-[#e0d8cf] dark:bg-[#252525]" />
+                <span className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/40 dark:text-[#f0ece4]/40">{t.orDivider}</span>
+                <div className="flex-1 h-px bg-[#e0d8cf] dark:bg-[#252525]" />
               </div>
 
               {/* Form */}
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/60 mb-1">{t.email}</label>
+                  <label className="block font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/60 dark:text-[#f0ece4]/60 mb-1">{t.email}</label>
                   <input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email"
                     placeholder="name@beispiel.de"
-                    className="w-full border-2 border-[#1a1a1a] bg-white px-3 py-2.5 font-serif text-[#1a1a1a] placeholder:text-[#1a1a1a]/30 focus:outline-none focus:ring-2 focus:ring-[#1a1a1a] focus:ring-offset-1"
+                    className="w-full border-2 border-[#1a1a1a] dark:border-[#2d2d2d] bg-white dark:bg-[#1c1c1c] px-3 py-2.5 font-serif text-[#1a1a1a] dark:text-[#f0ece4] placeholder:text-[#1a1a1a]/30 dark:placeholder:text-[#f0ece4]/30 focus:outline-none focus:border-rose-500 dark:focus:border-rose-500"
                   />
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/60">
+                    <label className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/60 dark:text-[#f0ece4]/60">
                       {t.password}
-                      {mode === 'register' && <span className="ml-1 text-[#1a1a1a]/40 normal-case tracking-normal">{t.passwordMin}</span>}
+                      {mode === 'register' && <span className="ml-1 text-[#1a1a1a]/40 dark:text-[#f0ece4]/40 normal-case tracking-normal">{t.passwordMin}</span>}
                     </label>
                     {mode === 'login' && (
                       <button type="button" onClick={() => switchMode('forgot')}
-                        className="font-sans text-[10px] text-gray-400 hover:text-[#1a1a1a] transition-colors underline"
+                        className="font-sans text-[10px] text-gray-400 dark:text-gray-500 hover:text-[#1a1a1a] dark:hover:text-[#f0ece4] transition-colors underline"
                       >
                         {t.forgotPassword}
                       </button>
@@ -392,10 +392,10 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                     <input
                       type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
                       required autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="••••••••"
-                      className="w-full border-2 border-[#1a1a1a] bg-white px-3 py-2.5 pr-10 font-serif text-[#1a1a1a] placeholder:text-[#1a1a1a]/30 focus:outline-none focus:ring-2 focus:ring-[#1a1a1a] focus:ring-offset-1"
+                      className="w-full border-2 border-[#1a1a1a] dark:border-[#2d2d2d] bg-white dark:bg-[#1c1c1c] px-3 py-2.5 pr-10 font-serif text-[#1a1a1a] dark:text-[#f0ece4] placeholder:text-[#1a1a1a]/30 dark:placeholder:text-[#f0ece4]/30 focus:outline-none focus:border-rose-500 dark:focus:border-rose-500"
                     />
                     <button type="button" onClick={() => setShowPw(v => !v)} tabIndex={-1}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1a1a1a] transition-colors"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-[#1a1a1a] dark:hover:text-[#f0ece4] transition-colors"
                     >
                       {showPw ? (
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -423,7 +423,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                         ] as { ok: boolean; label: string }[]).map(({ ok, label }) => (
                           <div key={label} className="flex items-center gap-2">
                             <Check ok={ok} />
-                            <span className={`font-sans text-[11px] transition-colors ${ok ? 'text-emerald-700' : 'text-gray-400'}`}>{label}</span>
+                            <span className={`font-sans text-[11px] transition-colors ${ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>{label}</span>
                           </div>
                         ))}
                       </div>
@@ -432,17 +432,17 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                 </div>
 
                 {error && error !== '__unverified__' && (
-                  <div className="border border-rose-400 bg-rose-50 px-3 py-2 font-serif text-sm text-rose-700">{error}</div>
+                  <div className="border border-rose-400 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 px-3 py-2 font-serif text-sm text-rose-700 dark:text-rose-400">{error}</div>
                 )}
 
                 {error === '__unverified__' && (
-                  <div className="border border-amber-400 bg-amber-50 px-3 py-3 space-y-2">
-                    <p className="font-serif text-sm text-amber-800">{t.notVerifiedError}</p>
+                  <div className="border border-amber-400 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-3 space-y-2">
+                    <p className="font-serif text-sm text-amber-800 dark:text-amber-400">{t.notVerifiedError}</p>
                     {resendSent ? (
-                      <p className="font-sans text-[11px] text-emerald-700 font-bold">{t.notVerifiedSent}</p>
+                      <p className="font-sans text-[11px] text-emerald-700 dark:text-emerald-400 font-bold">{t.notVerifiedSent}</p>
                     ) : (
                       <button type="button" onClick={handleResend} disabled={resendLoading}
-                        className="font-sans text-[11px] uppercase tracking-widest text-amber-800 underline hover:no-underline disabled:opacity-50"
+                        className="font-sans text-[11px] uppercase tracking-widest text-amber-800 dark:text-amber-400 underline hover:no-underline disabled:opacity-50"
                       >
                         {resendLoading ? t.loading : t.notVerifiedResend}
                       </button>
@@ -451,29 +451,29 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login', l
                 )}
 
                 <button type="submit" disabled={loading || (mode === 'register' && !allPass)}
-                  className="w-full bg-[#1a1a1a] text-[#FFF8F0] py-3 font-sans text-xs uppercase tracking-widest hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-[#1a1a1a] dark:bg-white text-[#FFF8F0] dark:text-[#1a1a1a] py-3 font-sans text-xs uppercase tracking-widest hover:bg-[#333] dark:hover:bg-[#e8e0d5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? t.loading : mode === 'login' ? t.submitLogin : t.submitRegister}
                 </button>
               </form>
 
               {mode === 'register' && (
-                <div className="border-t border-[#e0d8cf] pt-4">
-                  <p className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 mb-2">{t.benefitsTitle}</p>
+                <div className="border-t border-[#e0d8cf] dark:border-[#2d2d2d] pt-4">
+                  <p className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-[#f0ece4]/50 mb-2">{t.benefitsTitle}</p>
                   <ul className="space-y-1">
                     {t.benefits.map((item: string) => (
-                      <li key={item} className="font-serif text-sm text-[#1a1a1a]/70 flex items-start gap-2">
-                        <span className="text-[#1a1a1a]/40 mt-0.5">→</span>{item}
+                      <li key={item} className="font-serif text-sm text-[#1a1a1a]/70 dark:text-[#f0ece4]/70 flex items-start gap-2">
+                        <span className="text-[#1a1a1a]/40 dark:text-[#f0ece4]/40 mt-0.5">→</span>{item}
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
 
-              <p className="text-center font-serif text-sm text-[#1a1a1a]/60">
+              <p className="text-center font-serif text-sm text-[#1a1a1a]/60 dark:text-[#f0ece4]/60">
                 {mode === 'login' ? t.switchToRegister : t.switchToLogin}{' '}
                 <button type="button" onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
-                  className="text-[#1a1a1a] underline hover:no-underline"
+                  className="text-[#1a1a1a] dark:text-[#f0ece4] underline hover:no-underline"
                 >
                   {mode === 'login' ? t.linkRegister : t.linkLogin}
                 </button>

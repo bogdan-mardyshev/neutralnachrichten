@@ -73,19 +73,19 @@ function Tab({ icon, label, active, badge, onClick }: TabProps) {
       {/* Icon */}
       <div
         className={`transition-all duration-200 ${bouncing ? 'animate-nav-bounce' : ''} ${
-          active ? 'text-rose-600' : 'text-gray-400'
+          active ? 'text-rose-600' : 'text-gray-400 dark:text-gray-500'
         }`}
         style={{ transform: active ? 'scale(1.05)' : 'scale(1)' }}
       >
         {icon}
         {badge && (
-          <span className="absolute top-1.5 right-[calc(50%-10px)] w-2 h-2 bg-rose-500 rounded-full border-2 border-[#FFF8F0]" />
+          <span className="absolute top-1.5 right-[calc(50%-10px)] w-2 h-2 bg-rose-500 rounded-full border-2 border-[#FFF8F0] dark:border-[#0a0a0a]" />
         )}
       </div>
 
       {/* Label */}
       <span className={`font-sans text-[9px] uppercase tracking-widest leading-none transition-colors duration-200 ${
-        active ? 'text-rose-600 font-bold' : 'text-gray-400'
+        active ? 'text-rose-600 font-bold' : 'text-gray-400 dark:text-gray-500'
       }`}>
         {label}
       </span>
@@ -105,7 +105,7 @@ export function MobileBottomNav({ lang, authUser, onSearchTab, onAnalyzed }: Pro
 
   return (
     <nav
-      className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#FFF8F0] border-t-2 border-[#1a1a1a]"
+      className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#FFF8F0] dark:bg-[#0a0a0a] border-t-2 border-[#1a1a1a] dark:border-[#2d2d2d]"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       {/* Spectrum strip at top */}

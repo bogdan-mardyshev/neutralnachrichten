@@ -49,7 +49,7 @@ export const BiasBar: React.FC<BiasBarProps> = ({ coverage, lang }) => {
   const silentSpectra = SPECTRUM_ORDER.filter(s => coverage[s]?.silence === true);
 
   return (
-    <div className="border-2 border-[#1a1a1a] overflow-hidden animate-slide-up stagger-2">
+    <div className="border-2 border-[#1a1a1a] dark:border-[#2d2d2d] overflow-hidden animate-slide-up stagger-2 bg-[#FFF8F0] dark:bg-[#141414]">
       {/* Header */}
       <div className="bg-[#1a1a1a] px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
         <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">
@@ -75,7 +75,7 @@ export const BiasBar: React.FC<BiasBarProps> = ({ coverage, lang }) => {
                 // Tiny sliver to indicate silence
                 <div
                   key={spectrum}
-                  className="bg-[#e0d8cf] opacity-60 h-full"
+                  className="bg-[#e0d8cf] dark:bg-[#252525] opacity-60 h-full"
                   style={{ width: '2px' }}
                   title={`${labelMap[spectrum]}: 0`}
                 />
@@ -90,7 +90,7 @@ export const BiasBar: React.FC<BiasBarProps> = ({ coverage, lang }) => {
               );
             })}
           </div>
-          <div className="flex justify-between mt-1.5 font-sans text-[9px] uppercase tracking-widest text-gray-400">
+          <div className="flex justify-between mt-1.5 font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500">
             <span>{t.leaningLeft}</span>
             <span>{t.leaningCenter}</span>
             <span>{t.leaningRight}</span>
@@ -110,18 +110,18 @@ export const BiasBar: React.FC<BiasBarProps> = ({ coverage, lang }) => {
             return (
               <div key={spectrum} className="flex items-center gap-2 sm:gap-3">
                 {/* Dot */}
-                <div className={`w-2 h-2 rounded-full shrink-0 ${isSilent ? 'bg-[#e0d8cf]' : c.bar}`} />
+                <div className={`w-2 h-2 rounded-full shrink-0 ${isSilent ? 'bg-[#e0d8cf] dark:bg-[#252525]' : c.bar}`} />
 
                 {/* Label */}
-                <span className="font-sans text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-600 w-20 sm:w-24 shrink-0 leading-tight">
+                <span className="font-sans text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-600 dark:text-gray-400 w-20 sm:w-24 shrink-0 leading-tight">
                   {labelMap[spectrum]}
                 </span>
 
                 {/* Bar track */}
-                <div className="flex-1 bg-[#e8e0d5] h-1.5 overflow-hidden">
+                <div className="flex-1 bg-[#e8e0d5] dark:bg-[#252525] h-1.5 overflow-hidden">
                   {isSilent ? (
                     <div className="h-full w-full flex items-center">
-                      <div className="h-[1px] w-full bg-[#d0c8bf] border-dashed" />
+                      <div className="h-[1px] w-full bg-[#d0c8bf] dark:bg-[#2d2d2d] border-dashed" />
                     </div>
                   ) : (
                     <div
@@ -133,12 +133,12 @@ export const BiasBar: React.FC<BiasBarProps> = ({ coverage, lang }) => {
 
                 {/* Value */}
                 {isSilent ? (
-                  <span className="font-sans text-[9px] text-gray-300 w-10 sm:w-12 text-right shrink-0 italic">—</span>
+                  <span className="font-sans text-[9px] text-gray-300 dark:text-gray-600 w-10 sm:w-12 text-right shrink-0 italic">—</span>
                 ) : (
                   <div className="flex items-center gap-1 w-10 sm:w-16 justify-end shrink-0">
                     <span className={`font-sans text-xs font-bold ${c.text}`}>{pct}%</span>
                     {hasRealCounts && entry.count != null && (
-                      <span className="font-sans text-[8px] text-gray-300 hidden sm:inline">
+                      <span className="font-sans text-[8px] text-gray-300 dark:text-gray-600 hidden sm:inline">
                         ({entry.count})
                       </span>
                     )}
@@ -151,13 +151,13 @@ export const BiasBar: React.FC<BiasBarProps> = ({ coverage, lang }) => {
 
         {/* Silence warning banner */}
         {silentSpectra.length > 0 && (
-          <div className="border border-amber-300 bg-amber-50 px-3 py-2.5 flex items-start gap-2 mt-1">
+          <div className="border border-amber-300 dark:border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5 flex items-start gap-2 mt-1">
             <span className="text-amber-500 text-sm shrink-0 mt-0.5">⚠</span>
             <div>
-              <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-amber-800 mb-0.5">
+              <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-amber-800 dark:text-amber-300 mb-0.5">
                 {silentSpectra.map(s => labelMap[s]).join(', ')}
               </p>
-              <p className="font-sans text-[10px] text-amber-700 leading-relaxed">
+              <p className="font-sans text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
                 {SILENCE_COPY[lang]}
               </p>
             </div>
