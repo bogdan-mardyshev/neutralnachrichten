@@ -673,7 +673,7 @@ function coverageToPercent(estimate) {
 async function callGeminiWithRetry(topic, language, maxAttempts = 3, attemptTimeoutMs = GEMINI_ATTEMPT_TIMEOUT) {
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
-    tools: [{ googleSearch: {} }]
+    tools: [{ googleSearch: {} }],
   });
 
   let lastError = null;
@@ -686,7 +686,10 @@ async function callGeminiWithRetry(topic, language, maxAttempts = 3, attemptTime
       const result = await Promise.race([
         model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2 }
+          // thinkingBudget: 0 must be here (call-level) — model-level generationConfig
+          // gets shallow-merged and may be overridden. Thinking adds 30-120s overhead
+          // which consistently exceeds our 90s SSE budget.
+          generationConfig: { temperature: 0.2, thinkingConfig: { thinkingBudget: 0 } }
         }),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Gemini attempt timed out')), attemptTimeoutMs)
