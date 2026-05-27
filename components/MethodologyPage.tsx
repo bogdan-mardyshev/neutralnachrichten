@@ -63,29 +63,46 @@ const DEEP_FEATURES: Record<Language, { icon: string; title: string; desc: strin
   ],
 };
 
+// Updated pipeline: 5 steps, no Google Search Grounding, RSS-direct
 const PIPELINE: Record<Language, { n: string; title: string; desc: string; color: string; dotColor: string }[]> = {
   de: [
-    { n: '01', title: 'Thema eingeben',              desc: 'Du gibst ein Thema ein — auf Deutsch, Englisch oder Russisch. Das System übersetzt intern ins Deutsche, falls nötig.',                                   color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
-    { n: '02', title: 'RSS-Streaming (~2s)',          desc: '18 RSS-Feeds werden parallel abgerufen und sofort per SSE an den Browser gestreamt — echte Artikel erscheinen, bevor die KI überhaupt startet.',        color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
-    { n: '03', title: 'KI-Analyse (15–45s)',          desc: 'Gemini 2.5 Flash durchsucht alle 5 Spektren gleichzeitig via Google Search Grounding. Perspektiv-Zusammenfassungen und Fakten-Check werden generiert.',  color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
-    { n: '04', title: 'Übersetzung & Deep Analysis', desc: 'Bei EN/RU-Anfragen wird das Ergebnis semantisch übersetzt. Die Tiefenanalyse (Fakten, Divergenzen, Blind Spots) läuft parallel als zweiter Gemini-Call.',color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
-    { n: '05', title: 'Cache & Auslieferung',        desc: 'Ergebnisse werden 24h in PostgreSQL + RAM gecacht. Nächste Anfrage zum gleichen Thema: sofort. RSS wird immer frisch abgerufen.',                        color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
+    { n: '01', title: 'Thema eingeben',                   desc: 'Du gibst ein Thema ein — auf Deutsch, Englisch oder Russisch. Das System übersetzt intern ins Deutsche, falls nötig.',                                                                          color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
+    { n: '02', title: 'Keyword-Extraktion v2',            desc: 'extractSearchKeywords v2 zerlegt Komposita (Klimawandel → klima + wandel), filtert deutsche Stoppwörter heraus und gewichtet nach Aktualität — findet 18× mehr relevante Artikel als v1.',       color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
+    { n: '03', title: 'RSS-Abruf parallel (3–8s)',        desc: '18 RSS-Feeds werden gleichzeitig abgerufen, 15-Minuten-Cache vermeidet redundante Anfragen. Erste Artikel erscheinen per SSE-Stream im Browser, bevor die KI startet.',                          color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
+    { n: '04', title: 'RSS-Direct Gemini (3–10s)',        desc: 'Gemini 2.5 Flash erhält die RSS-Artikel direkt als Kontext — keine Google-Search-Runde, kein Grounding. Ergebnis: 3–10s statt 15–45s, und 78× niedrigere Kosten ($0,0004 statt $0,035/Anfrage).', color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
+    { n: '05', title: 'Cache 24h + Tiefenanalyse',        desc: 'Ergebnisse werden 24h in PostgreSQL + RAM gecacht. Paralleler zweiter Gemini-Call für Tiefenanalyse (Fakten, Divergenzen, Blind Spots). Nächste Anfrage zum gleichen Thema: sofort.',             color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
   ],
   en: [
-    { n: '01', title: 'Enter topic',                 desc: 'You enter a topic — in German, English or Russian. The system translates to German internally if needed.',                                                color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
-    { n: '02', title: 'RSS streaming (~2s)',          desc: '18 RSS feeds are fetched in parallel and streamed to the browser instantly via SSE — real articles appear before the AI has even started.',               color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
-    { n: '03', title: 'AI analysis (15–45s)',         desc: 'Gemini 2.5 Flash searches all 5 spectra simultaneously via Google Search Grounding. Perspective summaries and fact-checks are generated.',               color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
-    { n: '04', title: 'Translation & deep analysis', desc: 'For EN/RU queries, results are semantically translated. Deep analysis (shared facts, diverging points, blind spots) runs in parallel as a second Gemini call.', color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
-    { n: '05', title: 'Cache & delivery',            desc: 'Results are cached 24h in PostgreSQL + RAM. Next request for the same topic: instant. RSS is always fetched fresh.',                                      color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
+    { n: '01', title: 'Enter topic',                      desc: 'You enter a topic — in German, English or Russian. The system translates to German internally if needed.',                                                                                        color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
+    { n: '02', title: 'Keyword extraction v2',            desc: 'extractSearchKeywords v2 splits compound words (Klimawandel → klima + wandel), filters German stop words, and applies recency weighting — finds 18× more relevant articles than v1.',            color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
+    { n: '03', title: 'RSS fetch parallel (3–8s)',        desc: '18 RSS feeds are fetched simultaneously with a 15-minute cache to avoid redundant requests. First articles stream to the browser via SSE before the AI has started.',                            color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
+    { n: '04', title: 'RSS-direct Gemini (3–10s)',        desc: 'Gemini 2.5 Flash receives RSS articles directly as context — no Google Search round-trip, no grounding. Result: 3–10s instead of 15–45s, and 78× lower cost ($0.0004 vs $0.035/request).',     color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
+    { n: '05', title: 'Cache 24h + deep analysis',        desc: 'Results are cached 24h in PostgreSQL + RAM. A parallel second Gemini call runs the deep analysis (shared facts, diverging points, blind spots). Same topic next time: instant.',                  color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
   ],
   ru: [
-    { n: '01', title: 'Введите тему',                desc: 'Вы вводите тему — на немецком, английском или русском. При необходимости система автоматически переводит на немецкий.',                                   color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
-    { n: '02', title: 'RSS-стриминг (~2с)',           desc: '18 RSS-лент загружаются параллельно и мгновенно стримятся в браузер через SSE — реальные статьи появляются до того, как ИИ вообще начал работу.',        color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
-    { n: '03', title: 'ИИ-анализ (15–45с)',           desc: 'Gemini 2.5 Flash одновременно обходит все 5 спектров через Google Search Grounding. Генерируются перспективные резюме и проверка фактов.',               color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
-    { n: '04', title: 'Перевод и глубокий анализ',   desc: 'Для EN/RU запросов результат семантически переводится. Глубокий анализ (факты, расхождения, слепые пятна) параллельно выполняется вторым вызовом Gemini.', color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
-    { n: '05', title: 'Кэш и доставка',              desc: 'Результаты кэшируются на 24ч в PostgreSQL + ОЗУ. Следующий запрос по той же теме — мгновенно. RSS всегда загружается свежим.',                           color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
+    { n: '01', title: 'Введите тему',                     desc: 'Вы вводите тему — на немецком, английском или русском. При необходимости система автоматически переводит на немецкий.',                                                                          color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
+    { n: '02', title: 'Извлечение ключевых слов v2',      desc: 'extractSearchKeywords v2 разбивает составные слова (Klimawandel → klima + wandel), фильтрует немецкие стоп-слова и взвешивает по актуальности — находит в 18× больше релевантных статей, чем v1.', color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
+    { n: '03', title: 'Параллельный RSS-запрос (3–8с)',   desc: '18 RSS-лент загружаются одновременно, 15-минутный кэш исключает повторные запросы. Первые статьи стримятся в браузер через SSE ещё до старта ИИ.',                                              color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
+    { n: '04', title: 'RSS-Direct Gemini (3–10с)',        desc: 'Gemini 2.5 Flash получает RSS-статьи напрямую как контекст — без обращения к Google Search, без Grounding. Результат: 3–10с вместо 15–45с, стоимость в 78× ниже ($0,0004 вместо $0,035/запрос).', color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
+    { n: '05', title: 'Кэш 24ч + глубокий анализ',       desc: 'Результаты кэшируются на 24ч в PostgreSQL + ОЗУ. Параллельный второй вызов Gemini выполняет глубокий анализ (факты, расхождения, слепые пятна). Повторный запрос по той же теме — мгновенно.',    color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
   ],
 };
+
+// Truth Window rows
+const TRUTH_WINDOW_ROWS: {
+  badge: string; badgeColor: string; badgeBg: string;
+  time: Record<Language, string>;
+  barWidth: string; multiplier: string; barColor: string;
+  filtered?: boolean;
+}[] = [
+  { badge: 'BREAKING', badgeColor: 'text-rose-700',   badgeBg: 'bg-rose-100 dark:bg-rose-950/50',   time: { de: '< 6 Std.',  en: '< 6 hrs',   ru: '< 6 ч'   }, barWidth: '100%', multiplier: '3.0×', barColor: 'bg-rose-600'   },
+  { badge: 'HEUTE',    badgeColor: 'text-orange-700', badgeBg: 'bg-orange-100 dark:bg-orange-950/40',time: { de: '< 24 Std.', en: '< 24 hrs',  ru: '< 24 ч'  }, barWidth: '66%',  multiplier: '2.0×', barColor: 'bg-orange-400' },
+  { badge: '3 TAGE',   badgeColor: 'text-amber-700',  badgeBg: 'bg-amber-100 dark:bg-amber-950/40', time: { de: '< 72 Std.', en: '< 72 hrs',  ru: '< 72 ч'  }, barWidth: '50%',  multiplier: '1.5×', barColor: 'bg-amber-400'  },
+  { badge: 'WOCHE',    badgeColor: 'text-slate-600',  badgeBg: 'bg-slate-100 dark:bg-slate-800/40', time: { de: '< 7 Tage',  en: '< 7 days',  ru: '< 7 дн'  }, barWidth: '33%',  multiplier: '1.0×', barColor: 'bg-slate-400'  },
+  { badge: '2 WOCHEN', badgeColor: 'text-sky-700',    badgeBg: 'bg-sky-100 dark:bg-sky-950/40',     time: { de: '< 14 Tage', en: '< 14 days', ru: '< 14 дн' }, barWidth: '20%',  multiplier: '0.6×', barColor: 'bg-sky-400'    },
+  { badge: 'MONAT',    badgeColor: 'text-blue-700',   badgeBg: 'bg-blue-100 dark:bg-blue-950/40',   time: { de: '< 30 Tage', en: '< 30 days', ru: '< 30 дн' }, barWidth: '10%',  multiplier: '0.3×', barColor: 'bg-blue-700'   },
+  { badge: 'ÄLTER',    badgeColor: 'text-gray-400',   badgeBg: 'bg-gray-100 dark:bg-gray-800/40',   time: { de: '> 30 Tage', en: '> 30 days', ru: '> 30 дн' }, barWidth: '0%',   multiplier: '',     barColor: 'bg-gray-300',  filtered: true },
+];
 
 // ── Hooks ─────────────────────────────────────────────────────────────────────
 
@@ -111,10 +128,13 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
   const m = t.methodology;
   const [activeSpectrum, setActiveSpectrum] = useState<SpectrumKey | null>(null);
 
-  const { ref: pipeRef,   inView: pipeInView   } = useInView(0.05);
-  const { ref: deepRef,   inView: deepInView   } = useInView(0.05);
-  const { ref: notRef,    inView: notInView    } = useInView(0.1);
-  const { ref: limitsRef, inView: limitsInView } = useInView(0.1);
+  const { ref: pipeRef,    inView: pipeInView    } = useInView(0.05);
+  const { ref: truthRef,   inView: truthInView   } = useInView(0.05);
+  const { ref: compRef,    inView: compInView    } = useInView(0.05);
+  const { ref: costRef,    inView: costInView    } = useInView(0.05);
+  const { ref: deepRef,    inView: deepInView    } = useInView(0.05);
+  const { ref: notRef,     inView: notInView     } = useInView(0.1);
+  const { ref: limitsRef,  inView: limitsInView  } = useInView(0.1);
 
   const L = {
     de: {
@@ -129,6 +149,19 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
       totalSources: 'Quellen gesamt',
       verified: 'Verifiziert',
       suggestCta: m.suggestCta,
+      truthTitle: 'Truth Window — Recency-Gewichtung',
+      truthSub: 'Artikel-Aktualität beeinflusst das Ranking direkt. Ältere Artikel erhalten niedrigere Scores — veraltete Inhalte werden herausgefiltert.',
+      filteredLabel: 'gefiltert',
+      baselineLabel: 'Baseline',
+      compTitle: 'Keyword-Extraktion v2 — Komposita-Aufspaltung',
+      compSub: 'Deutsche Komposita werden automatisch in ihre Bestandteile zerlegt. Das ermöglicht semantisch verwandte Treffer, die v1 vollständig verpasst hat.',
+      compInput: 'Eingabe',
+      compMatches: 'Gefundene Artikel',
+      compResult: '18× mehr Artikel gefunden',
+      costTitle: 'Kostenvergleich — Grounding vs. RSS-Direct',
+      costOld: 'GROUNDING (alt)',
+      costNew: 'RSS-DIRECT (neu)',
+      costCheaper: '78× günstiger',
     },
     en: {
       pipeTitle: 'Technical pipeline',
@@ -142,6 +175,19 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
       totalSources: 'Total sources',
       verified: 'Verified',
       suggestCta: m.suggestCta,
+      truthTitle: 'Truth Window — Recency Scoring',
+      truthSub: 'Article freshness directly influences ranking. Older articles receive lower scores — stale content is filtered out entirely.',
+      filteredLabel: 'filtered out',
+      baselineLabel: 'Baseline',
+      compTitle: 'Keyword Extraction v2 — Compound Splitting',
+      compSub: 'German compound words are automatically split into their components. This enables semantically related matches that v1 missed entirely.',
+      compInput: 'Input',
+      compMatches: 'Matched articles',
+      compResult: '18× more articles found',
+      costTitle: 'Cost comparison — Grounding vs. RSS-Direct',
+      costOld: 'GROUNDING (old)',
+      costNew: 'RSS-DIRECT (new)',
+      costCheaper: '78× cheaper',
     },
     ru: {
       pipeTitle: 'Техническая цепочка',
@@ -155,6 +201,19 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
       totalSources: 'Источников всего',
       verified: 'Верифицировано',
       suggestCta: m.suggestCta,
+      truthTitle: 'Truth Window — взвешивание по актуальности',
+      truthSub: 'Свежесть статьи напрямую влияет на рейтинг. Старые статьи получают низкие оценки — устаревший контент полностью отфильтровывается.',
+      filteredLabel: 'отфильтровано',
+      baselineLabel: 'Базовый',
+      compTitle: 'Извлечение ключевых слов v2 — разбивка сложных слов',
+      compSub: 'Немецкие сложные слова автоматически разбиваются на составные части. Это позволяет находить семантически близкие статьи, которые v1 полностью упускал.',
+      compInput: 'Ввод',
+      compMatches: 'Найденные статьи',
+      compResult: 'в 18× больше статей',
+      costTitle: 'Сравнение затрат — Grounding vs. RSS-Direct',
+      costOld: 'GROUNDING (старый)',
+      costNew: 'RSS-DIRECT (новый)',
+      costCheaper: 'в 78× дешевле',
     },
   }[lang];
 
@@ -166,10 +225,10 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
     ? 'Методология – Как мы анализируем | NeutralNachrichten'
     : 'Methodology – How we analyse | NeutralNachrichten';
   const methDesc = lang === 'de'
-    ? 'Erfahre, wie NeutralNachrichten 18 deutsche Medien aus 5 politischen Lagern in Echtzeit analysiert – mit KI, RSS-Streaming und voller Transparenz.'
+    ? 'Erfahre, wie NeutralNachrichten 18 deutsche Medien aus 5 politischen Lagern in Echtzeit analysiert – mit KI, RSS-Direct und voller Transparenz.'
     : lang === 'ru'
-    ? 'Узнайте, как NeutralNachrichten анализирует 18 немецких изданий из 5 политических лагерей в реальном времени – с помощью ИИ, RSS-стриминга и полной прозрачности.'
-    : 'Learn how NeutralNachrichten analyses 18 German outlets from 5 political camps in real time – with AI, RSS streaming and full transparency.';
+    ? 'Узнайте, как NeutralNachrichten анализирует 18 немецких изданий из 5 политических лагерей в реальном времени – с помощью ИИ, RSS-Direct и полной прозрачности.'
+    : 'Learn how NeutralNachrichten analyses 18 German outlets from 5 political camps in real time – with AI, RSS-Direct and full transparency.';
 
   return (
     <div className="max-w-4xl mx-auto pb-16">
@@ -227,9 +286,9 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
             </p>
           </div>
           <div className="px-5 py-4 dark:bg-[#141414]">
-            <p className="font-serif font-black text-2xl text-orange-500">~2s</p>
+            <p className="font-serif font-black text-2xl text-orange-500">3–10s</p>
             <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500">
-              {lang === 'de' ? 'Erste Ergebnisse' : lang === 'ru' ? 'Первые результаты' : 'First results'}
+              {lang === 'de' ? 'KI-Analyse (RSS-Direct)' : lang === 'ru' ? 'ИИ-анализ (RSS-Direct)' : 'AI analysis (RSS-Direct)'}
             </p>
           </div>
           <div className="px-5 py-4 dark:bg-[#141414]">
@@ -242,7 +301,7 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
       </div>
 
       {/* ════════════════════════════════════════════════════════
-          PIPELINE — 4 steps with connecting line
+          PIPELINE — 5 steps
       ════════════════════════════════════════════════════════ */}
       <div ref={pipeRef} className="mb-8 border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
         <div className="bg-[#1a1a1a] dark:bg-gray-900 px-6 py-3">
@@ -288,6 +347,211 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════════════════
+          TRUTH WINDOW — recency scoring infographic
+      ════════════════════════════════════════════════════════ */}
+      <div ref={truthRef} className="mb-8 border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+        <div className="bg-[#1a1a1a] dark:bg-gray-900 px-6 py-3 flex items-center justify-between flex-wrap gap-2">
+          <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{L.truthTitle}</p>
+          <span className="font-sans text-[9px] uppercase tracking-widest text-white/40">
+            {lang === 'de' ? 'Recency-Score-Gewichtung' : lang === 'ru' ? 'Весовые коэффициенты' : 'Recency score multipliers'}
+          </span>
+        </div>
+        <div className="px-6 py-4 border-b-2 border-[#1a1a1a] dark:border-gray-700 dark:bg-[#141414]">
+          <p className="font-serif text-xs text-gray-400 dark:text-gray-500 leading-relaxed max-w-xl">{L.truthSub}</p>
+        </div>
+        <div className="dark:bg-[#141414] divide-y divide-[#e0d8cf] dark:divide-gray-800">
+          {TRUTH_WINDOW_ROWS.map((row, i) => (
+            <div
+              key={row.badge}
+              className={`flex items-center gap-3 px-4 sm:px-6 py-2.5 transition-all duration-500 ${truthInView ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-3'}`}
+              style={{ transitionDelay: `${i * 70}ms` }}
+            >
+              {/* Badge */}
+              <div className={`w-[74px] shrink-0 px-2 py-0.5 ${row.badgeBg} flex items-center justify-center`}>
+                <span className={`font-sans text-[8px] font-bold uppercase tracking-widest ${row.badgeColor} ${row.filtered ? 'line-through opacity-50' : ''}`}>
+                  {row.badge}
+                </span>
+              </div>
+              {/* Time label */}
+              <span className="font-sans text-[10px] text-gray-400 dark:text-gray-500 tabular-nums w-[54px] shrink-0">
+                {row.time[lang]}
+              </span>
+              {/* Bar track */}
+              <div className="flex-1 h-4 bg-[#f0e8dc] dark:bg-gray-800 relative overflow-hidden">
+                {!row.filtered && (
+                  <div
+                    className={`absolute left-0 top-0 h-full ${row.barColor} transition-all duration-700`}
+                    style={{ width: truthInView ? row.barWidth : '0%', transitionDelay: `${i * 70 + 200}ms` }}
+                  />
+                )}
+              </div>
+              {/* Multiplier */}
+              <div className="w-[52px] shrink-0 text-right">
+                {row.filtered ? (
+                  <span className="font-sans text-[10px] text-gray-400 dark:text-gray-600 italic">{L.filteredLabel}</span>
+                ) : (
+                  <span className={`font-serif font-black text-sm ${row.multiplier === '1.0×' ? 'text-slate-500' : row.multiplier >= '2' ? 'text-rose-600' : 'text-gray-500 dark:text-gray-400'}`}>
+                    {row.multiplier}
+                    {row.multiplier === '1.0×' && (
+                      <span className="block font-sans text-[7px] text-slate-400 uppercase tracking-wider">{L.baselineLabel}</span>
+                    )}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════════════════
+          COMPOUND SPLIT — keyword extraction v2 visual
+      ════════════════════════════════════════════════════════ */}
+      <div ref={compRef} className="mb-8 border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+        <div className="bg-[#1a1a1a] dark:bg-gray-900 px-6 py-3">
+          <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{L.compTitle}</p>
+        </div>
+        <div className="px-6 py-4 border-b-2 border-[#1a1a1a] dark:border-gray-700 dark:bg-[#141414]">
+          <p className="font-serif text-xs text-gray-400 dark:text-gray-500 leading-relaxed max-w-xl">{L.compSub}</p>
+        </div>
+        <div className="p-6 dark:bg-[#141414]">
+          {/* Input row */}
+          <div className={`flex items-center gap-3 mb-4 transition-all duration-500 ${compInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
+            <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500 w-16 shrink-0">{L.compInput}:</span>
+            <div className="border-2 border-[#1a1a1a] dark:border-gray-600 px-4 py-2 bg-[#FFF8F0] dark:bg-[#1a1a1a]">
+              <span className="font-serif font-black text-base text-[#1a1a1a] dark:text-white tracking-wide">Klimawandel</span>
+            </div>
+          </div>
+
+          {/* Arrow down */}
+          <div className={`flex items-center gap-3 mb-4 transition-all duration-500 delay-100 ${compInView ? 'opacity-100' : 'opacity-0'}`}>
+            <div className="w-16 shrink-0" />
+            <span className="font-sans text-lg text-gray-300 dark:text-gray-600">↓</span>
+          </div>
+
+          {/* Split boxes */}
+          <div className={`flex flex-wrap items-center gap-3 mb-4 transition-all duration-500 delay-150 ${compInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
+            <div className="w-16 shrink-0" />
+            {/* Full word */}
+            <div className="border-2 border-orange-400 px-3 py-1.5 bg-orange-50 dark:bg-orange-950/30">
+              <span className="font-sans text-[10px] font-bold uppercase tracking-widest text-orange-700 dark:text-orange-400">KLIMAWANDEL</span>
+            </div>
+            <span className="font-sans text-xs text-gray-300 dark:text-gray-600">+</span>
+            {/* Split part 1 */}
+            <div className="border-2 border-emerald-500 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/30">
+              <span className="font-sans text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">KLIMA</span>
+            </div>
+            <span className="font-sans text-xs text-gray-300 dark:text-gray-600">+</span>
+            {/* Split part 2 */}
+            <div className="border-2 border-emerald-500 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/30">
+              <span className="font-sans text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">WANDEL</span>
+            </div>
+          </div>
+
+          {/* Arrow down */}
+          <div className={`flex items-center gap-3 mb-4 transition-all duration-500 delay-200 ${compInView ? 'opacity-100' : 'opacity-0'}`}>
+            <div className="w-16 shrink-0" />
+            <span className="font-sans text-lg text-gray-300 dark:text-gray-600">↓</span>
+          </div>
+
+          {/* Matched articles */}
+          <div className={`mb-4 transition-all duration-500 delay-[250ms] ${compInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500 w-16 shrink-0">{L.compMatches}:</span>
+            </div>
+            <div className="flex flex-wrap gap-2 pl-[76px]">
+              {['Klimakonferenz', 'Klimapolitik', 'Klimaaktivismus', 'Klimaschutz', 'Klimapaket', 'Klimarecht'].map((word) => (
+                <span
+                  key={word}
+                  className="font-sans text-[9px] uppercase tracking-wider px-2.5 py-1 border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 bg-white dark:bg-[#1a1a1a]"
+                >
+                  {word}
+                </span>
+              ))}
+              <span className="font-sans text-[9px] text-gray-300 dark:text-gray-600 italic py-1">+ weitere …</span>
+            </div>
+          </div>
+
+          {/* Result badge */}
+          <div className={`flex items-center gap-3 transition-all duration-500 delay-300 ${compInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
+            <div className="w-16 shrink-0" />
+            <div className="flex items-center gap-2 border-2 border-emerald-500 bg-emerald-500 px-4 py-2">
+              <span className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{L.compResult}</span>
+              <span className="font-serif font-black text-white text-sm">✓</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════════════════
+          COST COMPARISON — Grounding vs RSS-Direct
+      ════════════════════════════════════════════════════════ */}
+      <div ref={costRef} className="mb-8 border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
+        <div className="bg-[#1a1a1a] dark:bg-gray-900 px-6 py-3">
+          <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{L.costTitle}</p>
+        </div>
+        <div className="grid sm:grid-cols-2 divide-y-2 sm:divide-y-0 sm:divide-x-2 divide-[#1a1a1a] dark:divide-gray-700">
+          {/* LEFT: old Grounding */}
+          <div className={`p-6 dark:bg-[#141414] transition-all duration-500 ${costInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">{L.costOld}</span>
+              <span className="font-sans text-[9px] text-rose-500 font-bold uppercase tracking-widest">✕</span>
+            </div>
+            <div className="space-y-3">
+              {[
+                { label: lang === 'de' ? 'Pro Anfrage' : lang === 'ru' ? 'За запрос' : 'Per request', value: '$0.035' },
+                { label: lang === 'de' ? 'Pro 10k Anfragen' : lang === 'ru' ? 'За 10к запросов' : 'Per 10k requests', value: '$350' },
+                { label: lang === 'de' ? 'Antwortzeit' : lang === 'ru' ? 'Время ответа' : 'Response time', value: '15–45s' },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex items-baseline justify-between gap-2">
+                  <span className="font-sans text-[9px] uppercase tracking-wider text-gray-400 dark:text-gray-600">{label}</span>
+                  <span className="font-serif font-bold text-sm text-gray-400 dark:text-gray-600 line-through">{value}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 pt-4 border-t border-[#e0d8cf] dark:border-gray-700">
+              <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-600">
+                {lang === 'de' ? 'Google Search Grounding' : lang === 'ru' ? 'Google Search Grounding' : 'Google Search Grounding'}
+              </span>
+            </div>
+          </div>
+
+          {/* RIGHT: new RSS-Direct */}
+          <div className={`p-6 dark:bg-[#0f1a0f] bg-emerald-50 transition-all duration-500 delay-150 ${costInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="font-sans text-[9px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">{L.costNew}</span>
+              <span className="font-sans text-[9px] text-emerald-600 font-bold uppercase tracking-widest">✓</span>
+            </div>
+            <div className="space-y-3">
+              {[
+                { label: lang === 'de' ? 'Pro Anfrage' : lang === 'ru' ? 'За запрос' : 'Per request', value: '$0.0004' },
+                { label: lang === 'de' ? 'Pro 10k Anfragen' : lang === 'ru' ? 'За 10к запросов' : 'Per 10k requests', value: '$4' },
+                { label: lang === 'de' ? 'Antwortzeit' : lang === 'ru' ? 'Время ответа' : 'Response time', value: '3–10s' },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex items-baseline justify-between gap-2">
+                  <span className="font-sans text-[9px] uppercase tracking-wider text-gray-500 dark:text-gray-400">{label}</span>
+                  <span className="font-serif font-bold text-sm text-emerald-700 dark:text-emerald-400">{value}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 pt-4 border-t border-emerald-200 dark:border-emerald-900/40">
+              <div className="flex items-center gap-2">
+                <span className="font-sans text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">{L.costCheaper}</span>
+                <span className="font-serif font-black text-emerald-600 dark:text-emerald-400">✓</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Arrow connector row */}
+        <div className="hidden sm:flex items-center justify-center border-t-2 border-[#1a1a1a] dark:border-gray-700 py-2 dark:bg-[#141414]">
+          <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500 mr-3">
+            {lang === 'de' ? 'Migration abgeschlossen' : lang === 'ru' ? 'Миграция завершена' : 'Migration complete'}
+          </span>
+          <span className="font-sans text-base text-emerald-500">→</span>
+          <span className="font-sans text-[9px] uppercase tracking-widest text-emerald-600 dark:text-emerald-400 ml-3 font-bold">RSS-Direct</span>
         </div>
       </div>
 
@@ -402,7 +666,7 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
       </div>
 
       {/* ════════════════════════════════════════════════════════
-          DEEP ANALYSIS FEATURES — 7 cards
+          DEEP ANALYSIS FEATURES — 8 cards
       ════════════════════════════════════════════════════════ */}
       <div ref={deepRef} className="mb-8">
         <div className="flex items-center gap-4 mb-4">

@@ -330,9 +330,10 @@ export const TermsPage: React.FC<Props> = ({ lang }) => (
     <Section title="§ 2 Leistungsbeschreibung">
       <p>
         NeutralNachrichten ist eine KI-gestützte Informationsplattform, die mithilfe von
-        Google Gemini und Google Search Grounding aktuelle Medienberichte aus verschiedenen
-        politischen Spektren des deutschen Mediensystems automatisiert analysiert und
-        gegenüberstellt.
+        Google Gemini und einem eigenentwickelten RSS-Direct-Algorithmus aktuelle Medienberichte
+        aus verschiedenen politischen Spektren des deutschen Mediensystems automatisiert
+        analysiert und gegenüberstellt. Grundlage der Analyse sind RSS-Feeds der aufgenommenen
+        Medienquellen; externe Suchmaschinen-Dienste werden nicht verwendet.
       </p>
       <p>
         Die Plattform stellt <strong>keine journalistische Redaktion</strong> dar und gibt
