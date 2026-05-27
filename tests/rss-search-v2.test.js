@@ -510,6 +510,32 @@ describe('scoreArticle', () => {
     );
     expect(result.titleScore).toBeGreaterThan(0);
   });
+
+  it('matchedKeywordCount reflects number of DISTINCT keywords that matched', () => {
+    // "ukraine" matches 3× in title but counts as 1 distinct keyword
+    const result = scoreArticle(
+      makeItem({ title: 'Ukraine Ukraine Ukraine Krieg' }),
+      ['ukraine', 'krieg', 'konflikt']
+    );
+    expect(result.matchedKeywordCount).toBe(2); // ukraine + krieg, not 3× ukraine
+  });
+
+  it('matchedKeywordCount=1 when only one keyword matches (false-positive scenario)', () => {
+    // Simulates "Frontalangriff" matching only "angriff" from a multi-word topic
+    const result = scoreArticle(
+      makeItem({ title: 'Frontalangriff auf Betriebsrat bei Thoughtworks' }),
+      ['holocaust', 'mahnmal', 'angriff', 'verhaftung']
+    );
+    expect(result.matchedKeywordCount).toBe(1); // only "angriff" matched
+  });
+
+  it('matchedKeywordCount=0 when no keywords match', () => {
+    const result = scoreArticle(
+      makeItem({ title: 'Sonniges Wetter in München' }),
+      ['holocaust', 'mahnmal', 'angriff']
+    );
+    expect(result.matchedKeywordCount).toBe(0);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -659,8 +685,8 @@ describe('searchAllFeeds — integration', () => {
       { title: 'Klimakonferenz in Berlin', pubDate: hoursAgo(5) },
     ]));
     // extractSearchKeywords('Klimawandel') gives ['klimawandel', 'klima', 'wandel']
-    // 'klima' matches 'Klimakonferenz'
-    const { total_articles } = await searchAllFeeds(['klimawandel', 'klima', 'wandel']);
+    // 'klima' matches 'Klimakonferenz'. inputWordCount=1 (single compound word) → minDistinctKeywords=1
+    const { total_articles } = await searchAllFeeds(['klimawandel', 'klima', 'wandel'], { inputWordCount: 1 });
     expect(total_articles).toBeGreaterThan(0);
   });
 
@@ -808,6 +834,110 @@ describe('End-to-end: compound expansion improves recall', () => {
     expect(kw).toContain('klimawandel');
     expect(kw).toContain('klima');
     expect(kw).toContain('wandel');
+  });
+});
+
+describe('minDistinctKeywords: false-positive filtering', () => {
+  it('rejects an article that matches only 1 of 4 topic keywords (false positive)', async () => {
+    // Real scenario: "Holocaust Mahnmal Angriff Verhaftung" → keywords include "angriff"
+    // taz article about Thoughtworks contains "Frontalangriff" → matches "angriff" only
+    mockAllFeedsOk(buildRSSXML([
+      { title: 'Frontalangriff auf Betriebsrat bei Thoughtworks', pubDate: hoursAgo(2) },
+    ]));
+    const kw = ['holocaust', 'mahnmal', 'angriff', 'verhaftung'];
+    // inputWordCount=4 → minDistinctKeywords=2 → 1-match article rejected
+    const { total_articles } = await searchAllFeeds(kw, { inputWordCount: 4 });
+    expect(total_articles).toBe(0);
+  });
+
+  it('accepts an article that matches 2+ keywords of a multi-word topic', async () => {
+    mockAllFeedsOk(buildRSSXML([
+      { title: 'Messerangriff auf Holocaust-Mahnmal in Berlin', pubDate: hoursAgo(1) },
+    ]));
+    const kw = ['holocaust', 'mahnmal', 'angriff', 'verhaftung'];
+    const { total_articles } = await searchAllFeeds(kw, { inputWordCount: 4 });
+    // "holocaust" + "mahnmal" + "angriff" all match → 3 distinct → accepted
+    expect(total_articles).toBeGreaterThan(0);
+  });
+
+  it('single-keyword topic requires only 1 distinct keyword (minDistinctKeywords=1)', async () => {
+    mockAllFeedsOk(buildRSSXML([
+      { title: 'Klimakonferenz beschlossen', pubDate: hoursAgo(3) },
+    ]));
+    // "Klimawandel" expands to ["klimawandel","klima","wandel"] but inputWordCount=1
+    // → minDistinctKeywords=1 → matching "klima" is enough → accepted
+    const { total_articles } = await searchAllFeeds(['klimawandel', 'klima', 'wandel'], { inputWordCount: 1 });
+    expect(total_articles).toBeGreaterThan(0);
+  });
+
+  it('two-keyword topic: article matching only 1 keyword is ACCEPTED (inputWordCount<2 → threshold=1)', async () => {
+    // 1-word input "Ukraine" passes even if only "ukraine" matches
+    mockAllFeedsOk(buildRSSXML([
+      { title: 'Ukraine reist nach Europa', pubDate: hoursAgo(2) },
+    ]));
+    const { total_articles } = await searchAllFeeds(['ukraine'], { inputWordCount: 1 });
+    expect(total_articles).toBeGreaterThan(0);
+  });
+
+  it('two-input-word topic: article matching both keywords is accepted', async () => {
+    mockAllFeedsOk(buildRSSXML([
+      { title: 'Ukraine Krieg aktuell', pubDate: hoursAgo(1) },
+    ]));
+    const { total_articles } = await searchAllFeeds(['ukraine', 'krieg'], { inputWordCount: 2 });
+    expect(total_articles).toBeGreaterThan(0);
+  });
+
+  it('two-input-word topic: article matching only 1 keyword is rejected', async () => {
+    mockAllFeedsOk(buildRSSXML([
+      { title: 'Ukraine reist nach Europa', pubDate: hoursAgo(2) },
+    ]));
+    // inputWordCount=2 → minDistinctKeywords=2 → only "ukraine" matches → rejected
+    const { total_articles } = await searchAllFeeds(['ukraine', 'krieg'], { inputWordCount: 2 });
+    expect(total_articles).toBe(0);
+  });
+
+  it('minDistinctKeywords option can be overridden to 1 explicitly', async () => {
+    mockAllFeedsOk(buildRSSXML([
+      { title: 'Frontalangriff auf Betriebsrat', pubDate: hoursAgo(2) },
+    ]));
+    const kw = ['holocaust', 'mahnmal', 'angriff', 'verhaftung'];
+    const { total_articles } = await searchAllFeeds(kw, { inputWordCount: 4, minDistinctKeywords: 1 });
+    // Overridden to 1 → 1-match article accepted
+    expect(total_articles).toBeGreaterThan(0);
+  });
+});
+
+describe('HTML stripping from RSS descriptions', () => {
+  it('strips HTML tags from CDATA description content', () => {
+    const xml = `<rss><channel>
+      <item>
+        <title>Test Artikel</title>
+        <link>https://test.de/1</link>
+        <description><![CDATA[<p><img width="1378" height="919" src="https://example.com/img.jpg" /></p><p>Dies ist der eigentliche Inhalt des Artikels.</p>]]></description>
+        <pubDate>Mon, 26 May 2026 10:00:00 +0000</pubDate>
+      </item>
+    </channel></rss>`;
+    const items = parseRSSItems(xml);
+    expect(items).toHaveLength(1);
+    // HTML tags must be stripped — no "<p>" or "<img" in description
+    expect(items[0].description).not.toContain('<p>');
+    expect(items[0].description).not.toContain('<img');
+    // The actual text content should be present
+    expect(items[0].description).toContain('Dies ist der eigentliche Inhalt');
+  });
+
+  it('strips HTML from plain (non-CDATA) description too', () => {
+    const xml = `<rss><channel>
+      <item>
+        <title>Test</title>
+        <link>https://test.de/2</link>
+        <description>&lt;p&gt;Inhalt mit &lt;strong&gt;HTML&lt;/strong&gt; drin.&lt;/p&gt;</description>
+      </item>
+    </channel></rss>`;
+    const items = parseRSSItems(xml);
+    // After decodeHTML + tag strip the description should be clean text
+    expect(items[0].description).not.toContain('<p>');
+    expect(items[0].description).not.toContain('<strong>');
   });
 });
 
