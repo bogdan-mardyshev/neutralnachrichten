@@ -19,7 +19,7 @@ import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/valid
 import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
 import { SPECTRUMS, validateAnalysisStructure, buildDeepAnalysisPrompt } from './lib/analysisValidator.js';
 import { createOAuthCode, consumeOAuthCode } from './lib/oauthCodes.js';
-import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverageVolume, extractSearchKeywords } from './lib/rssSearch.js';
+import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverageVolume, extractSearchKeywords, getInputWordCount } from './lib/rssSearch.js';
 import { callGeminiWithRSSContext } from './lib/rssDirectAnalysis.js';
 import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
@@ -899,7 +899,7 @@ app.post('/api/analyze', async (req, res) => {
       // Runs in parallel while we wait for a Gemini slot — zero extra latency cost.
       const rssKeywords = extractSearchKeywords(topic);
       console.log(`[RSS] Parallel search for keywords: ${JSON.stringify(rssKeywords)}`);
-      const rssPromise = searchAllFeeds(rssKeywords)
+      const rssPromise = searchAllFeeds(rssKeywords, { inputWordCount: getInputWordCount(topic) })
         .then(r => {
           console.log(`[RSS] Done — ${r.total_articles} articles found (${Date.now() - requestStart}ms elapsed)`);
           return r;
@@ -1092,7 +1092,7 @@ app.get('/api/analyze/stream', async (req, res) => {
     console.log(`[RSS-Stream] keywords: ${JSON.stringify(rssKeywords)}`);
 
     // rssPromise emits the 'rss' event as a side-effect when it resolves
-    const rssPromise = searchAllFeeds(rssKeywords)
+    const rssPromise = searchAllFeeds(rssKeywords, { inputWordCount: getInputWordCount(topic) })
       .then(r => {
         console.log(`[RSS-Stream] ${r.total_articles} articles found`);
         const rssCovDist = buildCoverageDistribution(r.spectra);
@@ -2492,7 +2492,7 @@ app.get('/api/experiment/rss-vs-grounding', async (req, res) => {
   let rssData = null;
   const rssStart = Date.now();
   try {
-    rssData = await searchAllFeeds(rssKeywords);
+    rssData = await searchAllFeeds(rssKeywords, { inputWordCount: getInputWordCount(topic.trim()) });
     console.log(`[Experiment] RSS done in ${Date.now() - rssStart}ms — ${rssData.total_articles} articles`);
   } catch (err) {
     console.warn('[Experiment] RSS fetch failed:', err.message);
