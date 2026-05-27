@@ -83,7 +83,7 @@ const PrincipleCard: React.FC<{
         <p className={`font-sans text-[10px] font-bold uppercase tracking-wider ${open ? 'text-white' : 'text-[#1a1a1a] dark:text-[#f0ece4]'} transition-colors leading-tight text-right max-w-[70%]`}>{title}</p>
         <span className={`font-sans text-sm shrink-0 transition-all duration-200 ${open ? 'text-white rotate-45' : 'text-[#1a1a1a]/40 dark:text-gray-500 rotate-0'}`}>+</span>
       </div>
-      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${open ? 'max-h-48' : 'max-h-0'}`}>
+      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${open ? 'max-h-40' : 'max-h-0'}`}>
         <p className="px-5 pb-5 font-serif text-xs text-white/65 leading-relaxed">{body}</p>
       </div>
     </button>
@@ -97,8 +97,6 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
   const a = t.about;
 
   const { ref: storyRef,      inView: storyInView      } = useInView(0.08);
-  const { ref: archRef,       inView: archInView        } = useInView(0.05);
-  const { ref: numbersRef,    inView: numbersInView     } = useInView(0.05);
   const { ref: principlesRef, inView: principlesInView  } = useInView(0.05);
   const { ref: visionRef,     inView: visionInView      } = useInView(0.08);
   const { ref: teamRef,       inView: teamInView        } = useInView(0.05);
@@ -110,36 +108,17 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
       heroSub: 'NeutraleNachrichten ist ein Werkzeug, das das gesamte politische Spektrum der deutschen Presse auf einen Blick zugänglich macht — für alle, nicht nur für Experten.',
       stat1: 'Deutsche Medien',
       stat2: 'Politische Lager',
-      stat3: 'RSS-Feeds live',
+      stat3: 'Erste Ergebnisse',
       stat4: 'Sprachen',
 
       storyLabel: 'Was wir gebaut haben',
-      storyLeft: 'Wir crawlen 18 deutsche Medien aus fünf politischen Lagern in Echtzeit — von taz und junge Welt auf der Linken bis zu Junge Freiheit und Tichys Einblick auf der Rechten. RSS-Algorithmus v2 analysiert Aktualität mit Recency-Gewichtung: Breaking News bekommt 3× höhere Gewichtung als Wochenartikel.',
-      storyRight: 'Gemini 2.5 Flash analysiert die RSS-Artikel direkt als Kontext — ohne Google Search. Das spart 78× Kosten ($0,0004 statt $0,035/Anfrage) und liefert Ergebnisse in 3–10s statt 15–45s. Wir zeigen dir nicht nur, was geschrieben wird — sondern auch den Originaltext, damit du die KI-Interpretation selbst überprüfen kannst.',
-
-      archLabel: 'Architektur',
-      archTitle: 'Wie Daten fließen',
-      archSub: 'Von RSS-Feed bis Analyse — in unter 15 Sekunden.',
-
-      archNodes: [
-        { id: 'rss',    label: 'RSS Feeds 18×',     sub: '3–8s',         accent: 'border-rose-500',    subColor: 'text-rose-500'    },
-        { id: 'v2',     label: 'v2 Algorithmus',    sub: 'Compound Split + Recency', accent: 'border-orange-400', subColor: 'text-orange-400' },
-        { id: 'gemini', label: 'Gemini 2.5 Flash',  sub: '3–10s',        accent: 'border-emerald-500', subColor: 'text-emerald-500' },
-        { id: 'out',    label: 'Analyse',           sub: '5 Spektren',   accent: 'border-sky-500',     subColor: 'text-sky-500'     },
-      ],
-
-      numbersLabel: 'Zahlen & Fakten',
-      numbers: [
-        { value: '197', label: lang === 'de' ? 'Tests (alle grün)' : 'Tests (alle grün)', accent: 'text-emerald-600' },
-        { value: '78×',  label: 'Günstiger als Grounding', accent: 'text-rose-600' },
-        { value: '18×',  label: 'Mehr Artikel (v2 vs. v1)', accent: 'text-orange-500' },
-        { value: '0',    label: 'Google-Abhängigkeiten', accent: 'text-slate-500' },
-      ],
+      storyLeft: 'Wir lesen 18 deutsche Medien aus fünf politischen Lagern in Echtzeit — von taz und junge Welt auf der Linken bis zu Junge Freiheit und Tichys Einblick auf der Rechten. Die Analyse basiert ausschließlich auf verifizierten RSS-Quellen, ohne Abhängigkeit von externen Suchdiensten.',
+      storyRight: 'Gemini 2.5 Flash analysiert die gefundenen Artikel direkt als Kontext — in Sekunden entstehen perspektivische Zusammenfassungen. Wir zeigen dir nicht nur, was geschrieben wird, sondern auch den Originaltext, damit du die KI-Interpretation selbst überprüfen kannst.',
 
       principlesLabel: 'Was uns antreibt',
       principles: [
         { n: '01', title: 'Jede Geschichte hat mehr als eine Perspektive', body: 'Wir zeigen dasselbe Thema gleichzeitig aus fünf politischen Richtungen — damit du dir selbst ein Bild machen kannst.' },
-        { n: '02', title: 'Ergebnisse in 3–10 Sekunden', body: 'RSS-Direct liefert Ergebnisse ohne Google-Search-Umweg. Gemini 2.5 Flash analysiert die Artikel direkt als Kontext — 3–10s statt 15–45s. RSS-Streaming zeigt erste Artikel noch früher.' },
+        { n: '02', title: 'Ergebnisse in Sekunden', body: 'RSS-Streaming liefert die erste Übersicht sofort. Keine leere Seite, kein Warten ins Leere — du siehst echte Artikel, während die KI noch denkt.' },
         { n: '03', title: 'KI-Aussagen sind überprüfbar', body: 'Jede KI-Zusammenfassung zeigt darunter den originalen RSS-Auszug. Du kannst immer sehen, ob die Interpretation dem Original entspricht.' },
         { n: '04', title: 'Transparenz über unsere Methoden', body: 'Du solltest wissen, wie unsere Analyse entsteht — welche Quellen, welche KI, welche Grenzen. Wir dokumentieren alles offen auf der Methodologie-Seite.' },
         { n: '05', title: 'Unabhängig von Verlagen und Investoren', body: 'Wir nehmen keine Investitionen von deutschen Medienverlagen an. Unsere Analyse gehört niemandem außer unseren Nutzern.' },
@@ -165,36 +144,17 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
       heroSub: 'NeutralNews is a tool that makes the full political spectrum of the German press accessible at a glance — for everyone, not just experts.',
       stat1: 'German outlets',
       stat2: 'Political camps',
-      stat3: 'RSS feeds live',
+      stat3: 'First results',
       stat4: 'Languages',
 
       storyLabel: 'What we built',
-      storyLeft: 'We crawl 18 German outlets across five political camps in real time — from taz and junge Welt on the left to Junge Freiheit and Tichys Einblick on the right. RSS algorithm v2 analyses freshness with recency weighting: breaking news gets 3× higher weight than week-old articles.',
-      storyRight: 'Gemini 2.5 Flash analyses RSS articles directly as context — no Google Search. This saves 78× in cost ($0.0004 vs $0.035/request) and delivers results in 3–10s instead of 15–45s. We don\'t just show you what\'s written — we also show the original text so you can verify the AI\'s interpretation yourself.',
-
-      archLabel: 'Architecture',
-      archTitle: 'How data flows',
-      archSub: 'From RSS feed to analysis — in under 15 seconds.',
-
-      archNodes: [
-        { id: 'rss',    label: 'RSS Feeds 18×',    sub: '3–8s',                      accent: 'border-rose-500',    subColor: 'text-rose-500'    },
-        { id: 'v2',     label: 'v2 Algorithm',     sub: 'Compound Split + Recency',  accent: 'border-orange-400',  subColor: 'text-orange-400'  },
-        { id: 'gemini', label: 'Gemini 2.5 Flash', sub: '3–10s',                     accent: 'border-emerald-500', subColor: 'text-emerald-500' },
-        { id: 'out',    label: 'Analysis',         sub: '5 Spectra',                 accent: 'border-sky-500',     subColor: 'text-sky-500'     },
-      ],
-
-      numbersLabel: 'Numbers & facts',
-      numbers: [
-        { value: '197', label: 'Tests (all green)', accent: 'text-emerald-600' },
-        { value: '78×',  label: 'Cheaper than Grounding', accent: 'text-rose-600' },
-        { value: '18×',  label: 'More articles (v2 vs v1)', accent: 'text-orange-500' },
-        { value: '0',    label: 'Google dependencies', accent: 'text-slate-500' },
-      ],
+      storyLeft: 'We read 18 German outlets across five political camps in real time — from taz and junge Welt on the left to Junge Freiheit and Tichys Einblick on the right. The analysis is based exclusively on verified RSS sources, with no dependency on external search services.',
+      storyRight: 'Gemini 2.5 Flash analyses the retrieved articles directly as context — perspective summaries are produced in seconds. We don\'t just show you what\'s written — we also show the original text so you can verify the AI\'s interpretation yourself.',
 
       principlesLabel: 'What drives us',
       principles: [
         { n: '01', title: 'Every story has more than one perspective', body: 'We show the same topic from five political directions simultaneously — so you can form your own view.' },
-        { n: '02', title: 'Results in 3–10 seconds', body: 'RSS-Direct delivers results without a Google Search round-trip. Gemini 2.5 Flash analyses articles directly as context — 3–10s instead of 15–45s. RSS streaming shows first articles even earlier.' },
+        { n: '02', title: 'Results in seconds', body: 'RSS streaming delivers the first overview instantly. No blank page, no waiting in the dark — you see real articles while the AI is still thinking.' },
         { n: '03', title: 'AI claims are verifiable', body: 'Every AI summary shows the original RSS excerpt below it. You can always check whether the interpretation matches the original.' },
         { n: '04', title: 'Transparency about our methods', body: 'You should know how our analysis is produced — which sources, which AI, which limitations. We document everything openly on the Methodology page.' },
         { n: '05', title: 'Independent of publishers and investors', body: 'We accept no investment from German media publishers. Our analysis belongs to nobody but our users.' },
@@ -213,72 +173,13 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
       contactBtn: 'Send email',
       suggestBtn: 'Suggest a source →',
     },
-
-    ru: {
-      heroLabel: 'О нас',
-      heroQuote: 'Понимание начинается с того, чтобы услышать все точки зрения.',
-      heroSub: 'NeutraleNachrichten — инструмент, который делает весь политический спектр немецкой прессы доступным с первого взгляда — для всех, а не только для экспертов.',
-      stat1: 'Немецких изданий',
-      stat2: 'Политических лагерей',
-      stat3: 'RSS-лент в реальном времени',
-      stat4: 'Языка',
-
-      storyLabel: 'Что мы построили',
-      storyLeft: 'Мы в реальном времени обходим 18 немецких изданий из пяти политических лагерей — от taz и junge Welt слева до Junge Freiheit и Tichys Einblick справа. RSS-алгоритм v2 анализирует актуальность с взвешиванием по свежести: Breaking News получает в 3× больший вес, чем статьи недельной давности.',
-      storyRight: 'Gemini 2.5 Flash анализирует RSS-статьи напрямую как контекст — без Google Search. Это снижает затраты в 78× ($0,0004 вместо $0,035/запрос) и даёт результаты за 3–10с вместо 15–45с. Мы показываем не только то, что написано — но и оригинальный текст, чтобы вы могли сами проверить интерпретацию ИИ.',
-
-      archLabel: 'Архитектура',
-      archTitle: 'Как движутся данные',
-      archSub: 'От RSS-ленты до анализа — менее чем за 15 секунд.',
-
-      archNodes: [
-        { id: 'rss',    label: 'RSS-ленты 18×',    sub: '3–8с',                         accent: 'border-rose-500',    subColor: 'text-rose-500'    },
-        { id: 'v2',     label: 'Алгоритм v2',      sub: 'Разбивка сложных слов + Recency', accent: 'border-orange-400', subColor: 'text-orange-400' },
-        { id: 'gemini', label: 'Gemini 2.5 Flash', sub: '3–10с',                         accent: 'border-emerald-500', subColor: 'text-emerald-500' },
-        { id: 'out',    label: 'Анализ',           sub: '5 спектров',                    accent: 'border-sky-500',     subColor: 'text-sky-500'     },
-      ],
-
-      numbersLabel: 'Цифры и факты',
-      numbers: [
-        { value: '197', label: 'Тестов (все зелёные)', accent: 'text-emerald-600' },
-        { value: '78×',  label: 'Дешевле Grounding',   accent: 'text-rose-600'   },
-        { value: '18×',  label: 'Больше статей (v2 vs v1)', accent: 'text-orange-500' },
-        { value: '0',    label: 'Зависимостей от Google', accent: 'text-slate-500' },
-      ],
-
-      principlesLabel: 'Что нас движет',
-      principles: [
-        { n: '01', title: 'У каждой истории больше одной точки зрения', body: 'Мы показываем одну тему с пяти политических направлений одновременно — чтобы вы могли составить собственное мнение.' },
-        { n: '02', title: 'Результаты за 3–10 секунд', body: 'RSS-Direct даёт результаты без обращения к Google Search. Gemini 2.5 Flash анализирует статьи напрямую как контекст — 3–10с вместо 15–45с. RSS-стриминг показывает первые статьи ещё раньше.' },
-        { n: '03', title: 'Утверждения ИИ проверяемы', body: 'Под каждым AI-резюме показывается оригинальный фрагмент из RSS. Вы всегда можете проверить, соответствует ли интерпретация оригиналу.' },
-        { n: '04', title: 'Прозрачность в методах', body: 'Вы должны знать, как создаётся наш анализ — какие источники, какой ИИ, какие ограничения. Мы открыто документируем всё на странице методологии.' },
-        { n: '05', title: 'Независимы от издателей и инвесторов', body: 'Мы не принимаем инвестиций от немецких медиаиздателей. Наш анализ не принадлежит никому, кроме наших пользователей.' },
-      ],
-
-      visionLabel: 'Куда мы движемся',
-      visionTitle: 'Инструмент, который растёт со временем.',
-      visionBody: 'Мы только начинаем. Австрия и Швейцария — следующие. Затем — больше языков, больше стран, открытый API для исследований и журналистики.',
-      visionItems: [
-        { icon: '◈', label: 'AT & CH', desc: 'Австрийские и швейцарские СМИ в разработке.' },
-        { icon: '⟳', label: 'Алерты в реальном времени', desc: 'Уведомления о новых событиях по сохранённым темам.' },
-        { icon: '≡', label: 'Открытый API', desc: 'Доступ к данным для исследователей и редакций.' },
-      ],
-
-      teamLabel: 'Команда',
-      contactBtn: 'Написать письмо',
-      suggestBtn: 'Предложить источник →',
-    },
-  }[lang];
+  }[lang === 'ru' ? 'de' : lang]!
 
   const aboutTitle = lang === 'de'
     ? 'Über uns – NeutralNachrichten'
-    : lang === 'ru'
-    ? 'О нас – NeutralNachrichten'
     : 'About – NeutralNachrichten';
   const aboutDesc = lang === 'de'
     ? 'NeutralNachrichten analysiert das deutsche Medienspektrum. Erfahre mehr über unser Team, unsere Prinzipien und unsere Vision für unabhängigen Journalismus.'
-    : lang === 'ru'
-    ? 'NeutralNachrichten анализирует немецкий медиаспектр. Узнайте о нашей команде, принципах и видении независимой журналистики.'
     : 'NeutralNachrichten analyses the German media spectrum. Learn about our team, principles and vision for independent journalism.';
 
   return (
@@ -328,10 +229,10 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
         {/* Live stats bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 divide-x-2 divide-y-2 sm:divide-y-0 divide-[#1a1a1a] dark:divide-gray-700 border-t-2 border-[#1a1a1a] dark:border-gray-700">
           {[
-            { value: '18',  label: L.stat1, accent: 'text-rose-600'    },
-            { value: '5',   label: L.stat2, accent: 'text-orange-500'  },
+            { value: '18', label: L.stat1, accent: 'text-rose-600' },
+            { value: '5',  label: L.stat2, accent: 'text-orange-500' },
             { value: '~2s', label: L.stat3, accent: 'text-emerald-600' },
-            { value: '3',   label: L.stat4, accent: 'text-sky-600'     },
+            { value: '2',  label: L.stat4, accent: 'text-sky-600' },
           ].map(({ value, label, accent }) => (
             <div key={label} className="px-5 py-4 flex flex-col gap-1 dark:bg-[#141414]">
               <span className={`font-serif font-black text-2xl ${accent}`}>{value}</span>
@@ -355,96 +256,6 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
           <div className={`p-6 sm:p-8 dark:bg-[#141414] transition-all duration-700 delay-150 ${storyInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
             <p className="font-serif text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{L.storyRight}</p>
           </div>
-        </div>
-      </div>
-
-      {/* ════════════════════════════════════════════════════════
-          ARCHITECTURE DIAGRAM — horizontal flow
-      ════════════════════════════════════════════════════════ */}
-      <div ref={archRef} className="mb-8 border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
-        <div className="bg-[#1a1a1a] dark:bg-gray-900 px-6 py-3 flex items-center justify-between flex-wrap gap-2">
-          <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{L.archLabel}</p>
-          <span className="font-sans text-[9px] uppercase tracking-widest text-white/40">{L.archSub}</span>
-        </div>
-        <div className="p-5 sm:p-6 dark:bg-[#141414]">
-          <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-5">{L.archTitle}</p>
-          {/* Desktop: horizontal flow */}
-          <div className="hidden sm:flex items-start gap-0">
-            {L.archNodes.map((node, i) => (
-              <React.Fragment key={node.id}>
-                <div
-                  className={`flex-1 flex flex-col items-center gap-2 transition-all duration-500 ${archInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
-                  style={{ transitionDelay: `${i * 120}ms` }}
-                >
-                  {/* Node box */}
-                  <div className={`w-full border-2 ${node.accent} px-3 py-3 bg-[#FFF8F0] dark:bg-[#1a1a1a] flex flex-col items-center gap-1.5`}>
-                    <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a] dark:text-[#f0ece4] text-center leading-tight">
-                      {node.label}
-                    </span>
-                    <span className={`font-sans text-[9px] uppercase tracking-widest ${node.subColor} text-center leading-snug`}>
-                      {node.sub}
-                    </span>
-                  </div>
-                </div>
-                {i < L.archNodes.length - 1 && (
-                  <div className={`flex items-start pt-4 px-1 shrink-0 transition-all duration-500 ${archInView ? 'opacity-100' : 'opacity-0'}`}
-                    style={{ transitionDelay: `${i * 120 + 80}ms` }}>
-                    <span className="font-sans text-lg text-gray-300 dark:text-gray-600">→</span>
-                  </div>
-                )}
-              </React.Fragment>
-            ))}
-          </div>
-          {/* Mobile: vertical flow */}
-          <div className="sm:hidden flex flex-col gap-0">
-            {L.archNodes.map((node, i) => (
-              <div key={node.id}>
-                <div
-                  className={`border-2 ${node.accent} px-4 py-3 bg-[#FFF8F0] dark:bg-[#1a1a1a] flex items-center justify-between transition-all duration-500 ${archInView ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-3'}`}
-                  style={{ transitionDelay: `${i * 120}ms` }}
-                >
-                  <span className="font-sans text-[10px] font-bold uppercase tracking-wider text-[#1a1a1a] dark:text-[#f0ece4]">
-                    {node.label}
-                  </span>
-                  <span className={`font-sans text-[9px] uppercase tracking-widest ${node.subColor}`}>
-                    {node.sub}
-                  </span>
-                </div>
-                {i < L.archNodes.length - 1 && (
-                  <div className="flex justify-center py-1">
-                    <span className="font-sans text-base text-gray-300 dark:text-gray-600">↓</span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          {/* Accent dots — spectrum colors */}
-          <div className="flex gap-1 mt-4">
-            {['bg-rose-600', 'bg-orange-400', 'bg-slate-400', 'bg-sky-500', 'bg-blue-700'].map((c) => (
-              <div key={c} className={`h-0.5 flex-1 ${c}`} />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ════════════════════════════════════════════════════════
-          NUMBERS — impressive stats row
-      ════════════════════════════════════════════════════════ */}
-      <div ref={numbersRef} className="mb-8 border-2 border-[#1a1a1a] dark:border-gray-700 overflow-hidden">
-        <div className="bg-[#1a1a1a] dark:bg-gray-900 px-6 py-3">
-          <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{L.numbersLabel}</p>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x-2 divide-y-2 sm:divide-y-0 divide-[#1a1a1a] dark:divide-gray-700 border-t-2 border-[#1a1a1a] dark:border-gray-700">
-          {L.numbers.map((stat, i) => (
-            <div
-              key={stat.label}
-              className={`px-5 py-5 dark:bg-[#141414] transition-all duration-500 ${numbersInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
-              style={{ transitionDelay: `${i * 80}ms` }}
-            >
-              <p className={`font-serif font-black text-2xl sm:text-3xl ${stat.accent} mb-1`}>{stat.value}</p>
-              <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500 leading-snug">{stat.label}</p>
-            </div>
-          ))}
         </div>
       </div>
 
