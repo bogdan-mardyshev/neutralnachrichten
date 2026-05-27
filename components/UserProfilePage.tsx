@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Link, useNavigate } from 'react-router-dom';
 import { Bookmark, X } from 'lucide-react';
 import { Language } from '../translations';
@@ -603,8 +604,18 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
     { id: 'settings', label: pt.tabSettings },
   ];
 
+  const profileTitle = lang === 'de'
+    ? 'Mein Konto – NeutralNachrichten'
+    : lang === 'ru'
+    ? 'Мой аккаунт – NeutralNachrichten'
+    : 'My Account – NeutralNachrichten';
+
   return (
     <div className="max-w-3xl space-y-5">
+      <Helmet>
+        <title>{profileTitle}</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
 
       <Link to="/" className="group inline-flex items-center gap-2.5 font-sans text-[11px] font-bold uppercase tracking-widest bg-[#1a1a1a] dark:bg-gray-800 text-white px-5 py-3 hover:bg-rose-600 transition-colors duration-200">
         <span className="inline-block group-hover:-translate-x-1 transition-transform duration-200">←</span>
