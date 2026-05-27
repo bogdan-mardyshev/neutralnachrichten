@@ -19,7 +19,7 @@ import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/valid
 import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
 import { SPECTRUMS, validateAnalysisStructure, buildDeepAnalysisPrompt } from './lib/analysisValidator.js';
 import { createOAuthCode, consumeOAuthCode } from './lib/oauthCodes.js';
-import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverageVolume } from './lib/rssSearch.js';
+import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverageVolume, extractSearchKeywords } from './lib/rssSearch.js';
 import { callGeminiWithRSSContext } from './lib/rssDirectAnalysis.js';
 import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
@@ -410,13 +410,7 @@ function extractJSON(rawText) {
 // Extract search keywords from a topic string (any language).
 // RSS feeds are German, so German topics work best; English/Russian topics
 // still work for shared proper nouns (Ukraine, Inflation, AfD, etc.).
-function extractSearchKeywords(topic) {
-  return topic.toLowerCase()
-    .replace(/[^a-züäöß\s-]/gi, ' ')
-    .split(/[\s-]+/)
-    .filter(w => w.length >= 3)
-    .slice(0, 8);
-}
+// extractSearchKeywords is now in lib/rssSearch.js (v2) — imported above
 
 // Merge real RSS data into a Gemini-produced analysis object.
 // Returns a new analysis object (original is not mutated).
