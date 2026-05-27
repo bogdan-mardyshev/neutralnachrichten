@@ -43,13 +43,28 @@ if (SENTRY_DSN && SENTRY_DSN.startsWith('https') && !SENTRY_DSN.includes('your_s
   Sentry.init({ dsn: SENTRY_DSN });
 }
 
+// Russian is a dev/admin-only language — hidden in production for all non-admin users
+const ADMIN_EMAIL = 'bogdan.mardyshev@gmail.com';
+function canUseRussian(userEmail?: string | null): boolean {
+  return userEmail === ADMIN_EMAIL;
+}
+
 function MainApp() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [lang, setLang] = useState<Language>(() => {
+    // Read saved user from localStorage to check admin status at init time
+    const savedUserEmail: string | null = (() => {
+      try { return JSON.parse(localStorage.getItem('authUser') || 'null')?.email ?? null; }
+      catch { return null; }
+    })();
+    const adminUser = canUseRussian(savedUserEmail);
     const p = searchParams.get('lang');
-    if (p === 'en' || p === 'ru' || p === 'de') return p;
+    if (p === 'en' || p === 'de') return p;
+    if (p === 'ru') return adminUser ? 'ru' : 'de';
     const saved = localStorage.getItem('lang') as Language | null;
-    return (saved === 'en' || saved === 'ru' || saved === 'de') ? saved : 'de';
+    if (saved === 'en' || saved === 'de') return saved;
+    if (saved === 'ru') return adminUser ? 'ru' : 'de';
+    return 'de';
   });
   const [status, setStatus] = useState<FetchStatus>('idle');
   const [data, setData] = useState<NewsAnalysisResult | null>(null);
@@ -401,6 +416,7 @@ function MainApp() {
   };
 
   const handleLanguageSwitch = (newLang: Language) => {
+    if (newLang === 'ru' && !canUseRussian(authUser?.email)) return;
     const oldLang = lang;
     setLang(newLang);
     localStorage.setItem('lang', newLang);
@@ -547,9 +563,9 @@ function MainApp() {
               {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
             </button>
 
-            {/* Language switcher — always visible */}
+            {/* Language switcher — ru only for admin */}
             <div className="flex gap-0 border border-[#1a1a1a] dark:border-gray-600">
-              {(['de', 'en', 'ru'] as Language[]).map((l) => (
+              {(canUseRussian(authUser?.email) ? ['de', 'en', 'ru'] as Language[] : ['de', 'en'] as Language[]).map((l) => (
                 <button
                   key={l}
                   onClick={() => handleLanguageSwitch(l)}

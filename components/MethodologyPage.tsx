@@ -30,7 +30,7 @@ const SPECTRUM_CFG: Record<SpectrumKey, {
   right:        { label: { de: 'Rechts',       en: 'Right',        ru: 'Правые'      }, bar: 'bg-blue-700',   dot: 'bg-blue-700',   border: 'border-blue-300',   bg: 'bg-blue-50',   text: 'text-blue-800',   arrow: '→', gradient: 'from-blue-700 to-blue-500'     },
 };
 
-const DEEP_FEATURES: Record<Language, { icon: string; title: string; desc: string; accent: string }[]> = {
+const DEEP_FEATURES: Record<string, { icon: string; title: string; desc: string; accent: string }[]> = {
   de: [
     { icon: '◎', title: 'Gemeinsame Fakten',         desc: 'Was alle fünf Lager übereinstimmend berichten — unbestrittener Konsens',                          accent: 'bg-emerald-500' },
     { icon: '↕', title: 'Divergenzpunkte',           desc: 'Dieselben Ereignisse — unterschiedliche Deutungen über das Spektrum hinweg',                      accent: 'bg-amber-400'   },
@@ -51,39 +51,22 @@ const DEEP_FEATURES: Record<Language, { icon: string; title: string; desc: strin
     { icon: '◈', title: 'Expert Map',                desc: 'Who is cited by which media — overview of referenced sources and authorities',                     accent: 'bg-indigo-500'  },
     { icon: '📄', title: 'Original RSS Snippets',    desc: 'Below each AI summary, the original RSS text is shown — for direct verification',                  accent: 'bg-orange-500'  },
   ],
-  ru: [
-    { icon: '◎', title: 'Общие факты',              desc: 'С чем согласны все пять лагерей — бесспорный консенсус по всему спектру',                          accent: 'bg-emerald-500' },
-    { icon: '↕', title: 'Точки расхождения',        desc: 'Одни события — разные интерпретации и подача по всему спектру',                                   accent: 'bg-amber-400'   },
-    { icon: '◌', title: 'Слепые пятна',             desc: 'Аспекты, о которых почти не говорят или говорит лишь одна сторона',                               accent: 'bg-rose-500'    },
-    { icon: '≡', title: 'Объём освещения',          desc: 'Реальное количество статей из RSS по лагерям — за неделю и месяц, без оценок ИИ',                 accent: 'bg-violet-500'  },
-    { icon: '~', title: 'Анализ тональности',       desc: 'Общий тон освещения: позитивный / нейтральный / негативный по лагерям',                           accent: 'bg-pink-500'    },
-    { icon: '#', title: 'Лингвистический анализ',   desc: 'Характерные ключевые слова по политическому лагерю — их языковой отпечаток',                       accent: 'bg-teal-500'    },
-    { icon: '◈', title: 'Карта экспертов',          desc: 'Кого цитируют какие СМИ — обзор упоминаемых источников и авторитетов',                             accent: 'bg-indigo-500'  },
-    { icon: '📄', title: 'Оригинальные RSS-сниппеты', desc: 'Под каждым AI-резюме показывается оригинальный текст из RSS — для прямой проверки',              accent: 'bg-orange-500'  },
-  ],
 };
 
-const PIPELINE: Record<Language, { n: string; title: string; desc: string; color: string; dotColor: string }[]> = {
+const PIPELINE: Record<string, { n: string; title: string; desc: string; color: string; dotColor: string }[]> = {
   de: [
-    { n: '01', title: 'Thema eingeben',              desc: 'Du gibst ein Thema ein — auf Deutsch, Englisch oder Russisch. Das System übersetzt intern ins Deutsche, falls nötig.',                                   color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
+    { n: '01', title: 'Thema eingeben',              desc: 'Du gibst ein Thema ein — auf Deutsch oder Englisch. Das System übersetzt intern ins Deutsche, falls nötig.',                                              color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
     { n: '02', title: 'RSS-Streaming (~2s)',          desc: '18 RSS-Feeds werden parallel abgerufen und sofort per SSE an den Browser gestreamt — echte Artikel erscheinen, bevor die KI überhaupt startet.',        color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
-    { n: '03', title: 'KI-Analyse (15–45s)',          desc: 'Gemini 2.5 Flash durchsucht alle 5 Spektren gleichzeitig via Google Search Grounding. Perspektiv-Zusammenfassungen und Fakten-Check werden generiert.',  color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
-    { n: '04', title: 'Übersetzung & Deep Analysis', desc: 'Bei EN/RU-Anfragen wird das Ergebnis semantisch übersetzt. Die Tiefenanalyse (Fakten, Divergenzen, Blind Spots) läuft parallel als zweiter Gemini-Call.',color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
+    { n: '03', title: 'KI-Analyse',                  desc: 'Gemini 2.5 Flash analysiert die gefundenen Artikel direkt als Kontext — innerhalb von Sekunden entstehen fünf perspektivische Zusammenfassungen.',       color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
+    { n: '04', title: 'Übersetzung & Deep Analysis', desc: 'Bei EN-Anfragen wird das Ergebnis semantisch übersetzt. Die Tiefenanalyse (Fakten, Divergenzen, Blind Spots) läuft parallel als zweiter Gemini-Call.',  color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
     { n: '05', title: 'Cache & Auslieferung',        desc: 'Ergebnisse werden 24h in PostgreSQL + RAM gecacht. Nächste Anfrage zum gleichen Thema: sofort. RSS wird immer frisch abgerufen.',                        color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
   ],
   en: [
-    { n: '01', title: 'Enter topic',                 desc: 'You enter a topic — in German, English or Russian. The system translates to German internally if needed.',                                                color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
+    { n: '01', title: 'Enter topic',                 desc: 'You enter a topic — in German or English. The system translates to German internally if needed.',                                                         color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
     { n: '02', title: 'RSS streaming (~2s)',          desc: '18 RSS feeds are fetched in parallel and streamed to the browser instantly via SSE — real articles appear before the AI has even started.',               color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
-    { n: '03', title: 'AI analysis (15–45s)',         desc: 'Gemini 2.5 Flash searches all 5 spectra simultaneously via Google Search Grounding. Perspective summaries and fact-checks are generated.',               color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
-    { n: '04', title: 'Translation & deep analysis', desc: 'For EN/RU queries, results are semantically translated. Deep analysis (shared facts, diverging points, blind spots) runs in parallel as a second Gemini call.', color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
+    { n: '03', title: 'AI analysis',                 desc: 'Gemini 2.5 Flash analyses the retrieved articles directly as context — five perspective summaries are produced within seconds.',                          color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
+    { n: '04', title: 'Translation & deep analysis', desc: 'For EN queries, results are semantically translated. Deep analysis (shared facts, diverging points, blind spots) runs in parallel as a second Gemini call.', color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
     { n: '05', title: 'Cache & delivery',            desc: 'Results are cached 24h in PostgreSQL + RAM. Next request for the same topic: instant. RSS is always fetched fresh.',                                      color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
-  ],
-  ru: [
-    { n: '01', title: 'Введите тему',                desc: 'Вы вводите тему — на немецком, английском или русском. При необходимости система автоматически переводит на немецкий.',                                   color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
-    { n: '02', title: 'RSS-стриминг (~2с)',           desc: '18 RSS-лент загружаются параллельно и мгновенно стримятся в браузер через SSE — реальные статьи появляются до того, как ИИ вообще начал работу.',        color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
-    { n: '03', title: 'ИИ-анализ (15–45с)',           desc: 'Gemini 2.5 Flash одновременно обходит все 5 спектров через Google Search Grounding. Генерируются перспективные резюме и проверка фактов.',               color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
-    { n: '04', title: 'Перевод и глубокий анализ',   desc: 'Для EN/RU запросов результат семантически переводится. Глубокий анализ (факты, расхождения, слепые пятна) параллельно выполняется вторым вызовом Gemini.', color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
-    { n: '05', title: 'Кэш и доставка',              desc: 'Результаты кэшируются на 24ч в PostgreSQL + ОЗУ. Следующий запрос по той же теме — мгновенно. RSS всегда загружается свежим.',                           color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
   ],
 };
 
@@ -143,32 +126,15 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
       verified: 'Verified',
       suggestCta: m.suggestCta,
     },
-    ru: {
-      pipeTitle: 'Техническая цепочка',
-      sourcesTitle: m.sourcesTitle,
-      sourceSub: 'Нажмите на лагерь, чтобы увидеть источники',
-      classifyTitle: m.classifyTitle,
-      deepTitle: (m as any).deepTitle as string,
-      trendingTitle: (m as any).trendingTitle as string,
-      notTitle: m.notTitle,
-      limitsTitle: m.limitsTitle,
-      totalSources: 'Источников всего',
-      verified: 'Верифицировано',
-      suggestCta: m.suggestCta,
-    },
-  }[lang];
+  }[lang === 'ru' ? 'de' : lang]!;
 
   const totalSources = Object.values(SOURCES).reduce((s, arr) => s + arr.length, 0);
 
   const methTitle = lang === 'de'
     ? 'Methodik – Wie wir analysieren | NeutralNachrichten'
-    : lang === 'ru'
-    ? 'Методология – Как мы анализируем | NeutralNachrichten'
     : 'Methodology – How we analyse | NeutralNachrichten';
   const methDesc = lang === 'de'
     ? 'Erfahre, wie NeutralNachrichten 18 deutsche Medien aus 5 politischen Lagern in Echtzeit analysiert – mit KI, RSS-Streaming und voller Transparenz.'
-    : lang === 'ru'
-    ? 'Узнайте, как NeutralNachrichten анализирует 18 немецких изданий из 5 политических лагерей в реальном времени – с помощью ИИ, RSS-стриминга и полной прозрачности.'
     : 'Learn how NeutralNachrichten analyses 18 German outlets from 5 political camps in real time – with AI, RSS streaming and full transparency.';
 
   return (
@@ -223,19 +189,19 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
           <div className="px-5 py-4 dark:bg-[#141414]">
             <p className="font-serif font-black text-2xl text-emerald-600">5</p>
             <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500">
-              {lang === 'de' ? 'Politische Lager' : lang === 'ru' ? 'Политических лагерей' : 'Political camps'}
+              {lang === 'de' ? 'Politische Lager' : 'Political camps'}
             </p>
           </div>
           <div className="px-5 py-4 dark:bg-[#141414]">
             <p className="font-serif font-black text-2xl text-orange-500">~2s</p>
             <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500">
-              {lang === 'de' ? 'Erste Ergebnisse' : lang === 'ru' ? 'Первые результаты' : 'First results'}
+              {lang === 'de' ? 'Erste Ergebnisse' : 'First results'}
             </p>
           </div>
           <div className="px-5 py-4 dark:bg-[#141414]">
-            <p className="font-serif font-black text-2xl text-sky-600">3</p>
+            <p className="font-serif font-black text-2xl text-sky-600">2</p>
             <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500">
-              {lang === 'de' ? 'Sprachen' : lang === 'ru' ? 'Языка' : 'Languages'}
+              {lang === 'de' ? 'Sprachen' : 'Languages'}
             </p>
           </div>
         </div>
@@ -253,7 +219,7 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
           <div className="hidden sm:grid grid-cols-5 relative">
             {/* Connecting line */}
             <div className="absolute top-5 left-[10%] right-[10%] h-px bg-[#e0d8cf] dark:bg-gray-700 z-0" />
-            {PIPELINE[lang].map((step, i) => (
+            {(PIPELINE[lang] ?? PIPELINE['de']).map((step, i) => (
               <div
                 key={step.n}
                 className={`flex flex-col items-center gap-3 relative z-10 px-3 transition-all duration-500 ${pipeInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
@@ -270,14 +236,14 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
           </div>
           {/* Mobile: vertical steps */}
           <div className="sm:hidden space-y-0">
-            {PIPELINE[lang].map((step, i) => (
+            {(PIPELINE[lang] ?? PIPELINE['de']).map((step, i) => (
               <div key={step.n} className="flex gap-4 relative">
                 {/* Left column: dot + line */}
                 <div className="flex flex-col items-center">
                   <div className={`w-8 h-8 border-2 ${step.color} flex items-center justify-center bg-[#FFF8F0] dark:bg-[#141414] shrink-0`}>
                     <span className={`font-serif font-black text-[10px] ${step.color.replace('border-', 'text-')}`}>{step.n}</span>
                   </div>
-                  {i < PIPELINE[lang].length - 1 && (
+                  {i < (PIPELINE[lang] ?? PIPELINE['de']).length - 1 && (
                     <div className="w-px flex-1 bg-[#e0d8cf] dark:bg-gray-700 my-1" />
                   )}
                 </div>
@@ -337,7 +303,7 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
                   {SPECTRUM_CFG[activeSpectrum].label[lang]}
                 </p>
                 <p className="font-sans text-[9px] text-gray-400 uppercase tracking-widest mt-0.5">
-                  {SOURCES[activeSpectrum].length} {lang === 'de' ? 'Quellen' : lang === 'ru' ? 'источников' : 'sources'}
+                  {SOURCES[activeSpectrum].length} {lang === 'de' ? 'Quellen' : 'sources'}
                 </p>
               </div>
             </div>
@@ -389,8 +355,8 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
           {/* Visual: outlet-level, not article-level */}
           <div className="sm:w-48 shrink-0 space-y-2">
             {[
-              { label: lang === 'de' ? 'Outlet-Ebene' : lang === 'ru' ? 'Уровень издания' : 'Outlet level', active: true  },
-              { label: lang === 'de' ? 'Artikel-Ebene' : lang === 'ru' ? 'Уровень статьи' : 'Article level', active: false },
+              { label: lang === 'de' ? 'Outlet-Ebene' : 'Outlet level', active: true  },
+              { label: lang === 'de' ? 'Artikel-Ebene' : 'Article level', active: false },
             ].map(({ label, active }) => (
               <div key={label} className={`flex items-center gap-2 px-3 py-2 border-2 ${active ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30' : 'border-[#e0d8cf] dark:border-gray-700 opacity-50'}`}>
                 <span className={`text-xs font-bold ${active ? 'text-emerald-600' : 'text-gray-400'}`}>{active ? '✓' : '✕'}</span>
@@ -410,7 +376,7 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
           <div className="flex-1 h-px bg-[#1a1a1a] dark:bg-gray-600 opacity-15 dark:opacity-100" />
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {DEEP_FEATURES[lang].map((f, i) => (
+          {(DEEP_FEATURES[lang] ?? DEEP_FEATURES['de']).map((f, i) => (
             <div
               key={f.title}
               className={`group border-2 border-[#1a1a1a] dark:border-gray-700 p-5 hover:bg-[#1a1a1a] dark:bg-[#141414] dark:hover:bg-gray-800 transition-colors duration-200 cursor-default
@@ -499,7 +465,7 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
         <div className="px-6 py-5 dark:bg-[#141414] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">
-              {lang === 'de' ? 'Quelle fehlt?' : lang === 'ru' ? 'Нет источника?' : 'Missing a source?'}
+              {lang === 'de' ? 'Quelle fehlt?' : 'Missing a source?'}
             </p>
             <p className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4]">{m.suggestCta}</p>
           </div>
@@ -507,7 +473,7 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
             to="/suggest"
             className="font-sans text-[10px] font-bold uppercase tracking-widest bg-[#1a1a1a] dark:bg-gray-700 text-white px-5 py-2.5 hover:bg-rose-600 transition-colors whitespace-nowrap shrink-0"
           >
-            ↗ {lang === 'de' ? 'Quelle vorschlagen' : lang === 'ru' ? 'Предложить источник' : 'Suggest a source'}
+            ↗ {lang === 'de' ? 'Quelle vorschlagen' : 'Suggest a source'}
           </Link>
         </div>
       </div>
