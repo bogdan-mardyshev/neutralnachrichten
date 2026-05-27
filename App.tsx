@@ -565,7 +565,7 @@ function MainApp() {
 
             {/* Language switcher — ru only for admin */}
             <div className="flex gap-0 border border-[#1a1a1a] dark:border-gray-600">
-              {(canUseRussian(authUser?.email) ? ['de', 'en', 'ru'] : ['de', 'en'] as Language[]).map((l) => (
+              {(canUseRussian(authUser?.email) ? ['de', 'en', 'ru'] as Language[] : ['de', 'en'] as Language[]).map((l) => (
                 <button
                   key={l}
                   onClick={() => handleLanguageSwitch(l)}
