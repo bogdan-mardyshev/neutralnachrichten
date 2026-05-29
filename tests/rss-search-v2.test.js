@@ -438,13 +438,15 @@ describe('scoreArticle', () => {
     expect(descHit.recency).toBe(1.5); // recency itself not penalised in the field
   });
 
-  it('titleScore counts per-keyword occurrences (×2 each)', () => {
+  it('titleScore: full standalone word gets +3, not counted multiple times', () => {
     const result = scoreArticle(
       makeItem({ title: 'Ukraine und Ukraine Krieg in ukraine' }),
       kw
     );
-    // "ukraine" appears 3× but score counts once per word: +2 for ukraine, +2 for krieg
-    expect(result.titleScore).toBe(4); // 2 keywords × 2
+    // "ukraine" appears 3× but is counted ONCE as a keyword hit (+3 standalone)
+    // "krieg" also matches once (+3 standalone)
+    // Total titleScore = 6 (2 full-word keywords × 3pts each)
+    expect(result.titleScore).toBe(6);
   });
 
   it('titleOnly=true when only title matches', () => {
@@ -509,6 +511,64 @@ describe('scoreArticle', () => {
       kw2
     );
     expect(result.titleScore).toBeGreaterThan(0);
+  });
+
+  // ── word-boundary scoring ──────────────────────────────────────────────────
+
+  it('full standalone word in title scores +3 (higher confidence)', () => {
+    // "Angriff" appears as standalone word → +3
+    const result = scoreArticle(
+      makeItem({ title: 'Angriff auf Holocaustmahnmal' }),
+      ['angriff', 'holocaust']
+    );
+    // "angriff" full-word → +3; "holocaust" substring of "holocaustmahnmal" → +1
+    expect(result.titleScore).toBe(4);
+  });
+
+  it('compound-embedded keyword in title scores only +1 (lower confidence)', () => {
+    // "angriff" is INSIDE "Frontalangriff" → only substring match → +1
+    const result = scoreArticle(
+      makeItem({ title: 'Frontalangriff auf Betriebsrat' }),
+      ['angriff']
+    );
+    expect(result.titleScore).toBe(1); // NOT +3, just +1
+  });
+
+  it('standalone "Angriff" scores 3× higher than compound-embedded "Frontalangriff"', () => {
+    const standalone = scoreArticle(
+      makeItem({ title: 'Angriff auf Mahnmal', pubDate: daysAgo(1) }),
+      ['angriff']
+    );
+    const compound = scoreArticle(
+      makeItem({ title: 'Frontalangriff auf Betriebsrat', pubDate: daysAgo(1) }),
+      ['angriff']
+    );
+    // standalone: titleScore=3; compound: titleScore=1 → same recency → ratio should be 3×
+    expect(standalone.titleScore / compound.titleScore).toBe(3);
+    expect(standalone.score).toBeGreaterThan(compound.score);
+  });
+
+  it('matchedTitleKeywordCount returns distinct keywords matched in title', () => {
+    const result = scoreArticle(
+      makeItem({ title: 'Holocaust Mahnmal Angriff Berlin' }),
+      ['holocaust', 'mahnmal', 'angriff', 'verhaftung']
+    );
+    // "verhaftung" not in title → matchedTitleKeywordCount = 3
+    expect(result.matchedTitleKeywordCount).toBe(3);
+    // total matched (title + desc check) = 3 (no desc provided)
+    expect(result.matchedKeywordCount).toBe(3);
+  });
+
+  it('matchedTitleKeywordCount = 0 for desc-only match', () => {
+    const result = scoreArticle(
+      makeItem({
+        title: 'Bundestag stimmt ab',
+        description: 'Dabei wurde auch das thema holocaust und verhaftung kurz erwähnt',
+      }),
+      ['holocaust', 'verhaftung']
+    );
+    expect(result.matchedTitleKeywordCount).toBe(0);
+    expect(result.matchedKeywordCount).toBe(2); // desc matched both
   });
 
   it('matchedKeywordCount reflects number of DISTINCT keywords that matched', () => {
@@ -894,6 +954,47 @@ describe('minDistinctKeywords: false-positive filtering', () => {
     // inputWordCount=2 → minDistinctKeywords=2 → only "ukraine" matches → rejected
     const { total_articles } = await searchAllFeeds(['ukraine', 'krieg'], { inputWordCount: 2 });
     expect(total_articles).toBe(0);
+  });
+
+  it('rejects description-only match for multi-word topic (minTitleKeywords=1)', async () => {
+    // Article title is completely off-topic; keywords only in description
+    mockAllFeedsOk(buildRSSXML([
+      {
+        title: 'Bundestag stimmt über Rentenreform ab',
+        description: 'Beim Thema Holocaust und Verhaftung kam es kurz zu Diskussionen.',
+        pubDate: hoursAgo(2),
+      },
+    ]));
+    const kw = ['holocaust', 'mahnmal', 'angriff', 'verhaftung'];
+    // inputWordCount=4 → minTitleKeywords=1. Title has no keywords → rejected
+    const { total_articles } = await searchAllFeeds(kw, { inputWordCount: 4 });
+    expect(total_articles).toBe(0);
+  });
+
+  it('accepts article where keywords appear in both title and description', async () => {
+    mockAllFeedsOk(buildRSSXML([
+      {
+        title: 'Angriff auf Holocaust-Mahnmal: Verdächtiger verhaftet',
+        description: 'Ein Syrer wurde nach dem Angriff auf das Berliner Holocaust-Mahnmal festgenommen.',
+        pubDate: hoursAgo(1),
+      },
+    ]));
+    const kw = ['holocaust', 'mahnmal', 'angriff', 'verhaftung'];
+    const { total_articles } = await searchAllFeeds(kw, { inputWordCount: 4 });
+    expect(total_articles).toBeGreaterThan(0);
+  });
+
+  it('single-word topic: desc-only match is still accepted (minTitleKeywords=0)', async () => {
+    mockAllFeedsOk(buildRSSXML([
+      {
+        title: 'Wirtschaftsminister trifft Industrie',
+        description: 'Dabei wurden klimawandel-bezogene Maßnahmen diskutiert.',
+        pubDate: hoursAgo(3),
+      },
+    ]));
+    // inputWordCount=1 → minTitleKeywords=0 → desc-only match accepted
+    const { total_articles } = await searchAllFeeds(['klimawandel', 'klima', 'wandel'], { inputWordCount: 1 });
+    expect(total_articles).toBeGreaterThan(0);
   });
 
   it('minDistinctKeywords option can be overridden to 1 explicitly', async () => {
