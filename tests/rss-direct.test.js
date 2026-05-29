@@ -804,3 +804,74 @@ describe('callGeminiWithRSSContext — output validation & retry', () => {
     expect(meta.overallPatched).toBe(false);
   });
 });
+
+// ── Hallucination filter ───────────────────────────────────────────────────────
+
+describe('callGeminiWithRSSContext — hallucination filter', () => {
+  const makeRssSpectra = () => ({
+    left:         { articles: [{ article_title: 'Telekom und Ver.di einigen sich', source_name: 'taz', source_domain: 'taz.de' }] },
+    center_left:  { articles: [{ article_title: 'Tarifvertrag bei der Deutschen Telekom', source_name: 'Spiegel', source_domain: 'spiegel.de' }] },
+    center:       { articles: [] },
+    center_right: { articles: [] },
+    right:        { articles: [] },
+  });
+
+  const makeValidAnalysis = (rightArticles = []) => ({
+    analysis_topic: 'Telekom Tarifvertrag',
+    overall_non_partisan_analysis: 'Telekom und Ver.di haben einen neuen Tarifvertrag abgeschlossen.',
+    news_spectrum: {
+      left:         [{ source_name: 'taz', source_domain: 'taz.de', article_title: 'Telekom und Ver.di einigen sich', summary_of_perspective: 'taz-Sicht' }],
+      center_left:  [{ source_name: 'Spiegel', source_domain: 'spiegel.de', article_title: 'Tarifvertrag bei der Deutschen Telekom', summary_of_perspective: 'Spiegel-Sicht' }],
+      center:       [],
+      center_right: [],
+      right:        rightArticles,
+    },
+  });
+
+  function mockGeminiWith(analysis) {
+    mockGenerateContent.mockResolvedValueOnce({
+      response: { text: () => JSON.stringify(analysis) },
+    });
+  }
+
+  beforeEach(() => mockGenerateContent.mockReset());
+
+  it('keeps articles whose titles match RSS input (≥50% word overlap)', async () => {
+    mockGeminiWith(makeValidAnalysis());
+    const { analysis } = await callGeminiWithRSSContext('Telekom Tarifvertrag', 'de', makeRssSpectra());
+    expect(analysis.news_spectrum.left).toHaveLength(1);
+    expect(analysis.news_spectrum.left[0].article_title).toBe('Telekom und Ver.di einigen sich');
+    expect(analysis.news_spectrum.center_left).toHaveLength(1);
+  });
+
+  it('removes fabricated articles from spectra that had NO RSS articles', async () => {
+    // Gemini fabricated a right-spectrum article despite no RSS data for it
+    const fabricated = { source_name: 'Bild', source_domain: 'bild.de', article_title: 'Contract until 2027 - Energie extends with Butler', summary_of_perspective: 'irrelevant' };
+    mockGeminiWith(makeValidAnalysis([fabricated]));
+    const { analysis } = await callGeminiWithRSSContext('Telekom Tarifvertrag', 'de', makeRssSpectra());
+    // right had no RSS articles → anything Gemini returned is removed
+    expect(analysis.news_spectrum.right).toHaveLength(0);
+  });
+
+  it('removes articles with low title overlap even when spectrum has RSS articles', async () => {
+    // Gemini swapped the left article with an unrelated one
+    const unrelated = { source_name: 'taz', source_domain: 'taz.de', article_title: 'Berufsverbote in Baden-Württemberg', summary_of_perspective: 'unrelated' };
+    const spectra = makeRssSpectra();
+    mockGeminiWith({
+      ...makeValidAnalysis(),
+      news_spectrum: { ...makeValidAnalysis().news_spectrum, left: [unrelated] },
+    });
+    const { analysis } = await callGeminiWithRSSContext('Telekom Tarifvertrag', 'de', spectra);
+    // "Berufsverbote in Baden-Württemberg" has <50% overlap with "Telekom und Ver.di einigen sich"
+    expect(analysis.news_spectrum.left).toHaveLength(0);
+  });
+
+  it('logs hallucination stats on the analysis object', async () => {
+    const fabricated = { source_name: 'Bild', source_domain: 'bild.de', article_title: 'Energie Butler Contract', summary_of_perspective: 'x' };
+    mockGeminiWith(makeValidAnalysis([fabricated]));
+    const { analysis } = await callGeminiWithRSSContext('Telekom Tarifvertrag', 'de', makeRssSpectra());
+    expect(analysis._hallucinationStats).toBeDefined();
+    expect(analysis._hallucinationStats.right).toBe(1); // 1 fabricated article removed
+    expect(analysis._hallucinationStats.left).toBe(0);  // real article kept
+  });
+});
