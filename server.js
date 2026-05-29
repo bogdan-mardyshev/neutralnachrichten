@@ -539,6 +539,19 @@ function enrichWithRSSData(analysis, rssData) {
   }
   if (rssFilled > 0) console.log(`[RSS→Spectrum] Added ${rssFilled} RSS articles to empty spectra (skipped ${rssSkippedNoTitle} desc-only matches)`);
 
+  // ── 4b. Reconcile silence flags against final news_spectrum state ────────
+  // Gemini may have found an article for a spectrum that RSS missed.
+  // If news_spectrum[spectrum] now has real articles, the silence flag must
+  // be cleared — otherwise the coverage bar contradicts the article card.
+  for (const spectrum of SPECTRUMS) {
+    if (!result.coverage_distribution[spectrum]?.silence) continue;
+    const hasReal = (result.news_spectrum[spectrum] || []).some(a => !isPlaceholder(a));
+    if (hasReal) {
+      result.coverage_distribution[spectrum].silence = false;
+      console.log(`[RSS→Coverage] silence cleared for ${spectrum} (Gemini found articles RSS missed)`);
+    }
+  }
+
   // ── 5. Stamp analyzed_at + store RSS metadata for downstream use ──────────
   result.analyzed_at = new Date().toISOString();
   result._rss = {
