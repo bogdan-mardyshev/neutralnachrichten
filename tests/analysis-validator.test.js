@@ -138,28 +138,30 @@ describe('buildDeepAnalysisPrompt', () => {
     expect(prompt).toContain('Bild');
   });
 
-  it('uses EMPTY placeholder for null spectrum — no crash (DeepAnalysis regression test)', () => {
+  it('shows silence marker for null spectrum — no crash (DeepAnalysis regression test)', () => {
     // This was the crash: "Cannot read properties of undefined (reading 'source_name')"
     const analysis = makeAnalysis({ left: null, right: [] });
     expect(() => buildDeepAnalysisPrompt(analysis)).not.toThrow();
     const prompt = buildDeepAnalysisPrompt(analysis);
-    expect(prompt).toContain('n/a');
+    // New format: shows silence marker text, not 'n/a'
+    expect(prompt).toContain('Keine Berichterstattung gefunden');
+    expect(prompt).toContain('Verschweigen');
+  });
+
+  it('shows silence marker for empty spectrum array', () => {
+    const analysis = makeAnalysis({ center: [] });
+    const prompt = buildDeepAnalysisPrompt(analysis);
+    expect(() => buildDeepAnalysisPrompt(analysis)).not.toThrow();
     expect(prompt).toContain('Keine Berichterstattung gefunden');
   });
 
-  it('uses EMPTY placeholder for empty spectrum array', () => {
-    const analysis = makeAnalysis({ center: [] });
-    const prompt = buildDeepAnalysisPrompt(analysis);
-    // Should not throw and should use placeholder
-    expect(prompt).toContain('n/a');
-  });
-
-  it('uses EMPTY placeholder when only "Kein Artikel gefunden" source exists', () => {
+  it('shows silence marker when only "Kein Artikel gefunden" source exists', () => {
     const analysis = makeAnalysis({
       right: [{ source_name: 'Kein Artikel gefunden', summary_of_perspective: 'Nichts gefunden.' }],
     });
     const prompt = buildDeepAnalysisPrompt(analysis);
-    expect(prompt).toContain('n/a');
+    // "Kein Artikel gefunden" is filtered as invalid → treated as silent
+    expect(prompt).toContain('Keine Berichterstattung gefunden');
   });
 
   it('includes JSON schema and rules section', () => {
@@ -176,5 +178,50 @@ describe('buildDeepAnalysisPrompt', () => {
     const prompt = buildDeepAnalysisPrompt(makeAnalysis());
     expect(prompt).toContain('Output ONLY the JSON object');
     expect(prompt).toContain('Response must start with {');
+  });
+
+  it('includes multiple articles per spectrum in prompt (not just first)', () => {
+    const analysis = makeAnalysis({
+      left: [
+        { source_name: 'taz',       article_title: 'Titel A', summary_of_perspective: 'taz-Sicht' },
+        { source_name: 'nd-aktuell', article_title: 'Titel B', summary_of_perspective: 'nd-Sicht'  },
+      ],
+    });
+    const prompt = buildDeepAnalysisPrompt(analysis);
+    // Both articles must appear
+    expect(prompt).toContain('Titel A');
+    expect(prompt).toContain('Titel B');
+    expect(prompt).toContain('taz-Sicht');
+    expect(prompt).toContain('nd-Sicht');
+    // Article count shown
+    expect(prompt).toContain('2 Artikel');
+  });
+
+  it('caps articles per spectrum at MAX_ARTICLES_PER_SPECTRUM (3)', () => {
+    const analysis = makeAnalysis({
+      right: [
+        { source_name: 'Bild', article_title: 'T1', summary_of_perspective: 'S1' },
+        { source_name: 'Bild', article_title: 'T2', summary_of_perspective: 'S2' },
+        { source_name: 'Bild', article_title: 'T3', summary_of_perspective: 'S3' },
+        { source_name: 'Bild', article_title: 'T4', summary_of_perspective: 'S4' }, // must be excluded
+      ],
+    });
+    const prompt = buildDeepAnalysisPrompt(analysis);
+    expect(prompt).toContain('T1');
+    expect(prompt).toContain('T3');
+    expect(prompt).not.toContain('T4'); // 4th article excluded
+  });
+
+  it('shows article count and source names in spectrum header', () => {
+    const analysis = makeAnalysis({
+      center_left: [
+        { source_name: 'Spiegel', article_title: 'X', summary_of_perspective: 'Y' },
+        { source_name: 'Zeit',    article_title: 'A', summary_of_perspective: 'B' },
+      ],
+    });
+    const prompt = buildDeepAnalysisPrompt(analysis);
+    expect(prompt).toContain('Spiegel');
+    expect(prompt).toContain('Zeit');
+    expect(prompt).toContain('2 Artikel');
   });
 });
