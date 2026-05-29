@@ -21,6 +21,10 @@ import {
   countCoveredSpectra,
   estimateContextTokens,
 } from '../lib/buildRSSPrompt.js';
+import {
+  detectSearchReportLanguage,
+  buildServerSideSummary,
+} from '../lib/rssDirectAnalysis.js';
 
 // ── Module-level mock (hoisted by Vitest) ─────────────────────────────────────
 // vi.hoisted() ensures mockGenerateContent is defined BEFORE vi.mock() runs,
@@ -638,5 +642,165 @@ describe('Cost analysis: RSS-direct vs grounding (unit estimates)', () => {
     const MONTHLY = 100_000;
     const rssMonthly = MONTHLY * estimatePerRequestCost(makeSpectra(), 3);
     expect(rssMonthly).toBeLessThan(200);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 12. detectSearchReportLanguage
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('detectSearchReportLanguage', () => {
+  it('returns valid=true for a clean factual summary', () => {
+    const text = 'Die deutschen Medien berichten ausführlich über den Angriff auf das Holocaust-Mahnmal. Tagesschau und Spiegel betonen die Schwere der Tat.';
+    expect(detectSearchReportLanguage(text).valid).toBe(true);
+  });
+
+  it('detects "The search showed no articles" pattern', () => {
+    const text = 'The search for recent articles on this topic has shown that there have been no specific reports of such an incident in the last 90 days.';
+    const result = detectSearchReportLanguage(text);
+    expect(result.valid).toBe(false);
+    expect(result.pattern).toBeTruthy();
+  });
+
+  it('detects "no specific reports were found" pattern', () => {
+    const text = 'No specific reports of this kind were found in the German media landscape over the past three months.';
+    expect(detectSearchReportLanguage(text).valid).toBe(false);
+  });
+
+  it('detects "search results indicate" pattern', () => {
+    const text = 'Search results indicate that this event was not widely covered by German media.';
+    expect(detectSearchReportLanguage(text).valid).toBe(false);
+  });
+
+  it('detects "could not find any articles" pattern', () => {
+    const text = 'I could not find any articles about this specific incident in the provided context.';
+    expect(detectSearchReportLanguage(text).valid).toBe(false);
+  });
+
+  it('detects "has shown that there have been no" pattern', () => {
+    const text = 'Die Suche has shown that there have been no prominent incidents of this kind during this period.';
+    expect(detectSearchReportLanguage(text).valid).toBe(false);
+  });
+
+  it('returns valid=true for empty-ish summaries that do not use search language', () => {
+    const text = 'Zu diesem Thema liegt aktuell keine Berichterstattung in den deutschen Medien vor.';
+    expect(detectSearchReportLanguage(text).valid).toBe(true);
+  });
+
+  it('returns valid=false for null/undefined input', () => {
+    expect(detectSearchReportLanguage(null).valid).toBe(false);
+    expect(detectSearchReportLanguage(undefined).valid).toBe(false);
+  });
+
+  it('returns valid=false for empty string', () => {
+    expect(detectSearchReportLanguage('').valid).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 13. buildServerSideSummary
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('buildServerSideSummary', () => {
+  it('lists covered spectra with article counts', () => {
+    const spectra = makeSpectra({ left: 3, center_left: 2, center: 0, center_right: 1, right: 0 });
+    const summary = buildServerSideSummary('Klimawandel', spectra);
+    expect(summary).toContain('Linke Medien (3 Artikel)');
+    expect(summary).toContain('Mitte-Links (2 Artikel)');
+    expect(summary).toContain('Mitte-Rechts (1 Artikel)');
+  });
+
+  it('mentions silent spectra when others have coverage', () => {
+    const spectra = makeSpectra({ left: 2, center_left: 0, center: 1, center_right: 0, right: 2 });
+    const summary = buildServerSideSummary('Ukraine', spectra);
+    expect(summary).toContain('Mitte-Links');
+    expect(summary).toContain('Mitte-Rechts');
+    // Should mention they don't cover
+    expect(summary).toMatch(/berichten? nicht/);
+  });
+
+  it('returns "no coverage" message when all spectra are empty', () => {
+    const spectra = makeSpectra({ left: 0, center_left: 0, center: 0, center_right: 0, right: 0 });
+    const summary = buildServerSideSummary('UnbekanntesThema', spectra);
+    expect(summary).toContain('keine aktuellen deutschen Medienberichte');
+  });
+
+  it('always includes the fallback label', () => {
+    const summary = buildServerSideSummary('Test', makeSpectra());
+    expect(summary).toContain('Automatische Zusammenfassung');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 14. callGeminiWithRSSContext — retry + validation
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('callGeminiWithRSSContext — output validation & retry', () => {
+  it('returns analysis as-is when overall has no search-report language', async () => {
+    mockGeminiSuccess(makeValidAnalysis());
+    const { analysis, degraded, meta } = await callGeminiWithRSSContext('Rentenreform', 'de', makeSpectra());
+    expect(degraded).toBe(false);
+    expect(meta.overallPatched).toBe(false);
+    expect(analysis.overall_non_partisan_analysis).toContain('Rentenreform');
+  });
+
+  it('retries and patches overall when search-report language detected with ≥3 articles', async () => {
+    // First call returns search-report language
+    const badAnalysis = makeValidAnalysis();
+    badAnalysis.overall_non_partisan_analysis =
+      'The search for recent articles on this topic has shown that there have been no specific reports in the last 90 days.';
+
+    // Second call (retry) returns clean analysis
+    const goodAnalysis = makeValidAnalysis();
+    goodAnalysis.overall_non_partisan_analysis =
+      'Die deutschen Medien berichten intensiv über das Thema Rentenreform.';
+
+    mockGenerateContent
+      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(badAnalysis) } })
+      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(goodAnalysis) } });
+
+    const spectra = makeSpectra(); // 5 spectra × 2 articles = 10 ≥ 3
+    const { analysis, degraded, meta } = await callGeminiWithRSSContext('Rentenreform', 'de', spectra);
+
+    expect(degraded).toBe(false);
+    expect(meta.overallPatched).toBe(false); // clean retry, no patching needed
+    expect(analysis.overall_non_partisan_analysis).toContain('deutschen Medien berichten');
+    // Gemini was called twice (initial + retry)
+    expect(mockGenerateContent).toHaveBeenCalledTimes(2);
+  });
+
+  it('patches overall with server-side summary when retry still has search-report language', async () => {
+    const badAnalysis = makeValidAnalysis();
+    badAnalysis.overall_non_partisan_analysis =
+      'Search results indicate that no articles were found for this topic.';
+
+    // Both calls return bad analysis
+    mockGenerateContent
+      .mockResolvedValue({ response: { text: () => JSON.stringify(badAnalysis) } });
+
+    const spectra = makeSpectra();
+    const { analysis, degraded, meta } = await callGeminiWithRSSContext('Rentenreform', 'de', spectra);
+
+    expect(degraded).toBe(false);
+    expect(meta.overallPatched).toBe(true);
+    // Server-side summary should be present
+    expect(analysis.overall_non_partisan_analysis).toContain('Automatische Zusammenfassung');
+    expect(mockGenerateContent).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT retry for topics with fewer than 3 RSS articles (search language may be accurate)', async () => {
+    const badAnalysis = makeValidAnalysis();
+    badAnalysis.overall_non_partisan_analysis =
+      'No specific reports were found for this obscure topic.';
+
+    mockGeminiSuccess(badAnalysis);
+
+    // Only 1 article total → search language might be valid (topic genuinely not covered)
+    const sparseSpectra = makeSpectra({ left: 1, center_left: 0, center: 0, center_right: 0, right: 0 });
+    const { analysis, meta } = await callGeminiWithRSSContext('ObskuresThema', 'de', sparseSpectra);
+
+    // No retry triggered — only 1 article
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1);
+    expect(meta.overallPatched).toBe(false);
   });
 });
