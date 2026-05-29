@@ -197,19 +197,22 @@ describe('buildDeepAnalysisPrompt', () => {
     expect(prompt).toContain('2 Artikel');
   });
 
-  it('caps articles per spectrum at MAX_ARTICLES_PER_SPECTRUM (3)', () => {
+  it('includes ALL articles per spectrum (no cap)', () => {
     const analysis = makeAnalysis({
       right: [
         { source_name: 'Bild', article_title: 'T1', summary_of_perspective: 'S1' },
         { source_name: 'Bild', article_title: 'T2', summary_of_perspective: 'S2' },
         { source_name: 'Bild', article_title: 'T3', summary_of_perspective: 'S3' },
-        { source_name: 'Bild', article_title: 'T4', summary_of_perspective: 'S4' }, // must be excluded
+        { source_name: 'Bild', article_title: 'T4', summary_of_perspective: 'S4' },
+        { source_name: 'Bild', article_title: 'T5', summary_of_perspective: 'S5' },
       ],
     });
     const prompt = buildDeepAnalysisPrompt(analysis);
     expect(prompt).toContain('T1');
     expect(prompt).toContain('T3');
-    expect(prompt).not.toContain('T4'); // 4th article excluded
+    expect(prompt).toContain('T4'); // previously excluded, now included
+    expect(prompt).toContain('T5');
+    expect(prompt).toContain('5 Artikel');
   });
 
   it('shows article count and source names in spectrum header', () => {
