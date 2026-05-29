@@ -495,16 +495,33 @@ function enrichWithRSSData(analysis, rssData) {
   // Handles two cases:
   //   (a) Gemini returned empty array [] for this spectrum
   //   (b) Gemini was fully degraded and left a "Kein Artikel gefunden" placeholder
+  //
+  // Relevance guard: only use RSS articles that matched at least one keyword in
+  // the TITLE (titleScore > 0). Description-only matches are passing references,
+  // not actual coverage — showing them would mislead users.
+  //
+  // rss_only: true marks these articles so the UI can display a note that no
+  // Gemini perspective analysis is available for this outlet.
   const isPlaceholder = (art) =>
     art.source_name === 'Kein Artikel gefunden' || art.source_domain === 'n/a';
 
   let rssFilled = 0;
+  let rssSkippedNoTitle = 0;
   for (const spectrum of SPECTRUMS) {
     const existing = result.news_spectrum[spectrum] || [];
     const hasReal  = existing.some(a => !isPlaceholder(a));
     if (hasReal) continue; // Gemini already has real articles
-    const rssArts = (rssData.spectra[spectrum]?.articles || []).slice(0, 2);
+
+    // Only use articles with a title keyword match (titleScore > 0)
+    const rssArts = (rssData.spectra[spectrum]?.articles || [])
+      .filter(art => (art.titleScore ?? 0) > 0)
+      .slice(0, 2);
+
+    const skipped = (rssData.spectra[spectrum]?.articles || []).length - rssArts.length;
+    rssSkippedNoTitle += Math.max(0, skipped);
+
     if (rssArts.length === 0) continue;
+
     result.news_spectrum[spectrum] = rssArts.map(art => ({
       source_name:               art.source_name,
       source_domain:             art.source_domain,
@@ -512,6 +529,7 @@ function enrichWithRSSData(analysis, rssData) {
       article_url:               art.article_url || null,
       url_is_search_fallback:    !art.article_url,
       publication_date:          art.pubDate?.slice(0, 10) ?? undefined,
+      rss_only:                  true,   // ← no Gemini perspective analysis for this article
       // Brief machine-generated summary from RSS description (no Gemini context)
       summary_of_perspective:    art.description
         ? `${art.source_name} berichtet: ${art.description.slice(0, 300)}`
@@ -519,7 +537,7 @@ function enrichWithRSSData(analysis, rssData) {
     }));
     rssFilled += rssArts.length;
   }
-  if (rssFilled > 0) console.log(`[RSS→Spectrum] Added ${rssFilled} RSS articles to empty spectra`);
+  if (rssFilled > 0) console.log(`[RSS→Spectrum] Added ${rssFilled} RSS articles to empty spectra (skipped ${rssSkippedNoTitle} desc-only matches)`);
 
   // ── 5. Stamp analyzed_at + store RSS metadata for downstream use ──────────
   result.analyzed_at = new Date().toISOString();
