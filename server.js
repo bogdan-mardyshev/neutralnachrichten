@@ -514,9 +514,11 @@ function enrichWithRSSData(analysis, rssData) {
     const hasReal  = existing.some(a => !isPlaceholder(a));
     if (hasReal) continue; // Gemini already has real articles
 
-    // Only use articles with a title keyword match (titleScore > 0)
+    // Only use articles where ≥1 keyword is a FULL WORD in the title (not compound-embedded).
+    // titleScore > 0 passes compound-embedded matches (+1pt) like "haushalt" in "Haushalte"
+    // which causes false positives — titleFullWordCount requires a real standalone match.
     const rssArts = (rssData.spectra[spectrum]?.articles || [])
-      .filter(art => (art.titleScore ?? 0) > 0)
+      .filter(art => (art.titleFullWordCount ?? 0) > 0)
       .slice(0, 2);
 
     const skipped = (rssData.spectra[spectrum]?.articles || []).length - rssArts.length;
