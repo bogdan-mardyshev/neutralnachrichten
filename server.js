@@ -21,7 +21,7 @@ import { SPECTRUMS, validateAnalysisStructure, buildDeepAnalysisPrompt } from '.
 import { createOAuthCode, consumeOAuthCode } from './lib/oauthCodes.js';
 import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverageVolume, extractSearchKeywords, getInputWordCount } from './lib/rssSearch.js';
 import { callGeminiWithRSSContext } from './lib/rssDirectAnalysis.js';
-import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference } from './db.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, getRedisClient, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
@@ -1762,6 +1762,31 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
   } catch (err) {
     console.error('[Auth/register]', err.message);
     res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// ── Dev test account (staging only) ──────────────────────────────────────────
+// POST /api/dev/ensure-test-user
+// Protected by ADMIN_KEY. Creates or resets admin@test.local / admin with
+// email_verified=true and daily_limit=-1 so it can log in without email flow.
+app.post('/api/dev/ensure-test-user', async (req, res) => {
+  const key = req.headers['x-admin-key'] || req.query.adminKey;
+  if (!ADMIN_KEY || key !== ADMIN_KEY) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  if (!isDBAvailable()) return res.status(503).json({ error: 'DB not available' });
+  try {
+    const passwordHash = await bcrypt.hash('admin', 12);
+    const user = await upsertDevUser('admin@test.local', passwordHash);
+    const token = jwt.sign(
+      { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit, email_verified: true },
+      JWT_SECRET, { expiresIn: JWT_EXPIRES }
+    );
+    console.log(`[Dev] Test account ensured: ${user.email} (id=${user.id})`);
+    res.json({ ok: true, email: user.email, token });
+  } catch (err) {
+    console.error('[Dev/ensure-test-user]', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
