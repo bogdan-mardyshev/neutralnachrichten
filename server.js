@@ -440,7 +440,9 @@ function enrichWithRSSData(analysis, rssData) {
   let rssUrlsAdded = 0;
   for (const spectrum of SPECTRUMS) {
     result.news_spectrum[spectrum] = (analysis.news_spectrum[spectrum] || []).map(source => {
-      if (!source.url_is_search_fallback) return source; // grounding already gave a real URL
+      // Enrich if: no URL at all (RSS-Direct path) OR URL is a Google Search fallback (grounding path)
+      const needsUrl = !source.article_url || source.url_is_search_fallback;
+      if (!needsUrl) return source;
 
       const domain = (source.source_domain || '').replace(/^www\./, '');
       const candidates =
@@ -462,9 +464,9 @@ function enrichWithRSSData(analysis, rssData) {
         if (score > bestScore) { bestScore = score; bestArt = art; }
       }
 
-      // Only replace when there's meaningful title overlap (≥15% word match)
-      // — prevents linking to completely unrelated articles from the same outlet
-      if (!bestArt?.article_url || bestScore < 0.15) return source;
+      // RSS-Direct: Gemini copies exact titles from RSS → scores ≈1.0
+      // Threshold 0.30 guards against accidental domain matches on unrelated articles.
+      if (!bestArt?.article_url || bestScore < 0.30) return source;
 
       rssUrlsAdded++;
       return {
@@ -940,17 +942,20 @@ app.post('/api/analyze', async (req, res) => {
           return null;
         });
 
-      // Throttle concurrent Gemini calls — wait for a slot, then call
-      console.log(`[Gemini] Waiting for slot (active=${geminiSemaphore.active}, queue=${geminiSemaphore.waiting})`);
+      // RSS-Direct: wait for RSS first, then feed articles into Gemini as context.
+      // Semaphore is acquired AFTER RSS resolves — slot not held during feed fetch.
+      const rssData = await rssPromise;
+      console.log(`[RSS-Direct] Waiting for Gemini slot (active=${geminiSemaphore.active}, queue=${geminiSemaphore.waiting})`);
       await geminiSemaphore.acquire();
-      let rssData = null;
       try {
-        // Run Gemini analysis + wait for RSS results in parallel
-        let rawAnalysis;
-        [{ analysis: rawAnalysis, degraded }, rssData] = await Promise.all([
-          callGeminiWithRetry(topic, 'de', 2),
-          rssPromise,
-        ]);
+        const timeoutBudget = Math.max(10000, TIMEOUT_MS - (Date.now() - requestStart) - 3000);
+        const { analysis: rawAnalysis, degraded: deg, meta: rssMeta } =
+          await callGeminiWithRSSContext(topic, 'de', rssData?.spectra ?? {}, {
+            timeoutMs:      timeoutBudget,
+            maxPerSpectrum: Infinity, // pass all matched RSS articles to Gemini
+          });
+        degraded = deg;
+        if (rssMeta) console.log(`[RSS-Direct] meta: articles=${rssMeta.totalArticles} spectra=${rssMeta.coveredSpectra}/5 elapsed=${rssMeta.elapsedMs}ms${rssMeta.overallPatched ? ' (patched)' : ''}`);
         // Merge real RSS data into analysis (URLs, coverage counts, silence flags)
         germanAnalysis = enrichWithRSSData(rawAnalysis, rssData);
       } finally {
@@ -1194,15 +1199,19 @@ app.get('/api/analyze/stream', async (req, res) => {
         console.log(`[RSS→Coverage] (cache-hit refresh) ${JSON.stringify(Object.fromEntries(SPECTRUMS.map(s => [s, rssCovDist[s].count])))}`);
       }
     } else {
-      console.log(`[Gemini-Stream] Waiting for slot`);
+      // RSS-Direct: RSS must resolve before Gemini so we can pass articles as context.
+      // Await rssPromise before acquiring the semaphore — don't hold the slot during feed fetch.
+      const rssData = await rssPromise;
+      console.log(`[RSS-Direct-Stream] Waiting for Gemini slot`);
       await geminiSemaphore.acquire();
-      let rssData = null;
       try {
-        let rawAnalysis;
-        [{ analysis: rawAnalysis, degraded }, rssData] = await Promise.all([
-          callGeminiWithRetry(topic, 'de', 2, GEMINI_TIMEOUT_SSE),
-          rssPromise,
-        ]);
+        const { analysis: rawAnalysis, degraded: deg, meta: rssMeta } =
+          await callGeminiWithRSSContext(topic, 'de', rssData?.spectra ?? {}, {
+            timeoutMs:      GEMINI_TIMEOUT_SSE,
+            maxPerSpectrum: Infinity, // pass all matched RSS articles to Gemini
+          });
+        degraded = deg;
+        if (rssMeta) console.log(`[RSS-Direct-Stream] meta: articles=${rssMeta.totalArticles} spectra=${rssMeta.coveredSpectra}/5 elapsed=${rssMeta.elapsedMs}ms${rssMeta.overallPatched ? ' (patched)' : ''}`);
         germanAnalysis = enrichWithRSSData(rawAnalysis, rssData);
       } finally {
         geminiSemaphore.release();
