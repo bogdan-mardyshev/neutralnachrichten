@@ -471,6 +471,27 @@ export async function createUser(email, passwordHash) {
   return rows[0];
 }
 
+/**
+ * Create or reset a dev/test account.
+ * Sets email_verified=true and daily_limit=-1 regardless of existing state.
+ * Only called from the protected /api/dev/ensure-test-user endpoint.
+ */
+export async function upsertDevUser(email, passwordHash) {
+  if (!pool) throw new Error('DB not available');
+  const { rows } = await pool.query(
+    `INSERT INTO users (email, password_hash, email_verified, daily_limit, is_active)
+     VALUES ($1, $2, true, -1, true)
+     ON CONFLICT (email) DO UPDATE
+       SET password_hash   = EXCLUDED.password_hash,
+           email_verified  = true,
+           daily_limit     = -1,
+           is_active       = true
+     RETURNING id, email, tier, daily_limit, email_verified`,
+    [email.toLowerCase().trim(), passwordHash]
+  );
+  return rows[0];
+}
+
 export async function findUserByEmail(email) {
   if (!pool) return null;
   const { rows } = await pool.query(
