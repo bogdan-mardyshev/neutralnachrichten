@@ -195,9 +195,10 @@ describe('estimateContextTokens', () => {
     expect(three).toBeLessThan(one * 4);
   });
 
-  it('truncates description to 400 chars in estimate', () => {
-    const longDesc  = 'x'.repeat(800);
-    const shortDesc = 'x'.repeat(400);
+  it('truncates article body to the 800-char budget in estimate', () => {
+    // Anything beyond ARTICLE_TEXT_BUDGET (800) must not affect the estimate.
+    const longDesc  = 'x'.repeat(1600);
+    const shortDesc = 'x'.repeat(800);
     const long  = { ...EMPTY_SPECTRA, center: { articles: [makeArticle({ description: longDesc })] } };
     const short = { ...EMPTY_SPECTRA, center: { articles: [makeArticle({ description: shortDesc })] } };
     expect(estimateContextTokens(long, 1)).toBe(estimateContextTokens(short, 1));
@@ -319,6 +320,52 @@ describe('buildRSSContextPrompt — structure', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 4b. buildRSSContextPrompt — full-body grounding (content_text)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('buildRSSContextPrompt — content_text grounding', () => {
+  it('uses full content_text body over the short description when present', () => {
+    const uniqueBody = 'EINZIGARTIGER_VOLLTEXT_MARKER mit ausführlicher Rahmung des Themas.';
+    const spectra = {
+      ...EMPTY_SPECTRA,
+      center: { articles: [makeArticle({
+        article_title: 'Volltext-Artikel',
+        description:   'Kurzer Teaser ohne Marker.',
+        content_text:  uniqueBody,
+      })] },
+    };
+    const prompt = buildRSSContextPrompt('Test', 'de', spectra, 3);
+    expect(prompt).toContain('EINZIGARTIGER_VOLLTEXT_MARKER');
+  });
+
+  it('falls back to description when content_text is absent', () => {
+    const spectra = {
+      ...EMPTY_SPECTRA,
+      center: { articles: [makeArticle({
+        article_title: 'Ohne Volltext',
+        description:   'NUR_TEASER_MARKER vorhanden.',
+        content_text:  undefined,
+      })] },
+    };
+    const prompt = buildRSSContextPrompt('Test', 'de', spectra, 3);
+    expect(prompt).toContain('NUR_TEASER_MARKER');
+  });
+
+  it('caps the per-article body to the prompt budget (does not dump multi-KB bodies)', () => {
+    const hugeBody = 'A'.repeat(5000);
+    const spectra = {
+      ...EMPTY_SPECTRA,
+      center: { articles: [makeArticle({ content_text: hugeBody })] },
+    };
+    const prompt = buildRSSContextPrompt('Test', 'de', spectra, 3);
+    // The 5000-char body must be truncated; the prompt must not contain the full run.
+    expect(prompt).not.toContain('A'.repeat(1000));
+    // But a bounded chunk (≤ budget) is present.
+    expect(prompt).toContain('A'.repeat(700));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 5. buildRSSContextPrompt — language support
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -394,12 +441,12 @@ describe('buildRSSContextPrompt — edge cases', () => {
     expect(() => buildRSSContextPrompt('Test', 'de', spectra)).not.toThrow();
   });
 
-  it('truncates long descriptions to 400 chars in the prompt', () => {
-    const longDesc = 'Z'.repeat(800);
+  it('truncates long bodies to the 800-char budget in the prompt', () => {
+    const longDesc = 'Z'.repeat(1600);
     const spectra = { ...EMPTY_SPECTRA, center: { articles: [makeArticle({ description: longDesc })] } };
     const prompt = buildRSSContextPrompt('Test', 'de', spectra);
-    expect(prompt).toContain('Z'.repeat(400));
-    expect(prompt).not.toContain('Z'.repeat(401));
+    expect(prompt).toContain('Z'.repeat(800));
+    expect(prompt).not.toContain('Z'.repeat(801));
   });
 
   it('includes total article count in prompt header', () => {
