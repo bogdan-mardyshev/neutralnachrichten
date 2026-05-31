@@ -678,6 +678,96 @@ describe('parseRSSItems', () => {
     const items = parseRSSItems(xml);
     expect(items[0].link).toBe('https://nd-aktuell.de/article/123');
   });
+
+  // ── content:encoded full-body extraction (corpus grounding input) ─────────────
+  describe('full-body extraction via content:encoded / Atom content', () => {
+    it('captures content:encoded as contentText, richer than description', () => {
+      const fullBody = 'Der ausführliche Artikeltext mit vielen Details. '.repeat(10);
+      const xml = `
+        <rss><channel>
+          <item>
+            <title>Klimapolitik im Bundestag</title>
+            <link>https://taz.de/klima</link>
+            <description>Kurzer Anriss.</description>
+            <content:encoded><![CDATA[<p>${fullBody}</p>]]></content:encoded>
+          </item>
+        </channel></rss>
+      `;
+      const items = parseRSSItems(xml);
+      expect(items).toHaveLength(1);
+      // description stays the short teaser (back-compat with scoring)
+      expect(items[0].description).toBe('Kurzer Anriss.');
+      // contentText carries the full body, HTML stripped, and is longer
+      expect(items[0].contentText).toContain('ausführliche Artikeltext');
+      expect(items[0].contentText).not.toContain('<p>');
+      expect(items[0].contentText.length).toBeGreaterThan(items[0].description.length);
+    });
+
+    it('falls back to description when content:encoded is absent', () => {
+      const xml = `
+        <rss><channel>
+          <item>
+            <title>Ohne Volltext</title>
+            <link>https://spiegel.de/x</link>
+            <description>Nur ein Teaser hier.</description>
+          </item>
+        </channel></rss>
+      `;
+      const items = parseRSSItems(xml);
+      expect(items[0].contentText).toBe('Nur ein Teaser hier.');
+    });
+
+    it('decodes HTML entities inside content:encoded', () => {
+      const xml = `
+        <rss><channel>
+          <item>
+            <title>Entit&#228;ten</title>
+            <link>https://a.de/e</link>
+            <description>kurz</description>
+            <content:encoded><![CDATA[Maßnahmen &amp; Reformen &#252;ber Jahre hinweg diskutiert.]]></content:encoded>
+          </item>
+        </channel></rss>
+      `;
+      const items = parseRSSItems(xml);
+      expect(items[0].contentText).toContain('Maßnahmen & Reformen');
+      expect(items[0].contentText).toContain('über Jahre');
+      expect(items[0].contentText).not.toContain('&amp;');
+    });
+
+    it('prefers Atom <content> over <summary> for contentText', () => {
+      const longContent = 'Vollständiger Atom-Inhalt mit Substanz. '.repeat(8);
+      const xml = `
+        <feed>
+          <entry>
+            <title>Atom Artikel</title>
+            <link href="https://zeit.de/atom"/>
+            <summary>Knappe Zusammenfassung.</summary>
+            <content>${longContent}</content>
+          </entry>
+        </feed>
+      `;
+      const items = parseRSSItems(xml);
+      expect(items).toHaveLength(1);
+      expect(items[0].description).toBe('Knappe Zusammenfassung.');
+      expect(items[0].contentText).toContain('Vollständiger Atom-Inhalt');
+      expect(items[0].contentText.length).toBeGreaterThan(items[0].description.length);
+    });
+
+    it('keeps contentText equal to description when content:encoded is shorter', () => {
+      const xml = `
+        <rss><channel>
+          <item>
+            <title>T</title>
+            <link>https://a.de/s</link>
+            <description>Dies ist eine deutlich längere und vollständigere Beschreibung des Artikels.</description>
+            <content:encoded><![CDATA[kurz]]></content:encoded>
+          </item>
+        </channel></rss>
+      `;
+      const items = parseRSSItems(xml);
+      expect(items[0].contentText).toBe('Dies ist eine deutlich längere und vollständigere Beschreibung des Artikels.');
+    });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -738,6 +828,49 @@ describe('searchAllFeeds — integration', () => {
     ]));
     const { total_articles } = await searchAllFeeds(['ukraine', 'krieg']);
     expect(total_articles).toBeGreaterThan(0);
+  });
+
+  it('attaches titleFullWordCount to returned articles (server step-4 guard depends on it)', async () => {
+    // Regression: searchAllFeeds previously dropped titleFullWordCount, so the
+    // server-side step-4 RSS backfill filter `art.titleFullWordCount > 0` was
+    // always false → empty spectra never got backfilled.
+    mockAllFeedsOk(buildRSSXML([
+      { title: 'Ukraine Krieg: Neue Entwicklungen', pubDate: hoursAgo(3) },
+    ]));
+    const { spectra } = await searchAllFeeds(['ukraine', 'krieg']);
+    const articles = Object.values(spectra).flatMap(s => s.articles);
+    expect(articles.length).toBeGreaterThan(0);
+    for (const art of articles) {
+      expect(art).toHaveProperty('titleFullWordCount');
+      expect(typeof art.titleFullWordCount).toBe('number');
+      // Both "ukraine" and "krieg" appear as full words in the title
+      expect(art.titleFullWordCount).toBeGreaterThan(0);
+    }
+  });
+
+  it('threads content_text (full body) onto returned articles for corpus grounding', async () => {
+    const fullBody = 'Ausführlicher Bericht über den Ukraine Krieg mit Hintergründen und Analyse. '.repeat(6);
+    const xml = `
+      <rss><channel>
+        <item>
+          <title>Ukraine Krieg: Neue Entwicklungen</title>
+          <link>https://test.de/uk</link>
+          <description>Kurzanriss zum Krieg.</description>
+          <content:encoded><![CDATA[<p>${fullBody}</p>]]></content:encoded>
+          <pubDate>${hoursAgo(3).toUTCString()}</pubDate>
+        </item>
+      </channel></rss>
+    `;
+    mockAllFeedsOk(xml);
+    const { spectra } = await searchAllFeeds(['ukraine', 'krieg']);
+    const articles = Object.values(spectra).flatMap(s => s.articles);
+    expect(articles.length).toBeGreaterThan(0);
+    for (const art of articles) {
+      expect(art).toHaveProperty('content_text');
+      expect(art.content_text).toContain('Ausführlicher Bericht');
+      // content_text is the richer full body, not just the short description
+      expect(art.content_text.length).toBeGreaterThan(art.description.length);
+    }
   });
 
   it('returns articles when substring matches (klima → klimakonferenz)', async () => {
