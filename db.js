@@ -7,6 +7,17 @@
 
 import pkg from 'pg';
 const { Pool } = pkg;
+import {
+  buildUpsertArticleQuery,
+  buildUpsertEmbeddingQuery,
+  buildFTSQuery,
+  buildVectorQuery,
+  buildFeedSuccessQuery,
+  buildFeedFailureQuery,
+  buildDownFeedsQuery,
+  buildUpsertSourceRatingQuery,
+  normalizeArticleRow,
+} from './lib/corpusQueries.js';
 
 let pool = null;
 
@@ -187,7 +198,132 @@ async function runMigrations() {
     );
   `);
 
+  // Corpus V2 (RSS-Direct corpus) — pgvector-aware, degrades to FTS if unavailable
+  await runCorpusMigrations();
+
   console.log('[DB] Migrations done ✓');
+}
+
+// ── Corpus V2 migrations ───────────────────────────────────────────────────────
+//
+// pgvector is OPTIONAL. If the extension can't be created (no superuser rights on
+// some managed Postgres), semantic search is disabled but the corpus + lexical
+// (FTS) retrieval still work fully. corpus_articles deliberately has NO vector
+// column — embeddings live in their own table — so the core schema is always
+// creatable regardless of pgvector availability.
+
+let pgvectorReady = false;
+
+/** True once pgvector + corpus_embeddings are confirmed usable. */
+export function isPgvectorAvailable() {
+  return pgvectorReady;
+}
+
+async function runCorpusMigrations() {
+  // 1) Try to enable pgvector — never throw; degrade to FTS-only on failure.
+  try {
+    await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
+    pgvectorReady = true;
+    console.log('[DB] pgvector enabled ✓ (semantic search on)');
+  } catch (err) {
+    pgvectorReady = false;
+    console.warn('[DB] pgvector unavailable — FTS-only mode:', err.message);
+  }
+
+  // 2) corpus_articles — derive-and-discard: NO full-body column. FTS over
+  //    title + our_summary (German dictionary), generated + GIN-indexed.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS corpus_articles (
+      id            BIGSERIAL PRIMARY KEY,
+      url           TEXT NOT NULL,
+      url_hash      TEXT NOT NULL UNIQUE,
+      source_name   TEXT NOT NULL,
+      source_domain TEXT NOT NULL,
+      spectrum      TEXT NOT NULL,
+      title         TEXT NOT NULL,
+      our_summary   TEXT,
+      short_lead    VARCHAR(200),
+      pub_date      TIMESTAMPTZ,
+      fetched_at    TIMESTAMPTZ DEFAULT now(),
+      cluster_id    BIGINT,
+      lang          TEXT DEFAULT 'de',
+      fts           tsvector GENERATED ALWAYS AS (
+                      to_tsvector('german', coalesce(title,'') || ' ' || coalesce(our_summary,''))
+                    ) STORED
+    );
+    CREATE INDEX IF NOT EXISTS corpus_articles_fts      ON corpus_articles USING GIN(fts);
+    CREATE INDEX IF NOT EXISTS corpus_articles_spectrum ON corpus_articles(spectrum);
+    CREATE INDEX IF NOT EXISTS corpus_articles_pubdate  ON corpus_articles(pub_date DESC);
+  `);
+
+  // 3) feed_health — distinguishes real editorial silence from a broken feed.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS feed_health (
+      feed_url             TEXT PRIMARY KEY,
+      source_name          TEXT NOT NULL,
+      spectrum             TEXT NOT NULL,
+      last_success         TIMESTAMPTZ,
+      last_failure         TIMESTAMPTZ,
+      consecutive_failures INTEGER DEFAULT 0,
+      status               TEXT DEFAULT 'unknown',
+      updated_at           TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS feed_health_status ON feed_health(status) WHERE status <> 'ok';
+  `);
+
+  // 4) source_ratings — auditable spectrum classification with provenance.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS source_ratings (
+      source_domain TEXT PRIMARY KEY,
+      source_name   TEXT NOT NULL,
+      spectrum      TEXT NOT NULL,
+      rating_source TEXT,
+      confidence    REAL DEFAULT 0.5,
+      reach_weight  REAL DEFAULT 1.0,
+      notes         TEXT,
+      updated_at    TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+
+  // 5) story_clusters — base table (centroid added conditionally below).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS story_clusters (
+      id            BIGSERIAL PRIMARY KEY,
+      label         TEXT,
+      article_count INTEGER DEFAULT 0,
+      first_seen    TIMESTAMPTZ DEFAULT now(),
+      last_seen     TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+
+  // 6) pgvector-dependent pieces — only when the extension is available.
+  if (pgvectorReady) {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS corpus_embeddings (
+          article_id BIGINT NOT NULL REFERENCES corpus_articles(id) ON DELETE CASCADE,
+          model      TEXT NOT NULL DEFAULT 'text-embedding-004',
+          embedding  vector(768) NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT now(),
+          PRIMARY KEY (article_id, model)
+        );
+      `);
+      // HNSW index can be slow to build on big tables; isolate so a failure here
+      // doesn't abort startup — queries still work without it (just slower).
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS corpus_embeddings_hnsw
+           ON corpus_embeddings USING hnsw (embedding vector_cosine_ops)`
+      ).catch(e => console.warn('[DB] HNSW index skipped:', e.message));
+      await pool.query(`ALTER TABLE story_clusters ADD COLUMN IF NOT EXISTS centroid vector(768)`)
+        .catch(e => console.warn('[DB] cluster centroid column skipped:', e.message));
+    } catch (err) {
+      // If the embeddings table can't be created, fall back to FTS-only.
+      pgvectorReady = false;
+      console.warn('[DB] corpus_embeddings setup failed — FTS-only mode:', err.message);
+    }
+  }
+
+  console.log(`[DB] Corpus V2 ready ✓ (pgvector=${pgvectorReady})`);
 }
 
 // ── Content Cache ─────────────────────────────────────────────────────────────
@@ -868,6 +1004,137 @@ export async function saveSuggestion({ name, email, url, spectrum, why }) {
   } catch (err) {
     console.error('[DB:saveSuggestion]', err.message);
     throw err;
+  }
+}
+
+// ── Corpus V2 data helpers ─────────────────────────────────────────────────────
+//
+// Thin wrappers around the pure SQL builders in lib/corpusQueries.js. Query
+// construction (and all its branching) is unit-tested there; these wrappers only
+// add the live pool.query call + null-safety when the DB is unavailable.
+
+/** Upsert a corpus article. Returns { id, inserted } or null when DB is down. */
+export async function upsertCorpusArticle(article) {
+  if (!pool) return null;
+  try {
+    const { text, values } = buildUpsertArticleQuery(article);
+    const { rows } = await pool.query(text, values);
+    return rows[0] || null;
+  } catch (err) {
+    console.error('[DB:upsertCorpusArticle]', err.message);
+    throw err;
+  }
+}
+
+/** Store/replace an article embedding. No-op (returns false) without pgvector. */
+export async function upsertCorpusEmbedding(articleId, embedding, model) {
+  if (!pool || !pgvectorReady) return false;
+  try {
+    const { text, values } = buildUpsertEmbeddingQuery(articleId, embedding, model);
+    await pool.query(text, values);
+    return true;
+  } catch (err) {
+    console.error('[DB:upsertCorpusEmbedding]', err.message);
+    throw err;
+  }
+}
+
+/** Lexical (FTS) corpus retrieval. Always available. */
+export async function searchCorpusFTS(keywords, opts = {}) {
+  if (!pool) return [];
+  const spec = buildFTSQuery(keywords, opts);
+  if (!spec) return [];
+  try {
+    const { rows } = await pool.query(spec.text, spec.values);
+    return rows.map(normalizeArticleRow);
+  } catch (err) {
+    console.error('[DB:searchCorpusFTS]', err.message);
+    return [];
+  }
+}
+
+/**
+ * Semantic (vector) corpus retrieval. Falls back to FTS automatically when
+ * pgvector is unavailable, so callers get results either way.
+ *
+ * @param {number[]} embedding — query vector
+ * @param {string[]} keywords  — used for the FTS fallback path
+ */
+export async function searchCorpusSemantic(embedding, keywords, opts = {}) {
+  if (!pool) return [];
+  if (!pgvectorReady) return searchCorpusFTS(keywords, opts);
+  try {
+    const { text, values } = buildVectorQuery(embedding, opts);
+    const { rows } = await pool.query(text, values);
+    return rows.map(normalizeArticleRow);
+  } catch (err) {
+    console.error('[DB:searchCorpusSemantic] vector path failed, falling back to FTS:', err.message);
+    return searchCorpusFTS(keywords, opts);
+  }
+}
+
+/** Record a successful feed fetch (resets the failure counter). */
+export async function recordFeedSuccess(feedUrl, sourceName, spectrum) {
+  if (!pool) return;
+  try {
+    const { text, values } = buildFeedSuccessQuery(feedUrl, sourceName, spectrum);
+    await pool.query(text, values);
+  } catch (err) {
+    console.error('[DB:recordFeedSuccess]', err.message);
+  }
+}
+
+/** Record a failed feed fetch (increments counter, escalates status). */
+export async function recordFeedFailure(feedUrl, sourceName, spectrum) {
+  if (!pool) return;
+  try {
+    const { text, values } = buildFeedFailureQuery(feedUrl, sourceName, spectrum);
+    await pool.query(text, values);
+  } catch (err) {
+    console.error('[DB:recordFeedFailure]', err.message);
+  }
+}
+
+/** Get feeds that are degraded/down (optionally per spectrum). */
+export async function getDownFeeds(spectra) {
+  if (!pool) return [];
+  try {
+    const { text, values } = buildDownFeedsQuery(spectra);
+    const { rows } = await pool.query(text, values);
+    return rows;
+  } catch (err) {
+    console.error('[DB:getDownFeeds]', err.message);
+    return [];
+  }
+}
+
+/** Upsert a source's spectrum rating with provenance. */
+export async function upsertSourceRating(rating) {
+  if (!pool) return null;
+  try {
+    const { text, values } = buildUpsertSourceRatingQuery(rating);
+    await pool.query(text, values);
+    return { ok: true };
+  } catch (err) {
+    console.error('[DB:upsertSourceRating]', err.message);
+    throw err;
+  }
+}
+
+/** Get a single source's rating by domain (normalized). */
+export async function getSourceRating(domain) {
+  if (!pool) return null;
+  try {
+    const norm = String(domain || '').toLowerCase().replace(/^www\./, '');
+    const { rows } = await pool.query(
+      `SELECT source_domain, source_name, spectrum, rating_source, confidence, reach_weight, notes
+       FROM source_ratings WHERE source_domain = $1`,
+      [norm]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    console.error('[DB:getSourceRating]', err.message);
+    return null;
   }
 }
 
