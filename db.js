@@ -174,6 +174,19 @@ async function runMigrations() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS email_digest BOOLEAN DEFAULT false;
   `);
 
+  // Source suggestion submissions
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS source_suggestions (
+      id         BIGSERIAL PRIMARY KEY,
+      name       TEXT,
+      email      TEXT,
+      url        TEXT NOT NULL,
+      spectrum   TEXT,
+      why        TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+
   console.log('[DB] Migrations done ✓');
 }
 
@@ -832,6 +845,28 @@ export async function setDigestPreference(userId, enabled) {
     return { ok: true };
   } catch (err) {
     console.error('[DB:setDigestPreference]', err.message);
+    throw err;
+  }
+}
+
+export async function saveSuggestion({ name, email, url, spectrum, why }) {
+  if (!pool) throw new Error('DB not available');
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO source_suggestions (name, email, url, spectrum, why)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [
+        (name || '').trim().slice(0, 100) || null,
+        (email || '').trim().slice(0, 200) || null,
+        (url || '').trim().slice(0, 500),
+        (spectrum || 'unsure').slice(0, 20),
+        (why || '').trim().slice(0, 1000),
+      ]
+    );
+    return rows[0];
+  } catch (err) {
+    console.error('[DB:saveSuggestion]', err.message);
     throw err;
   }
 }
