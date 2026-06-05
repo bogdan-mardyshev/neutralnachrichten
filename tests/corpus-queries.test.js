@@ -336,17 +336,20 @@ describe('buildUpsertSourceRatingQuery', () => {
     expect(q.text).toContain('ON CONFLICT (source_domain) DO UPDATE');
     expect(q.values[0]).toBe('spiegel.de');
   });
-  it('defaults rating_source to editorial and confidence to 0.5', () => {
+  // values layout: [domain, name, spectrum, tier, factual_rating, rating_source, confidence, reach_weight, notes]
+  it('defaults tier/factual/rating_source and confidence to 0.5', () => {
     const q = buildUpsertSourceRatingQuery(base);
-    expect(q.values[3]).toBe('editorial');
-    expect(q.values[4]).toBe(0.5);
+    expect(q.values[3]).toBe('standard');   // tier default
+    expect(q.values[4]).toBe('mixed');      // factual default
+    expect(q.values[5]).toBe('editorial');  // rating_source default
+    expect(q.values[6]).toBe(0.5);          // confidence default
   });
   it('clamps confidence to [0,1]', () => {
-    expect(buildUpsertSourceRatingQuery({ ...base, confidence: 5 }).values[4]).toBe(1);
-    expect(buildUpsertSourceRatingQuery({ ...base, confidence: -2 }).values[4]).toBe(0);
+    expect(buildUpsertSourceRatingQuery({ ...base, confidence: 5 }).values[6]).toBe(1);
+    expect(buildUpsertSourceRatingQuery({ ...base, confidence: -2 }).values[6]).toBe(0);
   });
   it('floors reach_weight at 0', () => {
-    expect(buildUpsertSourceRatingQuery({ ...base, reach_weight: -3 }).values[5]).toBe(0);
+    expect(buildUpsertSourceRatingQuery({ ...base, reach_weight: -3 }).values[7]).toBe(0);
   });
   it('throws on missing domain / bad spectrum', () => {
     expect(() => buildUpsertSourceRatingQuery({ ...base, source_domain: undefined })).toThrow(/source_domain is required/);
