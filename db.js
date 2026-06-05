@@ -284,6 +284,11 @@ async function runCorpusMigrations() {
       notes         TEXT,
       updated_at    TIMESTAMPTZ DEFAULT now()
     );
+    -- Two classification axes added in Step 11 (idempotent):
+    --   tier: flagship|standard|niche (reach/prominence)
+    --   factual_rating: high|mixed|low (factual quality, separate from spectrum)
+    ALTER TABLE source_ratings ADD COLUMN IF NOT EXISTS tier           TEXT DEFAULT 'standard';
+    ALTER TABLE source_ratings ADD COLUMN IF NOT EXISTS factual_rating TEXT DEFAULT 'mixed';
   `);
 
   // 5) story_clusters — base table (centroid added conditionally below).
@@ -1154,7 +1159,7 @@ export async function getSourceRating(domain) {
   try {
     const norm = String(domain || '').toLowerCase().replace(/^www\./, '');
     const { rows } = await pool.query(
-      `SELECT source_domain, source_name, spectrum, rating_source, confidence, reach_weight, notes
+      `SELECT source_domain, source_name, spectrum, tier, factual_rating, rating_source, confidence, reach_weight, notes
        FROM source_ratings WHERE source_domain = $1`,
       [norm]
     );

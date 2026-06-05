@@ -13,19 +13,25 @@ import {
 } from '../lib/sourceRatingsSeed.js';
 
 describe('source ratings seed', () => {
-  it('covers all 18 configured outlets across 5 spectra', () => {
-    expect(SOURCE_RATINGS).toHaveLength(18);
+  it('covers the expanded outlet set across all 5 spectra', () => {
+    expect(SOURCE_RATINGS.length).toBeGreaterThanOrEqual(30);
     const spectra = new Set(SOURCE_RATINGS.map(r => r.spectrum));
     expect([...spectra].sort()).toEqual(['center', 'center_left', 'center_right', 'left', 'right']);
   });
-  it('every rating has provenance + bounded confidence/reach', () => {
+  it('every rating has provenance + bounded confidence/reach + both axes', () => {
     for (const r of SOURCE_RATINGS) {
       expect(r.rating_source).toBeTruthy();
       expect(r.confidence).toBeGreaterThan(0);
       expect(r.confidence).toBeLessThanOrEqual(1);
       expect(r.reach_weight).toBeGreaterThan(0);
       expect(r.notes).toBeTruthy();
+      expect(['flagship', 'standard', 'niche']).toContain(r.tier);
+      expect(['high', 'mixed', 'low']).toContain(r.factual_rating);
     }
+  });
+  it('domains are unique', () => {
+    const domains = SOURCE_RATINGS.map(r => r.source_domain);
+    expect(new Set(domains).size).toBe(domains.length);
   });
   it('buildRatingsMap normalizes domains', () => {
     const map = buildRatingsMap();
@@ -35,9 +41,9 @@ describe('source ratings seed', () => {
   it('seedSourceRatings upserts each and counts results', async () => {
     const upsert = vi.fn().mockResolvedValue({ ok: true });
     const { seeded, failed } = await seedSourceRatings(upsert);
-    expect(seeded).toBe(18);
+    expect(seeded).toBe(SOURCE_RATINGS.length);
     expect(failed).toBe(0);
-    expect(upsert).toHaveBeenCalledTimes(18);
+    expect(upsert).toHaveBeenCalledTimes(SOURCE_RATINGS.length);
   });
   it('seedSourceRatings counts failures without throwing', async () => {
     const upsert = vi.fn().mockRejectedValue(new Error('db'));
