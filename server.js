@@ -20,7 +20,9 @@ import { SPECTRUMS, validateAnalysisStructure, buildDeepAnalysisPrompt } from '.
 import { createOAuthCode, consumeOAuthCode } from './lib/oauthCodes.js';
 import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverageVolume, extractSearchKeywords, getInputWordCount } from './lib/rssSearch.js';
 import { callGeminiWithRSSContext } from './lib/rssDirectAnalysis.js';
-import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion } from './db.js';
+import { retrieveCorpusSpectra } from './lib/corpusRetrieval.js';
+import { getEmbedding } from './lib/embeddings.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, getRedisClient, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
@@ -411,6 +413,38 @@ async function checkDailyLimitDB(ip) {
 // still work for shared proper nouns (Ukraine, Inflation, AfD, etc.).
 // extractSearchKeywords is now in lib/rssSearch.js (v2) — imported above
 
+// ── Corpus-vs-live source selection (Step 12 cutover) ───────────────────────────
+//
+// When CORPUS_ANALYSIS_ENABLED=true and the corpus has enough articles for the
+// topic, analysis is sourced from Corpus V2 (hybrid semantic+lexical retrieval over
+// 33 stored outlets, every article carrying a REAL stored URL) instead of a live
+// per-request RSS fetch. Output shape is identical (corpusToSpectra is a drop-in),
+// so the rest of the pipeline is unchanged. Falls back to live RSS on:
+//   - flag off / DB down / corpus too thin / any retrieval error
+// → with the flag OFF this is byte-for-byte the previous searchAllFeeds behavior.
+const CORPUS_ANALYSIS_ENABLED = process.env.CORPUS_ANALYSIS_ENABLED === 'true';
+const CORPUS_MIN_ARTICLES = parseInt(process.env.CORPUS_MIN_ARTICLES, 10) || 8;
+
+async function getSpectraForTopic(topic) {
+  if (CORPUS_ANALYSIS_ENABLED && isDBAvailable()) {
+    try {
+      const corpus = await retrieveCorpusSpectra(
+        topic,
+        { getEmbedding, searchHybrid: (embedding, kw, o) => searchCorpusHybrid(embedding, kw, o) },
+        { limit: 40, perSpectrum: 8 }
+      );
+      if ((corpus?.total_articles ?? 0) >= CORPUS_MIN_ARTICLES) {
+        console.log(`[Corpus] ${corpus.total_articles} articles (semantic=${corpus.search_meta?.usedSemantic})`);
+        return corpus;
+      }
+      console.log(`[Corpus] only ${corpus?.total_articles ?? 0} articles for "${topic}" — live RSS fallback`);
+    } catch (err) {
+      console.error('[Corpus] retrieval failed, live RSS fallback:', err.message);
+    }
+  }
+  return searchAllFeeds(extractSearchKeywords(topic), { inputWordCount: getInputWordCount(topic) });
+}
+
 // Merge real RSS data into a Gemini-produced analysis object.
 // Returns a new analysis object (original is not mutated).
 //   - Replaces search-fallback Google URLs with real RSS article URLs
@@ -743,7 +777,7 @@ app.post('/api/analyze', async (req, res) => {
       // Runs in parallel while we wait for a Gemini slot — zero extra latency cost.
       const rssKeywords = extractSearchKeywords(topic);
       console.log(`[RSS] Parallel search for keywords: ${JSON.stringify(rssKeywords)}`);
-      const rssPromise = searchAllFeeds(rssKeywords, { inputWordCount: getInputWordCount(topic) })
+      const rssPromise = getSpectraForTopic(topic)
         .then(r => {
           console.log(`[RSS] Done — ${r.total_articles} articles found (${Date.now() - requestStart}ms elapsed)`);
           return r;
@@ -946,7 +980,7 @@ app.get('/api/analyze/stream', async (req, res) => {
     console.log(`[RSS-Stream] keywords: ${JSON.stringify(rssKeywords)}`);
 
     // rssPromise emits the 'rss' event as a side-effect when it resolves
-    const rssPromise = searchAllFeeds(rssKeywords, { inputWordCount: getInputWordCount(topic) })
+    const rssPromise = getSpectraForTopic(topic)
       .then(r => {
         console.log(`[RSS-Stream] ${r.total_articles} articles found`);
         const rssCovDist = buildCoverageDistribution(r.spectra);
