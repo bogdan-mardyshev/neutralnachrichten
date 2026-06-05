@@ -27,7 +27,9 @@ import {
   upsertCorpusEmbedding,
   recordFeedSuccess,
   recordFeedFailure,
+  upsertSourceRating,
 } from './db.js';
+import { seedSourceRatings } from './lib/sourceRatingsSeed.js';
 import { fetchRSSFeed } from './lib/rssSearch.js';
 import { getEmbeddingsBatch, isEmbeddingAvailable } from './lib/embeddings.js';
 import { runIngestionOnce } from './lib/ingestionWorker.js';
@@ -81,6 +83,13 @@ async function shutdown(signal) {
 async function main() {
   console.log(`[Worker] starting (mode=${RUN_ONCE ? 'once' : `loop/${INTERVAL_MIN}min`})`);
   await initDB();
+
+  // Seed/refresh source classifications (idempotent upserts) so the API can serve
+  // auditable spectrum ratings + reach weights for coverage normalization.
+  if (isDBAvailable()) {
+    const { seeded, failed } = await seedSourceRatings(upsertSourceRating);
+    console.log(`[Worker] source ratings seeded: ${seeded} ok, ${failed} failed`);
+  }
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT',  () => shutdown('SIGINT'));
