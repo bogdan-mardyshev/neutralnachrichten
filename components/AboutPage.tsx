@@ -112,7 +112,7 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
       stat4: 'Sprachen',
 
       storyLabel: 'Was wir gebaut haben',
-      storyLeft: 'Wir lesen 18 deutsche Medien aus fünf politischen Lagern in Echtzeit — von taz und junge Welt auf der Linken bis zu Junge Freiheit und Tichys Einblick auf der Rechten. Die Analyse basiert ausschließlich auf verifizierten RSS-Quellen, ohne Abhängigkeit von externen Suchdiensten.',
+      storyLeft: 'Wir lesen 33 deutsche Medien aus fünf politischen Lagern in Echtzeit — von taz und junge Welt auf der Linken bis zu Junge Freiheit und Tichys Einblick auf der Rechten. Die Analyse basiert ausschließlich auf verifizierten RSS-Quellen, ohne Abhängigkeit von externen Suchdiensten.',
       storyRight: 'Gemini 2.5 Flash analysiert die gefundenen Artikel direkt als Kontext — in Sekunden entstehen perspektivische Zusammenfassungen. Wir zeigen dir nicht nur, was geschrieben wird, sondern auch den Originaltext, damit du die KI-Interpretation selbst überprüfen kannst.',
 
       principlesLabel: 'Was uns antreibt',
@@ -148,7 +148,7 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
       stat4: 'Languages',
 
       storyLabel: 'What we built',
-      storyLeft: 'We read 18 German outlets across five political camps in real time — from taz and junge Welt on the left to Junge Freiheit and Tichys Einblick on the right. The analysis is based exclusively on verified RSS sources, with no dependency on external search services.',
+      storyLeft: 'We read 33 German outlets across five political camps in real time — from taz and junge Welt on the left to Junge Freiheit and Tichys Einblick on the right. The analysis is based exclusively on verified RSS sources, with no dependency on external search services.',
       storyRight: 'Gemini 2.5 Flash analyses the retrieved articles directly as context — perspective summaries are produced in seconds. We don\'t just show you what\'s written — we also show the original text so you can verify the AI\'s interpretation yourself.',
 
       principlesLabel: 'What drives us',
@@ -229,7 +229,7 @@ export const AboutPage: React.FC<Props> = ({ lang }) => {
         {/* Live stats bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 divide-x-2 divide-y-2 sm:divide-y-0 divide-[#1a1a1a] dark:divide-gray-700 border-t-2 border-[#1a1a1a] dark:border-gray-700">
           {[
-            { value: '18', label: L.stat1, accent: 'text-rose-600' },
+            { value: '33', label: L.stat1, accent: 'text-rose-600' },
             { value: '5',  label: L.stat2, accent: 'text-orange-500' },
             { value: '~2s', label: L.stat3, accent: 'text-emerald-600' },
             { value: '2',  label: L.stat4, accent: 'text-sky-600' },

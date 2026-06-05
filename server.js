@@ -2495,7 +2495,7 @@ app.use(async (req, res, next) => {
 
   // Determine page-specific meta
   let title = 'NeutralNachrichten – KI-Analyse der deutschen Medien';
-  let description = 'Analysiere wie deutsche Medien über jedes Thema berichten. Echtzeit-Vergleich von 18 Quellen quer durch das politische Spektrum.';
+  let description = 'Analysiere wie deutsche Medien über jedes Thema berichten. Echtzeit-Vergleich von 33 Quellen quer durch das politische Spektrum.';
   const canonical = `https://www.neutralenachrichten.com${req.path}`;
 
   // Analysis page
@@ -2509,7 +2509,7 @@ app.use(async (req, res, next) => {
     description = 'NeutralNachrichten analysiert das deutsche Medienspektrum. Erfahre mehr über unser Team, unsere Prinzipien und unsere Vision.';
   } else if (req.path === '/methodology') {
     title = 'Methodik – NeutralNachrichten';
-    description = 'Erfahre, wie NeutralNachrichten 18 deutsche Medien aus 5 politischen Lagern in Echtzeit analysiert.';
+    description = 'Erfahre, wie NeutralNachrichten 33 deutsche Medien aus 5 politischen Lagern in Echtzeit analysiert.';
   }
 
   // Inject meta tags after <title>

@@ -134,8 +134,8 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
     ? 'Methodik – Wie wir analysieren | NeutralNachrichten'
     : 'Methodology – How we analyse | NeutralNachrichten';
   const methDesc = lang === 'de'
-    ? 'Erfahre, wie NeutralNachrichten 18 deutsche Medien aus 5 politischen Lagern in Echtzeit analysiert – mit KI, RSS-Streaming und voller Transparenz.'
-    : 'Learn how NeutralNachrichten analyses 18 German outlets from 5 political camps in real time – with AI, RSS streaming and full transparency.';
+    ? 'Erfahre, wie NeutralNachrichten 33 deutsche Medien aus 5 politischen Lagern in Echtzeit analysiert – mit KI, RSS-Streaming und voller Transparenz.'
+    : 'Learn how NeutralNachrichten analyses 33 German outlets from 5 political camps in real time – with AI, RSS streaming and full transparency.';
 
   return (
     <div className="max-w-4xl mx-auto pb-16">
@@ -183,7 +183,7 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
         {/* Stats bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 divide-x-2 divide-y-2 sm:divide-y-0 divide-[#1a1a1a] dark:divide-gray-700 border-t-2 border-[#1a1a1a] dark:border-gray-700">
           <div className="px-5 py-4 dark:bg-[#141414]">
-            <p className="font-serif font-black text-2xl text-rose-600">18</p>
+            <p className="font-serif font-black text-2xl text-rose-600">33</p>
             <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500">{L.totalSources}</p>
           </div>
           <div className="px-5 py-4 dark:bg-[#141414]">

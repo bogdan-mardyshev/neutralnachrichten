@@ -75,7 +75,7 @@ export const AnalysisPage: React.FC<Props> = ({ lang }) => {
   const displayTopic = capitalize(topic);
 
   const pageTitle = `${displayTopic} – Medienspektrum-Analyse | NeutralNachrichten`;
-  const pageDesc = `Wie berichten deutsche Medien über "${displayTopic}"? KI-Analyse von taz, Spiegel, FAZ, Bild und 14 weiteren Quellen.`;
+  const pageDesc = `Wie berichten deutsche Medien über "${displayTopic}"? KI-Analyse von taz, Spiegel, FAZ, Bild und 29 weiteren Quellen.`;
   const canonical = `https://www.neutralenachrichten.com/a/${slug || ''}`;
 
   // Extract news spectrum sources (full analysis)
@@ -205,7 +205,7 @@ export const AnalysisPage: React.FC<Props> = ({ lang }) => {
           </h1>
           <div className="h-px bg-white/10 mb-4" />
           <p className="font-sans text-[10px] text-white/35 uppercase tracking-widest">
-            {lang === 'de' ? '18 Quellen · 5 politische Lager · KI-Analyse' : lang === 'ru' ? '18 источников · 5 политических лагерей · ИИ-анализ' : '18 sources · 5 political camps · AI analysis'}
+            {lang === 'de' ? '33 Quellen · 5 politische Lager · KI-Analyse' : lang === 'ru' ? '33 источников · 5 политических лагерей · ИИ-анализ' : '33 sources · 5 political camps · AI analysis'}
           </p>
         </div>
       </div>
@@ -318,10 +318,10 @@ export const AnalysisPage: React.FC<Props> = ({ lang }) => {
             </p>
             <p className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4]">
               {lang === 'de'
-                ? `Jetzt "${displayTopic}" live analysieren — mit aktuellen Artikeln aus 18 Quellen.`
+                ? `Jetzt "${displayTopic}" live analysieren — mit aktuellen Artikeln aus 33 Quellen.`
                 : lang === 'ru'
-                ? `Анализировать "${displayTopic}" прямо сейчас — со свежими статьями из 18 источников.`
-                : `Analyse "${displayTopic}" now — with the latest articles from 18 sources.`}
+                ? `Анализировать "${displayTopic}" прямо сейчас — со свежими статьями из 33 источников.`
+                : `Analyse "${displayTopic}" now — with the latest articles from 33 sources.`}
             </p>
           </div>
           <Link

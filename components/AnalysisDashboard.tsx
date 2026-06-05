@@ -77,9 +77,9 @@ function getInsights(
 
   const insights: string[] = [];
 
-  if (lang === 'de') insights.push(`${total} Artikel aus 18 deutschen Medien analysiert`);
-  else if (lang === 'en') insights.push(`${total} articles found across 18 German outlets`);
-  else insights.push(`Найдено ${total} статей в 18 немецких изданиях`);
+  if (lang === 'de') insights.push(`${total} Artikel aus 33 deutschen Medien analysiert`);
+  else if (lang === 'en') insights.push(`${total} articles found across 33 German outlets`);
+  else insights.push(`Найдено ${total} статей в 33 немецких изданиях`);
 
   const withArticles = counts.filter(x => x.count > 0);
   if (withArticles.length >= 2) {
