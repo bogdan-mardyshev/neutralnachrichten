@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { makeEmbedder, extractVector } from '../lib/embeddings.js';
+import { makeEmbedder, makeFallbackEmbedder, extractVector } from '../lib/embeddings.js';
 import { EMBEDDING_DIM } from '../lib/corpusQueries.js';
 
 const vec = (fill = 0.1) => Array(EMBEDDING_DIM).fill(fill);
@@ -107,5 +107,53 @@ describe('makeEmbedder.embedBatch', () => {
 describe('makeEmbedder guard', () => {
   it('throws if no model factory provided', () => {
     expect(() => makeEmbedder()).toThrow(/model factory/);
+  });
+});
+
+describe('makeFallbackEmbedder', () => {
+  const okModel = { embedContent: vi.fn().mockResolvedValue({ embedding: { values: vec() } }) };
+  const badModel = { embedContent: vi.fn().mockRejectedValue(new Error('404 not found')) };
+
+  it('falls through to the first working model and locks it', async () => {
+    const getModelByName = vi.fn((name) => (name === 'good' ? okModel : badModel));
+    const fb = makeFallbackEmbedder(getModelByName, ['bad1', 'bad2', 'good']);
+    const out = await fb.embed('x');
+    expect(out).toHaveLength(EMBEDDING_DIM);
+    expect(fb.lockedModel).toBe('good');
+  });
+
+  it('once locked, does not re-probe the failing models', async () => {
+    const getModelByName = vi.fn((name) => (name === 'good' ? okModel : badModel));
+    const fb = makeFallbackEmbedder(getModelByName, ['bad1', 'good']);
+    await fb.embed('a');
+    getModelByName.mockClear();
+    await fb.embed('b');
+    // only the locked 'good' model is requested now
+    expect(getModelByName).toHaveBeenCalledTimes(1);
+    expect(getModelByName).toHaveBeenCalledWith('good');
+  });
+
+  it('returns null (all-null batch) when no model works', async () => {
+    const fb = makeFallbackEmbedder(() => badModel, ['a', 'b']);
+    const out = await fb.embedBatch(['x', 'y', 'z']);
+    expect(out).toEqual([null, null, null]);
+    expect(fb.lockedModel).toBeNull();
+  });
+
+  it('requests outputDimensionality for gemini-embedding models', async () => {
+    const gem = { embedContent: vi.fn().mockResolvedValue({ embedding: { values: vec() } }) };
+    const fb = makeFallbackEmbedder(() => gem, ['gemini-embedding-001']);
+    await fb.embed('x');
+    expect(gem.embedContent).toHaveBeenCalledWith(
+      expect.objectContaining({ outputDimensionality: EMBEDDING_DIM })
+    );
+  });
+
+  it('embedBatch locks the model once and embeds the whole batch', async () => {
+    const getModelByName = vi.fn((name) => (name === 'good' ? okModel : badModel));
+    const fb = makeFallbackEmbedder(getModelByName, ['bad', 'good']);
+    const out = await fb.embedBatch(['a', 'b', 'c']);
+    expect(out.every(v => v && v.length === EMBEDDING_DIM)).toBe(true);
+    expect(fb.lockedModel).toBe('good');
   });
 });
