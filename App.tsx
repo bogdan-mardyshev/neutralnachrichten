@@ -449,8 +449,8 @@ function MainApp() {
     ? `${lastQuery} – Medienspektrum-Analyse | NeutralNachrichten`
     : 'NeutralNachrichten – KI-Analyse der deutschen Medien';
   const helmetDescription = lastQuery && (status === 'success' || (status === 'loading' && data))
-    ? `Wie berichten deutsche Medien über "${lastQuery}"? KI-Analyse von taz, Spiegel, FAZ, Bild und 14 weiteren Quellen.`
-    : 'Analysiere wie deutsche Medien über jedes Thema berichten. Echtzeit-Vergleich von 18 Quellen quer durch das politische Spektrum – links bis rechts.';
+    ? `Wie berichten deutsche Medien über "${lastQuery}"? KI-Analyse von taz, Spiegel, FAZ, Bild und 29 weiteren Quellen.`
+    : 'Analysiere wie deutsche Medien über jedes Thema berichten. Echtzeit-Vergleich von 33 Quellen quer durch das politische Spektrum – links bis rechts.';
 
   return (
     <div className="min-h-screen bg-[#FFF8F0] dark:bg-[#0f0f0f] text-[#1a1a1a] dark:text-[#f0ece4] flex flex-col font-serif">
