@@ -199,10 +199,10 @@ describe('runIngestionOnce', () => {
   it('runs every configured feed and returns a summary', async () => {
     const deps = makeDeps();
     const summary = await runIngestionOnce(deps, { maxPerFeed: 1 });
-    // 18 feeds configured across the spectrum
-    expect(summary.feeds).toBe(18);
-    expect(summary.feedsOk).toBe(18);
-    expect(deps.fetchFeed).toHaveBeenCalledTimes(18);
+    // 33 feeds configured across the spectrum (18 original + 15 added in Step 11)
+    expect(summary.feeds).toBe(33);
+    expect(summary.feedsOk).toBe(33);
+    expect(deps.fetchFeed).toHaveBeenCalledTimes(33);
     expect(summary.inserted).toBeGreaterThan(0);
   });
 });

@@ -8,9 +8,11 @@ import {
 
 describe('totalFeedsForSpectrum', () => {
   it('reflects the configured RSS_FEEDS counts', () => {
-    expect(totalFeedsForSpectrum('left')).toBe(3);
-    expect(totalFeedsForSpectrum('center_left')).toBe(4);
-    expect(totalFeedsForSpectrum('center_right')).toBe(5);
+    expect(totalFeedsForSpectrum('left')).toBe(5);
+    expect(totalFeedsForSpectrum('center_left')).toBe(8);
+    expect(totalFeedsForSpectrum('center')).toBe(5);
+    expect(totalFeedsForSpectrum('center_right')).toBe(8);
+    expect(totalFeedsForSpectrum('right')).toBe(7);
     expect(totalFeedsForSpectrum('nonexistent')).toBe(0);
   });
 });
