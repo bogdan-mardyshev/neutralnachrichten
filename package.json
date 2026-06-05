@@ -10,6 +10,8 @@
     "build": "vite build",
     "postinstall": "npm run build",
     "start": "node server.js",
+    "worker": "node worker.js",
+    "worker:once": "node worker.js --once",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

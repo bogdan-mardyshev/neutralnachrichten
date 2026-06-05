@@ -1,0 +1,103 @@
+/**
+ * worker.js — corpus ingestion worker (separate Railway service).
+ *
+ * Wires the REAL implementations into the dependency-injected orchestration in
+ * lib/ingestionWorker.js and runs it on an interval. Deployed as its own Railway
+ * service (start command: `npm run worker`) sharing the same DATABASE_URL +
+ * GEMINI_API_KEY as the web service, so the corpus it fills is read by the API.
+ *
+ * Modes:
+ *   node worker.js          → run once, then every INGEST_INTERVAL_MINUTES (default 30)
+ *   node worker.js --once   → run a single pass and exit (manual/dev/cron use)
+ *
+ * Reliability:
+ *   - Never lets one run's error kill the loop (each pass is try/caught).
+ *   - Degrades gracefully: no pgvector → articles stored, embeddings skipped (FTS
+ *     still works). No API key → same. No DB → logs and idles (loop keeps trying).
+ *   - Clean shutdown on SIGTERM/SIGINT so Railway redeploys don't drop the pool.
+ */
+
+import 'dotenv/config';
+import {
+  initDB,
+  closeDB,
+  isDBAvailable,
+  isPgvectorAvailable,
+  upsertCorpusArticle,
+  upsertCorpusEmbedding,
+  recordFeedSuccess,
+  recordFeedFailure,
+} from './db.js';
+import { fetchRSSFeed } from './lib/rssSearch.js';
+import { getEmbeddingsBatch, isEmbeddingAvailable } from './lib/embeddings.js';
+import { runIngestionOnce } from './lib/ingestionWorker.js';
+
+const INTERVAL_MIN = Math.max(5, parseInt(process.env.INGEST_INTERVAL_MINUTES, 10) || 30);
+const RUN_ONCE = process.argv.includes('--once');
+
+/** Real dependencies for the orchestration layer. */
+function buildDeps() {
+  return {
+    fetchFeed:      (feed) => fetchRSSFeed(feed),
+    upsertArticle:  (article) => upsertCorpusArticle(article),
+    embedBatch:     (texts) => getEmbeddingsBatch(texts),
+    upsertEmbedding:(id, vec) => upsertCorpusEmbedding(id, vec),
+    recordSuccess:  (url, name, spectrum) => recordFeedSuccess(url, name, spectrum),
+    recordFailure:  (url, name, spectrum) => recordFeedFailure(url, name, spectrum),
+  };
+}
+
+async function runPass() {
+  if (!isDBAvailable()) {
+    console.warn('[Worker] DB unavailable — skipping this pass');
+    return;
+  }
+  const withEmbeddings = isPgvectorAvailable() && isEmbeddingAvailable();
+  if (!withEmbeddings) {
+    console.warn(
+      `[Worker] embeddings off (pgvector=${isPgvectorAvailable()} apiKey=${isEmbeddingAvailable()}) ` +
+      '— storing articles for FTS only'
+    );
+  }
+  try {
+    await runIngestionOnce(buildDeps(), { withEmbeddings });
+  } catch (err) {
+    console.error('[Worker] ingestion pass failed:', err.message);
+  }
+}
+
+let timer = null;
+let shuttingDown = false;
+
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[Worker] ${signal} received — shutting down`);
+  if (timer) clearInterval(timer);
+  await closeDB();
+  process.exit(0);
+}
+
+async function main() {
+  console.log(`[Worker] starting (mode=${RUN_ONCE ? 'once' : `loop/${INTERVAL_MIN}min`})`);
+  await initDB();
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT',  () => shutdown('SIGINT'));
+
+  await runPass();
+
+  if (RUN_ONCE) {
+    await closeDB();
+    process.exit(0);
+  }
+
+  timer = setInterval(runPass, INTERVAL_MIN * 60 * 1000);
+  console.log(`[Worker] next pass in ${INTERVAL_MIN} min`);
+}
+
+main().catch(async (err) => {
+  console.error('[Worker] fatal:', err);
+  await closeDB().catch(() => {});
+  process.exit(1);
+});
