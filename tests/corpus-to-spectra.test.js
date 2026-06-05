@@ -48,6 +48,20 @@ describe('corpusArticleToPipeline', () => {
     const a = corpusArticleToPipeline(row(1, { our_summary: '' }), []);
     expect(a.content_text).toBe('Der Bundestag hat die Rentenreform beschlossen.');
   });
+
+  it('coerces a Date pubDate (from Postgres) into an ISO string', () => {
+    // Postgres returns TIMESTAMPTZ as a Date — pubDate must be a string downstream.
+    const a = corpusArticleToPipeline(row(1, { pubDate: new Date('2026-06-01T08:00:00Z') }), []);
+    expect(typeof a.pubDate).toBe('string');
+    expect(a.pubDate).toBe('2026-06-01T08:00:00.000Z');
+    expect(() => a.pubDate.slice(0, 10)).not.toThrow();
+    expect(a.pubDate.slice(0, 10)).toBe('2026-06-01');
+  });
+
+  it('null pubDate stays null', () => {
+    const a = corpusArticleToPipeline(row(1, { pubDate: null }), []);
+    expect(a.pubDate).toBeNull();
+  });
 });
 
 describe('corpusToSpectra', () => {
