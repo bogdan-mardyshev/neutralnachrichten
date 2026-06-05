@@ -18,6 +18,7 @@ import {
   buildUpsertSourceRatingQuery,
   normalizeArticleRow,
 } from './lib/corpusQueries.js';
+import { combineRetrieval } from './lib/hybridRetrieval.js';
 
 let pool = null;
 
@@ -1071,6 +1072,32 @@ export async function searchCorpusSemantic(embedding, keywords, opts = {}) {
     console.error('[DB:searchCorpusSemantic] vector path failed, falling back to FTS:', err.message);
     return searchCorpusFTS(keywords, opts);
   }
+}
+
+/**
+ * Hybrid corpus retrieval: run semantic (vector) + lexical (FTS) in parallel and
+ * fuse with Reciprocal Rank Fusion. Falls back cleanly: when pgvector is off,
+ * searchCorpusSemantic already returns FTS results, so fusion still works (the two
+ * lists may overlap heavily — RRF dedups by id).
+ *
+ * @param {number[]|null} embedding — query vector (null → lexical-only)
+ * @param {string[]} keywords       — for the FTS path
+ * @param {object} opts — { spectra?, sinceDate?, limit?, perSpectrum?, k? }
+ * @returns {Promise<{ranked, grouped, meta}>}
+ */
+export async function searchCorpusHybrid(embedding, keywords, opts = {}) {
+  if (!pool) return { ranked: [], grouped: {}, meta: { semanticCount: 0, lexicalCount: 0, fusedCount: 0, returnedCount: 0, bothRetrieversCount: 0 } };
+  const retrieveLimit = Math.min(200, Math.max(1, parseInt(opts.limit, 10) || 50));
+  const [semantic, lexical] = await Promise.all([
+    embedding ? searchCorpusSemantic(embedding, keywords, { ...opts, limit: retrieveLimit }) : Promise.resolve([]),
+    searchCorpusFTS(keywords, { ...opts, limit: retrieveLimit }),
+  ]);
+  return combineRetrieval({
+    semantic, lexical,
+    k: opts.k,
+    limit: opts.limit ?? 50,
+    perSpectrum: opts.perSpectrum,
+  });
 }
 
 /** Record a successful feed fetch (resets the failure counter). */
