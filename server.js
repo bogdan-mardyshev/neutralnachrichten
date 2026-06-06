@@ -70,7 +70,7 @@ const IS_PRODUCTION = !!process.env.RAILWAY_ENVIRONMENT;
 const GEMINI_TIMEOUT_SSE  = IS_PRODUCTION ? 90000 : 180000; // SSE path — no Railway kill
 const GEMINI_ATTEMPT_TIMEOUT = IS_PRODUCTION ? 50000 : 90000; // REST path — stays under 60s kill
 const GLOBAL_TIMEOUT_MS     = IS_PRODUCTION ? 58000 : 120000;
-const GLOBAL_TRANSL_TIMEOUT = IS_PRODUCTION ? 20000 :  40000;
+const GLOBAL_TRANSL_TIMEOUT = IS_PRODUCTION ? 35000 :  40000;
 
 const rawKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 const GEMINI_API_KEY = rawKey.replace(/["']/g, '').trim();
