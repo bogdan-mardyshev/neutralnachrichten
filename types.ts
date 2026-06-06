@@ -82,7 +82,12 @@ export interface RssArticle {
   article_title: string;
   article_url:   string | null;
   pub_date:      string | null;
+  pubDate?:      string | null;   // corpus path uses pubDate (ISO)
   description:   string;
+  // Source classification attached from source_ratings (Wave 2 visuals)
+  _tier?:        'flagship' | 'standard' | 'niche';
+  _factual?:     'high' | 'mixed' | 'low';
+  _reachWeight?: number;
 }
 
 export interface NewsAnalysisResult {

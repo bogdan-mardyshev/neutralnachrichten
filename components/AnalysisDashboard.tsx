@@ -7,6 +7,7 @@ import { ShareButtons } from './ShareButtons';
 import { DeepAnalysisBlock } from './DeepAnalysisBlock';
 import { HypeCounter } from './HypeCounter';
 import { ReliabilityPanel } from './ReliabilityPanel';
+import { DeepInsights } from './DeepInsights';
 import { translations, Language } from '../translations';
 
 // ── Sources known to be analysed (fixed list, matches rssSearch.js feeds) ─────
@@ -311,6 +312,9 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
           lang={lang}
         />
       )}
+
+      {/* ── Deep Insights (reach balance, timeline, source map, headlines) ── */}
+      <DeepInsights data={data} lang={lang} />
 
       {/* ── Deep Analysis Skeleton ── */}
       {deepLoading && <DeepAnalysisSkeleton lang={lang} t={t} />}
