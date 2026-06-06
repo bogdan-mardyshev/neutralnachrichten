@@ -110,31 +110,21 @@ describe('validateAnalysisStructure', () => {
 // ────────────────────────────────────────────────────────────
 // buildDeepAnalysisPrompt — DeepAnalysis article cap removed
 // ────────────────────────────────────────────────────────────
-describe('buildDeepAnalysisPrompt — no article cap', () => {
-  it('does NOT say "up to 3" articles — cap has been removed', () => {
+describe('buildDeepAnalysisPrompt — representative cap', () => {
+  it('caps at 6 articles per spectrum (keeps JSON output bounded)', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      source_name: `Src${i}`, article_title: `Title number ${i}`, summary_of_perspective: `View ${i}`,
+    }));
     const analysis = {
       analysis_topic: 'Klimawandel',
-      news_spectrum: {
-        left:         [{ source_name: 'taz', article_title: 'A', summary_of_perspective: 'X' }],
-        center_left:  [],
-        center:       [],
-        center_right: [],
-        right:        [],
-      },
+      news_spectrum: { left: many, center_left: [], center: [], center_right: [], right: [] },
     };
     const prompt = buildDeepAnalysisPrompt(analysis);
-    expect(prompt).not.toContain('up to 3');
-    expect(prompt).toContain('no cap');
-  });
-
-  it('says ALL articles are passed — no cap language in prompt', () => {
-    const analysis = {
-      analysis_topic: 'Test',
-      news_spectrum: { left: [], center_left: [], center: [], center_right: [], right: [] },
-    };
-    const prompt = buildDeepAnalysisPrompt(analysis);
-    // Should mention "ALL" or "no cap" in the preamble
-    expect(prompt.toLowerCase()).toMatch(/all available|no cap/);
+    // first 6 present, 7th+ dropped
+    expect(prompt).toContain('Title number 5');
+    expect(prompt).not.toContain('Title number 6');
+    // header reflects the representative cap
+    expect(prompt).toContain('up to 6 representative articles');
   });
 });
 
