@@ -5,7 +5,56 @@ import {
   titleOverlap,
   matchArticle,
   groundAnalysis,
+  dedupeArticles,
+  normalizeTitle,
 } from '../lib/citationGrounding.js';
+
+describe('dedupeArticles', () => {
+  const art = (over) => ({ source_domain: 'taz.de', article_title: 'Rentenreform beschlossen', article_url: 'https://taz.de/a/1', ...over });
+
+  it('drops same canonical URL (query/slash variants)', () => {
+    const out = dedupeArticles([
+      art({ article_url: 'https://taz.de/a/1' }),
+      art({ article_url: 'https://www.taz.de/a/1/?utm=rss' }),
+    ]);
+    expect(out).toHaveLength(1);
+  });
+
+  it('drops same outlet + same headline (different paths)', () => {
+    const out = dedupeArticles([
+      art({ article_url: 'https://taz.de/x' }),
+      art({ article_url: 'https://taz.de/y' }),
+    ]);
+    expect(out).toHaveLength(1);
+  });
+
+  it('KEEPS same headline from different outlets (distinct sources)', () => {
+    const out = dedupeArticles([
+      art({ source_domain: 'taz.de', article_url: 'https://taz.de/x' }),
+      art({ source_domain: 'spiegel.de', article_url: 'https://spiegel.de/y' }),
+    ]);
+    expect(out).toHaveLength(2);
+  });
+
+  it('keeps distinct articles and preserves order', () => {
+    const out = dedupeArticles([
+      art({ article_title: 'A', article_url: 'https://taz.de/a' }),
+      art({ article_title: 'B', article_url: 'https://taz.de/b' }),
+    ]);
+    expect(out.map(a => a.article_title)).toEqual(['A', 'B']);
+  });
+
+  it('handles empty/garbage', () => {
+    expect(dedupeArticles([])).toEqual([]);
+    expect(dedupeArticles(null)).toEqual([]);
+  });
+});
+
+describe('normalizeTitle', () => {
+  it('lowercases, strips punctuation, collapses whitespace', () => {
+    expect(normalizeTitle('  Rentenreform: beschlossen!  ')).toBe('rentenreform beschlossen');
+  });
+});
 
 describe('normalizeUrl', () => {
   it('strips www, query, hash, trailing slash', () => {

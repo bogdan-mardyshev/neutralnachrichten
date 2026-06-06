@@ -7,7 +7,7 @@ const row = (id, over = {}) => ({
   source_name: 'Tagesschau',
   source_domain: 'tagesschau.de',
   spectrum: 'center',
-  article_title: 'Bundestag beschließt Rentenreform',
+  article_title: `Bundestag beschließt Rentenreform ${id}`,
   our_summary: 'Der Bundestag hat die Rentenreform beschlossen. Details folgen.',
   short_lead: 'Der Bundestag hat die Rentenreform beschlossen.',
   pubDate: new Date().toISOString(),
@@ -23,7 +23,7 @@ describe('corpusArticleToPipeline', () => {
     expect(a).toMatchObject({
       source_name: 'Tagesschau',
       source_domain: 'tagesschau.de',
-      article_title: 'Bundestag beschließt Rentenreform',
+      article_title: 'Bundestag beschließt Rentenreform 1',
       article_url: 'https://example.de/a/1',
       content_text: 'Der Bundestag hat die Rentenreform beschlossen. Details folgen.',
       description: 'Der Bundestag hat die Rentenreform beschlossen.',
