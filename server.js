@@ -26,6 +26,7 @@ import { groundAnalysis, dedupeArticles } from './lib/citationGrounding.js';
 import { verifyBlindspots } from './lib/blindspotVerification.js';
 import { buildReliabilityEnvelope } from './lib/confidenceScore.js';
 import { enrichDeepAnalysis, flattenSpectra } from './lib/deepAnalysisEnrich.js';
+import { clusterArticles } from './lib/storyClustering.js';
 import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, getRedisClient, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
@@ -491,6 +492,16 @@ async function applyCorpusReliability(analysis, rssData) {
   const blindspot = verifyBlindspots(spectra, downFeeds);
 
   const reliability = buildReliabilityEnvelope({ corpusSpectra: spectra, grounding, blindspot });
+
+  // Story clustering (Wave 4): group the topic's articles into sub-stories and
+  // flag sub-angles only one camp tells (sub-story-level blindspots).
+  try {
+    const { clusters, meta } = clusterArticles(flattenSpectra(spectra));
+    reliability.clusters = clusters;
+    reliability.clusterMeta = meta;
+    if (meta.soloCamps.length) console.log(`[Clusters] ${meta.clusterCount} sub-stories, solo-camp angles: ${meta.soloCamps.map(s => `${s.camp}:${s.label}`).join(' | ')}`);
+  } catch (e) { console.warn('[Clusters] skipped:', e.message); }
+
   console.log(`[Reliability] confidence=${reliability.confidence.score}/${reliability.confidence.band} grounded=${grounding.grounded}/${grounding.total} flagshipSilent=[${blindspot.flagshipSilences}] verifiedSilent=[${blindspot.verifiedSilences}]`);
   return { analysis: grounded, reliability };
 }

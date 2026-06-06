@@ -27,9 +27,12 @@ const T = {
         heads: 'Один сюжет, пять заголовков', high: 'Высокая', mixed: 'Смешанная', low: 'Низкая', noData: 'Нет данных' },
 } as const;
 const T2 = {
-  de: { comp: 'Worauf der Bericht beruht', compHint: 'Quellen-Zusammensetzung — Transparenz der Auswahl', flagship: 'Leitmedien', standard: 'Standard', niche: 'Nische', factTitle: 'Faktentreue der Quellen' },
-  en: { comp: 'What this analysis is built on', compHint: 'Source composition — selection transparency', flagship: 'Flagship', standard: 'Standard', niche: 'Niche', factTitle: 'Source factuality' },
-  ru: { comp: 'На чём построен разбор', compHint: 'Состав источников — прозрачность выборки', flagship: 'Флагманы', standard: 'Стандартные', niche: 'Нишевые', factTitle: 'Фактологичность источников' },
+  de: { comp: 'Worauf der Bericht beruht', compHint: 'Quellen-Zusammensetzung — Transparenz der Auswahl', flagship: 'Leitmedien', standard: 'Standard', niche: 'Nische', factTitle: 'Faktentreue der Quellen',
+        clusters: 'Unterthemen dieser Story', clustersHint: 'Automatisch gruppierte Teilstränge', solo: 'nur ein Lager', camps: 'Lager' },
+  en: { comp: 'What this analysis is built on', compHint: 'Source composition — selection transparency', flagship: 'Flagship', standard: 'Standard', niche: 'Niche', factTitle: 'Source factuality',
+        clusters: 'Sub-stories within this topic', clustersHint: 'Automatically grouped threads', solo: 'only one camp', camps: 'camps' },
+  ru: { comp: 'На чём построен разбор', compHint: 'Состав источников — прозрачность выборки', flagship: 'Флагманы', standard: 'Стандартные', niche: 'Нишевые', factTitle: 'Фактологичность источников',
+        clusters: 'Под-сюжеты этой темы', clustersHint: 'Автоматически сгруппированные нити', solo: 'только один лагерь', camps: 'лагерей' },
 } as const;
 
 /** Collect corpus articles per spectrum from _rss.spectra. */
@@ -244,6 +247,40 @@ const Composition: React.FC<{ data: NewsAnalysisResult; t2: typeof T2[Lang]; t: 
   );
 };
 
+// ── 6. Sub-stories (clusters) ─────────────────────────────────────────────────
+const SubStories: React.FC<{ data: NewsAnalysisResult; t2: typeof T2[Lang]; lang: Lang }> = ({ data, t2, lang }) => {
+  const clusters = (data._reliability?.clusters || []).filter(c => c.size >= 2);
+  if (clusters.length < 2) return null;
+  return (
+    <Card title={`${t2.clusters} · ${clusters.length}`} hint={t2.clustersHint}>
+      <div className="space-y-2">
+        {clusters.slice(0, 6).map(c => (
+          <div key={c.id} className="border-l-2 pl-3 py-1"
+               style={{ borderColor: c.soloCamp ? SP_COLOR[c.soloCamp] : '#94a3b8' }}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] capitalize">{c.label}</span>
+              <span className="font-sans text-[10px] text-gray-400">{c.size} {lang === 'ru' ? 'ст.' : 'art.'}</span>
+              {c.soloCamp && (
+                <span className="font-sans text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-white"
+                      style={{ backgroundColor: SP_COLOR[c.soloCamp] }}>
+                  {SP_LABEL[c.soloCamp][lang]} · {t2.solo}
+                </span>
+              )}
+            </div>
+            {/* camp dots */}
+            <div className="flex items-center gap-1 mt-1">
+              {c.coveredCamps.map(sp => (
+                <span key={sp} className="w-2 h-2 rounded-full" style={{ backgroundColor: SP_COLOR[sp] }} title={SP_LABEL[sp][lang]} />
+              ))}
+              <span className="font-sans text-[9px] text-gray-400 ml-1">{c.coveredCamps.length} {t2.camps}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+};
+
 export const DeepInsights: React.FC<Props> = ({ data, lang }) => {
   const t = T[lang] ?? T.de;
   const t2 = T2[lang] ?? T2.de;
@@ -252,6 +289,7 @@ export const DeepInsights: React.FC<Props> = ({ data, lang }) => {
   return (
     <div className="space-y-3">
       <ReachBalance data={data} t={t} lang={lang} />
+      <SubStories data={data} t2={t2} lang={lang} />
       <Composition data={data} t2={t2} t={t} />
       <Headlines data={data} t={t} lang={lang} />
       <Timeline data={data} t={t} />
