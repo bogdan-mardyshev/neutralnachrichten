@@ -1159,6 +1159,16 @@ app.get('/api/analyze/stream', async (req, res) => {
       ...(germanAnalysis._rss ? { _rss: germanAnalysis._rss } : {}),
       ...(germanAnalysis._reliability ? { _reliability: germanAnalysis._reliability } : {}),
     };
+    // Final belt-and-suspenders dedup on the SHIPPED spectrum — URLs survive
+    // translation, so this removes any same-article twin that slipped through
+    // (e.g. a German original + its translated copy resolving to one URL).
+    if (finalAnalysis.news_spectrum) {
+      for (const sp of SPECTRUMS) {
+        if (Array.isArray(finalAnalysis.news_spectrum[sp])) {
+          finalAnalysis.news_spectrum[sp] = dedupeArticles(finalAnalysis.news_spectrum[sp]);
+        }
+      }
+    }
     const fullResponse = {
       ...finalAnalysis,
       _meta: {
