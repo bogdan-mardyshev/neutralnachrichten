@@ -666,7 +666,7 @@ async function callDeepAnalysisOnce(analysis, timeoutMs) {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.3,
-        maxOutputTokens: 8192,
+        maxOutputTokens: 16384,
         responseMimeType: 'application/json',
         thinkingConfig: { thinkingBudget: 0 },
       },
