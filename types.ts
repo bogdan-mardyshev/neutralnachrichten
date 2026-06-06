@@ -132,6 +132,18 @@ export interface ReliabilityEnvelope {
   claims?:     { total: number; supported: number; contradicted: number; unsupported: number; supportRatio: number; hasContradiction: boolean } | null;
   blindspots?: { verifiedSilences: SpectrumKey[]; flagshipSilences: SpectrumKey[]; unverifiable: SpectrumKey[] } | null;
   sourceCount?: number;
+  clusters?: StoryCluster[];
+  clusterMeta?: { total: number; clusterCount: number; multiArticleClusters: number; soloCamps: Array<{ label: string; camp: SpectrumKey; size: number }> };
+}
+
+export interface StoryCluster {
+  id: number;
+  label: string;
+  size: number;
+  spectra: Record<SpectrumKey, number>;
+  coveredCamps: SpectrumKey[];
+  soloCamp: SpectrumKey | null;
+  articles: Array<{ title: string; source_name: string; url: string; spectrum: SpectrumKey | null }>;
 }
 
 export interface TopicCount {
