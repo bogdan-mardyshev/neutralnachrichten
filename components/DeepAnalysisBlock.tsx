@@ -347,28 +347,50 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
           accent="text-teal-600" accentBar="bg-teal-500"
         >
           <div className="px-5 py-5">
+            {/* Loaded-language contrast: words used by only ONE camp are that camp's
+                distinctive framing; words shared across camps are common ground. */}
+            <p className="font-sans text-[10px] text-gray-400 dark:text-gray-500 mb-3">
+              {lang === 'de' ? 'Hervorgehoben = nur von diesem Lager verwendet (Framing). Blass = lagerübergreifend.'
+               : lang === 'ru' ? 'Выделено = использует только этот лагерь (фрейминг). Бледное = общее для лагерей.'
+               : 'Highlighted = used only by this camp (framing). Faded = shared across camps.'}
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-5 gap-5">
-              {SPECTRUM_ORDER.map(s => {
-                const words = data.keywords![s] ?? [];
-                return (
-                  <div key={s} className="space-y-2">
-                    <div className={`font-sans text-[9px] font-bold uppercase tracking-widest border-b border-[#e0d8cf] dark:border-[#252525] pb-1 ${SPECTRUM_STYLE[s].text}`}>
-                      {leaningLabel[s]}
+              {(() => {
+                // count how many camps use each (normalized) word
+                const campCount = new Map<string, number>();
+                for (const sp of SPECTRUM_ORDER) {
+                  const arr: string[] = data.keywords![sp] ?? [];
+                  const uniq = new Set<string>(arr.map(w => String(w).toLowerCase().trim()));
+                  uniq.forEach(w => campCount.set(w, (campCount.get(w) || 0) + 1));
+                }
+                return SPECTRUM_ORDER.map(s => {
+                  const words = data.keywords![s] ?? [];
+                  return (
+                    <div key={s} className="space-y-2">
+                      <div className={`font-sans text-[9px] font-bold uppercase tracking-widest border-b border-[#e0d8cf] dark:border-[#252525] pb-1 ${SPECTRUM_STYLE[s].text}`}>
+                        {leaningLabel[s]}
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {words.map((w, i) => {
+                          const unique = (campCount.get(w.toLowerCase().trim()) ?? 0) <= 1;
+                          return (
+                            <span
+                              key={i}
+                              className={unique
+                                ? `font-sans text-[10px] font-semibold px-2 py-0.5 border ${SPECTRUM_STYLE[s].text} border-current`
+                                : 'font-sans text-[10px] px-2 py-0.5 border border-dashed border-gray-300 dark:border-[#333] text-gray-400 dark:text-gray-600'}
+                              title={unique ? (lang === 'de' ? 'Nur dieses Lager' : lang === 'ru' ? 'Только этот лагерь' : 'Only this camp')
+                                            : (lang === 'de' ? 'Lagerübergreifend' : lang === 'ru' ? 'Общее' : 'Shared')}
+                            >
+                              {w}
+                            </span>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-1">
-                      {words.map((w, i) => (
-                        <span
-                          key={i}
-                          className="font-sans text-[10px] border border-[#1a1a1a] dark:border-[#2d2d2d] px-2 py-0.5 text-[#1a1a1a] dark:text-[#f0ece4] hover:bg-[#1a1a1a] dark:hover:bg-[#f0ece4] hover:text-white dark:hover:text-[#1a1a1a] transition-colors cursor-default"
-                          style={{ fontSize: `${Math.max(10, 12 - i * 0.4)}px` }}
-                        >
-                          {w}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           </div>
         </Section>
