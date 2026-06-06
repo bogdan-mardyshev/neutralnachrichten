@@ -23,12 +23,21 @@ const onlyInDot: Record<string, string> = {
 };
 
 const divergingViews = [
-  { key: 'left_view',         leaningKey: 'leaningLeft',        borderHex: '#e11d48' },
-  { key: 'center_left_view',  leaningKey: 'leaningCenterLeft',  borderHex: '#fb923c' },
-  { key: 'center_view',       leaningKey: 'leaningCenter',      borderHex: '#64748b' },
-  { key: 'center_right_view', leaningKey: 'leaningCenterRight', borderHex: '#0ea5e9' },
-  { key: 'right_view',        leaningKey: 'leaningRight',       borderHex: '#1d4ed8' },
+  { key: 'left_view',         leaningKey: 'leaningLeft',        citeKey: 'left',         borderHex: '#e11d48' },
+  { key: 'center_left_view',  leaningKey: 'leaningCenterLeft',  citeKey: 'center_left',  borderHex: '#fb923c' },
+  { key: 'center_view',       leaningKey: 'leaningCenter',      citeKey: 'center',       borderHex: '#64748b' },
+  { key: 'center_right_view', leaningKey: 'leaningCenterRight', citeKey: 'center_right', borderHex: '#0ea5e9' },
+  { key: 'right_view',        leaningKey: 'leaningRight',       citeKey: 'right',         borderHex: '#1d4ed8' },
 ] as const;
+
+// Wave 1: fact-verification badge labels (lexical/NLI check against the corpus)
+const VERIFY: Record<string, { de: string; en: string; ru: string; cls: string; icon: string }> = {
+  supported:     { de: 'Belegt',      en: 'Verified',     ru: 'Подтверждено',    icon: '✓', cls: 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30' },
+  entailment:    { de: 'Belegt',      en: 'Verified',     ru: 'Подтверждено',    icon: '✓', cls: 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30' },
+  unsupported:   { de: 'Unbelegt',    en: 'Unverified',   ru: 'Не подтверждено', icon: '⚠', cls: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30' },
+  contradiction: { de: 'Widerspruch', en: 'Contradicted', ru: 'Противоречие',    icon: '✗', cls: 'text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30' },
+};
+const SOURCE_LABEL = { de: 'Quelle', en: 'Source', ru: 'Источник' } as const;
 
 const SENTIMENT_CONFIG: Record<Sentiment, { icon: string; bar: string; label: string }> = {
   positive: { icon: '↑', bar: 'bg-emerald-500', label: 'sentimentPositive' },
@@ -129,12 +138,31 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
         accent="text-emerald-600" accentBar="bg-emerald-500"
       >
         <div className="divide-y divide-[#e0d8cf] dark:divide-[#252525]">
-          {data.shared_facts.map((fact, i) => (
+          {data.shared_facts.map((fact, i) => {
+            const v = fact._verification;
+            const vMeta = v ? VERIFY[v.label] : null;
+            return (
             <div key={i} className="flex items-start gap-4 px-5 py-3.5">
               <span className="font-sans text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider shrink-0 mt-0.5 w-4">{i + 1}</span>
-              <p className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] leading-relaxed">{fact.claim}</p>
+              <div className="flex-1">
+                <p className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] leading-relaxed">{fact.claim}</p>
+                {vMeta && (
+                  <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                    <span className={`font-sans text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${vMeta.cls}`}>
+                      {vMeta.icon} {vMeta[lang]}
+                    </span>
+                    {v?.evidence?.url && (
+                      <a href={v.evidence.url} target="_blank" rel="noopener noreferrer"
+                         className="font-sans text-[10px] text-rose-600 dark:text-rose-400 hover:underline">
+                        {SOURCE_LABEL[lang]}: {v.evidence.source_name} ↗
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </Section>
 
@@ -153,15 +181,22 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
                 {point.topic}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-                {divergingViews.map(({ key, leaningKey, borderHex }) => {
+                {divergingViews.map(({ key, leaningKey, citeKey, borderHex }) => {
                   const text = (point as any)[key];
                   if (!text) return null;
+                  const cite = point._citations?.[citeKey as SpectrumKey];
                   return (
                     <div key={key} className="border-l-2 pl-3 py-1" style={{ borderColor: borderHex }}>
                       <div className="font-sans text-[9px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">
                         {(t as any)[leaningKey]}
                       </div>
                       <p className="font-sans text-xs text-[#1a1a1a] dark:text-[#f0ece4] leading-relaxed">{text}</p>
+                      {cite?.url && (
+                        <a href={cite.url} target="_blank" rel="noopener noreferrer"
+                           className="font-sans text-[9px] text-rose-600 dark:text-rose-400 hover:underline mt-1 inline-block">
+                          {cite.source_name} ↗
+                        </a>
+                      )}
                     </div>
                   );
                 })}
