@@ -151,6 +151,20 @@ describe('groundAnalysis', () => {
     expect(out.news_spectrum.left[1]._citation).toBeNull();
   });
 
+  it('stamps the authoritative source_domain from the corpus row', () => {
+    const corpus = { center: { articles: [
+      { _corpusId: 1, article_url: 'https://t.de/a/1', article_title: 'Bundestag beschließt Rentenreform', source_domain: 'tagesschau.de', source_name: 'Tagesschau' },
+    ] } };
+    const a = { news_spectrum: { center: [
+      // Gemini emitted with EMPTY domain (no domain in its prompt context)
+      { source_name: 'Tagesschau', source_domain: '', article_title: 'Bundestag beschließt Rentenreform', article_url: '' },
+    ] } };
+    const { analysis: out } = groundAnalysis(a, corpus);
+    expect(out.news_spectrum.center[0]._grounded).toBe(true);
+    expect(out.news_spectrum.center[0].source_domain).toBe('tagesschau.de'); // stamped
+    expect(out.news_spectrum.center[0].article_url).toBe('https://t.de/a/1'); // canonicalized
+  });
+
   it('does not mutate the input analysis', () => {
     const before = JSON.parse(JSON.stringify(analysis));
     groundAnalysis(analysis, corpusSpectra);

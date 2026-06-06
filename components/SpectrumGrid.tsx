@@ -76,21 +76,28 @@ function mergeArticles(
 ): NewsSource[] {
   const isPlaceholder = (a: NewsSource) =>
     a.source_name === 'Kein Artikel gefunden' || a.source_domain === 'n/a';
+  // Canonical URL key — strips protocol/www/query/trailing slash so the same
+  // article never appears twice (analyzed copy + raw copy) regardless of variant.
+  const urlKey = (u?: string) =>
+    (u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
 
   const merged: NewsSource[] = [];
   const seenDomains = new Set<string>();
+  const seenUrls = new Set<string>();
 
   // 1. Real Gemini articles first — they have AI-generated perspective summaries
   for (const a of geminiArticles) {
     if (isPlaceholder(a)) continue;
     merged.push(a);
     if (a.source_domain) seenDomains.add(a.source_domain.replace(/^www\./, ''));
+    const uk = urlKey(a.article_url); if (uk) seenUrls.add(uk);
   }
 
   // 2. RSS articles from additional outlets not already covered by Gemini
   for (const r of rssArticles) {
     if (!r.article_url) continue;
     const dom = (r.source_domain || '').replace(/^www\./, '');
+    if (seenUrls.has(urlKey(r.article_url))) continue; // same article already shown (analyzed)
     if (seenDomains.has(dom)) continue; // outlet already represented
     merged.push({
       source_name:            r.source_name,
@@ -102,6 +109,7 @@ function mergeArticles(
       url_is_search_fallback: false,
     });
     seenDomains.add(dom);
+    const uk = urlKey(r.article_url); if (uk) seenUrls.add(uk);
   }
 
   // Fall back to original list if nothing merged (edge case)
