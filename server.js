@@ -427,6 +427,11 @@ async function checkDailyLimitDB(ip) {
 // → with the flag OFF this is byte-for-byte the previous searchAllFeeds behavior.
 const CORPUS_ANALYSIS_ENABLED = process.env.CORPUS_ANALYSIS_ENABLED === 'true';
 const CORPUS_MIN_ARTICLES = parseInt(process.env.CORPUS_MIN_ARTICLES, 10) || 8;
+// How many articles per camp Gemini writes perspective summaries for. ALL matching
+// articles are still retrieved, counted and DISPLAYED (with real links) — this only
+// bounds the AI-summary workload so one request stays within model token/latency
+// limits. Articles beyond this show as raw cards (original RSS excerpt + link).
+const GEMINI_MAX_PER_SPECTRUM = parseInt(process.env.GEMINI_MAX_PER_SPECTRUM, 10) || 12;
 
 async function getSpectraForTopic(topic) {
   if (CORPUS_ANALYSIS_ENABLED && isDBAvailable()) {
@@ -434,7 +439,11 @@ async function getSpectraForTopic(topic) {
       const corpus = await retrieveCorpusSpectra(
         topic,
         { getEmbedding, searchHybrid: (embedding, kw, o) => searchCorpusHybrid(embedding, kw, o) },
-        { limit: 40, perSpectrum: 8 }
+        // Retrieve ALL matching articles per camp — the page shows the full,
+        // honest coverage (real links). The Gemini call is separately bounded
+        // (maxPerSpectrum) so the AI summary stays within model limits while the
+        // raw articles beyond that are still displayed.
+        { limit: 250, perSpectrum: 60 }
       );
       if ((corpus?.total_articles ?? 0) >= CORPUS_MIN_ARTICLES) {
         console.log(`[Corpus] ${corpus.total_articles} articles (semantic=${corpus.search_meta?.usedSemantic})`);
@@ -837,7 +846,7 @@ app.post('/api/analyze', async (req, res) => {
         const { analysis: rawAnalysis, degraded: deg, meta: rssMeta } =
           await callGeminiWithRSSContext(topic, 'de', rssData?.spectra ?? {}, {
             timeoutMs:      timeoutBudget,
-            maxPerSpectrum: Infinity, // pass all matched RSS articles to Gemini
+            maxPerSpectrum: GEMINI_MAX_PER_SPECTRUM, // AI summarises top-N/camp; remaining articles still shown via _rss merge
           });
         degraded = deg;
         if (rssMeta) console.log(`[RSS-Direct] meta: articles=${rssMeta.totalArticles} spectra=${rssMeta.coveredSpectra}/5 elapsed=${rssMeta.elapsedMs}ms${rssMeta.overallPatched ? ' (patched)' : ''}`);
@@ -1103,7 +1112,7 @@ app.get('/api/analyze/stream', async (req, res) => {
         const { analysis: rawAnalysis, degraded: deg, meta: rssMeta } =
           await callGeminiWithRSSContext(topic, 'de', rssData?.spectra ?? {}, {
             timeoutMs:      GEMINI_TIMEOUT_SSE,
-            maxPerSpectrum: Infinity, // pass all matched RSS articles to Gemini
+            maxPerSpectrum: GEMINI_MAX_PER_SPECTRUM, // AI summarises top-N/camp; remaining articles still shown via _rss merge
           });
         degraded = deg;
         if (rssMeta) console.log(`[RSS-Direct-Stream] meta: articles=${rssMeta.totalArticles} spectra=${rssMeta.coveredSpectra}/5 elapsed=${rssMeta.elapsedMs}ms${rssMeta.overallPatched ? ' (patched)' : ''}`);
