@@ -25,6 +25,7 @@ import { getEmbedding } from './lib/embeddings.js';
 import { groundAnalysis, dedupeArticles } from './lib/citationGrounding.js';
 import { verifyBlindspots } from './lib/blindspotVerification.js';
 import { buildReliabilityEnvelope } from './lib/confidenceScore.js';
+import { enrichDeepAnalysis, flattenSpectra } from './lib/deepAnalysisEnrich.js';
 import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, getRedisClient, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
@@ -1260,6 +1261,21 @@ app.post('/api/deep-analysis', async (req, res) => {
     if (germanAnalysis._rss?.coverage_volume) {
       deep.coverage_volume = germanAnalysis._rss.coverage_volume;
       console.log('[DeepAnalysis] coverage_volume overridden with real RSS data');
+    }
+
+    // Wave 1 reliability: verify shared_facts against the corpus, cite each
+    // conclusion, and drop unverifiable experts. Only when corpus articles exist.
+    if (germanAnalysis._rss?.spectra) {
+      try {
+        const flat = flattenSpectra(germanAnalysis._rss.spectra);
+        if (flat.length) {
+          const { deep: enriched, report } = await enrichDeepAnalysis(deep, flat);
+          deep = enriched;
+          console.log(`[DeepAnalysis] verified facts=${report.verifiedFacts}/${report.facts} contradicted=${report.contradicted} experts kept=${report.expertsKept} dropped=${report.expertsDropped}`);
+        }
+      } catch (e) {
+        console.warn('[DeepAnalysis] enrichment skipped:', e.message);
+      }
     }
 
     // Cache German deep analysis

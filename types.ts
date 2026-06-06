@@ -21,8 +21,22 @@ export interface NewsSource {
   sentiment?: 'positive' | 'negative' | 'neutral';
 }
 
+export interface Citation {
+  url: string;
+  source_name: string;
+  title: string;
+  corpus_id?: number | null;
+}
+
+export interface FactVerification {
+  label: 'supported' | 'entailment' | 'contradiction' | 'unsupported';
+  score: number;
+  evidence: Citation | null;
+}
+
 export interface SharedFact {
   claim: string;
+  _verification?: FactVerification;   // Wave 1: NLI check + citation
 }
 
 export interface DivergingPoint {
@@ -32,6 +46,7 @@ export interface DivergingPoint {
   center_view: string;
   center_right_view: string;
   right_view: string;
+  _citations?: Partial<Record<SpectrumKey, Citation>>;  // Wave 1: per-camp source
 }
 
 export interface SilencedTopic {
@@ -54,6 +69,7 @@ export interface DeepAnalysis {
   keywords?: Record<SpectrumKey, string[]>;
   sentiment?: Record<SpectrumKey, Sentiment>;
   experts_cited?: Record<SpectrumKey, string[]>;
+  _experts_unverified?: Record<SpectrumKey, string[]>;  // Wave 1: names not found in article text
   coverage_volume?: Record<SpectrumKey, CoverageVolume>;
 }
 
