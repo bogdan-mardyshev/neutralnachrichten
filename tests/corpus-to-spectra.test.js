@@ -49,6 +49,19 @@ describe('corpusArticleToPipeline', () => {
     expect(a.content_text).toBe('Der Bundestag hat die Rentenreform beschlossen.');
   });
 
+  it('attaches tier/factual/reach from source_ratings (tagesschau.de = flagship/high)', () => {
+    const a = corpusArticleToPipeline(row(1), []);
+    expect(a._tier).toBe('flagship');
+    expect(a._factual).toBe('high');
+    expect(a._reachWeight).toBeGreaterThan(0);
+  });
+
+  it('defaults classification for an unrated outlet', () => {
+    const a = corpusArticleToPipeline(row(1, { source_domain: 'unknown-blog.de' }), []);
+    expect(a._tier).toBe('standard');
+    expect(a._factual).toBe('mixed');
+  });
+
   it('coerces a Date pubDate (from Postgres) into an ISO string', () => {
     // Postgres returns TIMESTAMPTZ as a Date — pubDate must be a string downstream.
     const a = corpusArticleToPipeline(row(1, { pubDate: new Date('2026-06-01T08:00:00Z') }), []);
