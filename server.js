@@ -22,7 +22,7 @@ import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverage
 import { callGeminiWithRSSContext } from './lib/rssDirectAnalysis.js';
 import { retrieveCorpusSpectra } from './lib/corpusRetrieval.js';
 import { getEmbedding } from './lib/embeddings.js';
-import { groundAnalysis } from './lib/citationGrounding.js';
+import { groundAnalysis, dedupeArticles } from './lib/citationGrounding.js';
 import { verifyBlindspots } from './lib/blindspotVerification.js';
 import { buildReliabilityEnvelope } from './lib/confidenceScore.js';
 import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds } from './db.js';
@@ -464,10 +464,15 @@ async function applyCorpusReliability(analysis, rssData) {
   const { analysis: grounded, report: grounding } = groundAnalysis(analysis, spectra);
 
   // Grounded article → real corpus URL is now set; mark it as a real (non-fallback)
-  // link so the UI renders "read article" with a working href.
+  // link so the UI renders "read article" with a working href. Then drop any twin
+  // cards (same canonical URL now resolved, or same outlet+headline) — safety net
+  // for duplicates the model may have emitted from near-duplicate corpus rows.
   for (const sp of SPECTRUMS) {
     for (const art of (grounded.news_spectrum?.[sp] || [])) {
       if (art._grounded && art.article_url) art.url_is_search_fallback = false;
+    }
+    if (Array.isArray(grounded.news_spectrum?.[sp])) {
+      grounded.news_spectrum[sp] = dedupeArticles(grounded.news_spectrum[sp]);
     }
   }
 
