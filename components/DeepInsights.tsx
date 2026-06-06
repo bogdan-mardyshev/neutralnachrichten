@@ -26,6 +26,11 @@ const T = {
         timeline: 'Освещение во времени', map: 'Карта источников', mapY: 'Фактологичность', mapHint: 'Спектр × фактологичность · размер точки = охват',
         heads: 'Один сюжет, пять заголовков', high: 'Высокая', mixed: 'Смешанная', low: 'Низкая', noData: 'Нет данных' },
 } as const;
+const T2 = {
+  de: { comp: 'Worauf der Bericht beruht', compHint: 'Quellen-Zusammensetzung — Transparenz der Auswahl', flagship: 'Leitmedien', standard: 'Standard', niche: 'Nische', factTitle: 'Faktentreue der Quellen' },
+  en: { comp: 'What this analysis is built on', compHint: 'Source composition — selection transparency', flagship: 'Flagship', standard: 'Standard', niche: 'Niche', factTitle: 'Source factuality' },
+  ru: { comp: 'На чём построен разбор', compHint: 'Состав источников — прозрачность выборки', flagship: 'Флагманы', standard: 'Стандартные', niche: 'Нишевые', factTitle: 'Фактологичность источников' },
+} as const;
 
 /** Collect corpus articles per spectrum from _rss.spectra. */
 function articlesBySpectrum(data: NewsAnalysisResult): Record<SpectrumKey, RssArticle[]> {
@@ -177,13 +182,77 @@ const Headlines: React.FC<{ data: NewsAnalysisResult; t: typeof T[Lang]; lang: L
   );
 };
 
+// ── 5. Source composition / selection self-audit (tier + factuality) ──────────
+const FACT_COLOR: Record<string, string> = { high: '#0f9d6b', mixed: '#e0992a', low: '#e0445c' };
+const TIER_COLOR: Record<string, string> = { flagship: '#11161e', standard: '#64748b', niche: '#b8b2a7' };
+
+const Composition: React.FC<{ data: NewsAnalysisResult; t2: typeof T2[Lang]; t: typeof T[Lang] }> = ({ data, t2, t }) => {
+  const bySp = articlesBySpectrum(data);
+  const seen = new Map<string, { tier: string; factual: string }>();
+  for (const sp of SP_ORDER) for (const a of bySp[sp]) {
+    const dom = (a.source_domain || '').toLowerCase().replace(/^www\./, '');
+    if (dom && !seen.has(dom)) seen.set(dom, { tier: a._tier || 'standard', factual: a._factual || 'mixed' });
+  }
+  const outlets = [...seen.values()];
+  if (outlets.length < 2) return null;
+  const total = outlets.length;
+  const tierN = { flagship: 0, standard: 0, niche: 0 } as Record<string, number>;
+  const factN = { high: 0, mixed: 0, low: 0 } as Record<string, number>;
+  for (const o of outlets) { tierN[o.tier] = (tierN[o.tier] || 0) + 1; factN[o.factual] = (factN[o.factual] || 0) + 1; }
+
+  const Bar: React.FC<{ segs: Array<{ n: number; color: string; label: string }> }> = ({ segs }) => (
+    <>
+      <div className="flex h-5 w-full overflow-hidden rounded">
+        {segs.filter(s => s.n > 0).map((s, i) => (
+          <div key={i} style={{ width: `${(s.n / total) * 100}%`, backgroundColor: s.color }}
+               className="flex items-center justify-center" title={`${s.label}: ${s.n}`}>
+            {s.n / total >= 0.12 && <span className="text-[9px] font-bold text-white">{s.n}</span>}
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+        {segs.filter(s => s.n > 0).map((s, i) => (
+          <span key={i} className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />{s.label} {s.n}
+          </span>
+        ))}
+      </div>
+    </>
+  );
+
+  return (
+    <Card title={`${t2.comp} · ${total}`} hint={t2.compHint}>
+      <div className="space-y-3">
+        <div>
+          <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 mb-1">{t2.factTitle}</p>
+          <Bar segs={[
+            { n: factN.high, color: FACT_COLOR.high, label: t.high },
+            { n: factN.mixed, color: FACT_COLOR.mixed, label: t.mixed },
+            { n: factN.low, color: FACT_COLOR.low, label: t.low },
+          ]} />
+        </div>
+        <div>
+          <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 mb-1">{t2.flagship} / {t2.standard} / {t2.niche}</p>
+          <Bar segs={[
+            { n: tierN.flagship, color: TIER_COLOR.flagship, label: t2.flagship },
+            { n: tierN.standard, color: TIER_COLOR.standard, label: t2.standard },
+            { n: tierN.niche, color: TIER_COLOR.niche, label: t2.niche },
+          ]} />
+        </div>
+      </div>
+    </Card>
+  );
+};
+
 export const DeepInsights: React.FC<Props> = ({ data, lang }) => {
   const t = T[lang] ?? T.de;
+  const t2 = T2[lang] ?? T2.de;
   // Only meaningful for the corpus path (needs _rss.spectra / _reliability)
   if (!data._rss?.spectra && !data._reliability) return null;
   return (
     <div className="space-y-3">
       <ReachBalance data={data} t={t} lang={lang} />
+      <Composition data={data} t2={t2} t={t} />
       <Headlines data={data} t={t} lang={lang} />
       <Timeline data={data} t={t} />
       <SourceMap data={data} t={t} lang={lang} />
