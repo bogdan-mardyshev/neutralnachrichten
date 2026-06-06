@@ -22,7 +22,10 @@ import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverage
 import { callGeminiWithRSSContext } from './lib/rssDirectAnalysis.js';
 import { retrieveCorpusSpectra } from './lib/corpusRetrieval.js';
 import { getEmbedding } from './lib/embeddings.js';
-import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid } from './db.js';
+import { groundAnalysis } from './lib/citationGrounding.js';
+import { verifyBlindspots } from './lib/blindspotVerification.js';
+import { buildReliabilityEnvelope } from './lib/confidenceScore.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, getRedisClient, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
@@ -443,6 +446,38 @@ async function getSpectraForTopic(topic) {
     }
   }
   return searchAllFeeds(extractSearchKeywords(topic), { inputWordCount: getInputWordCount(topic) });
+}
+
+// ── Step 12b: corpus citation grounding + reliability envelope ───────────────────
+//
+// For corpus-sourced analyses only. Gemini's prompt context carries source_name +
+// title but NOT the domain, so enrichWithRSSData's domain-keyed URL match misses;
+// citation grounding matches emitted articles to corpus rows by URL / title overlap
+// and stamps the REAL stored URL (this is what makes source links clickable). Also
+// computes verified blindspots (feed_health) + a confidence/coverage envelope.
+// No-op for the live-RSS path (returns the analysis unchanged, reliability null).
+async function applyCorpusReliability(analysis, rssData) {
+  if (!analysis || rssData?.search_meta?.source !== 'corpus') {
+    return { analysis, reliability: null };
+  }
+  const spectra = rssData.spectra || {};
+  const { analysis: grounded, report: grounding } = groundAnalysis(analysis, spectra);
+
+  // Grounded article → real corpus URL is now set; mark it as a real (non-fallback)
+  // link so the UI renders "read article" with a working href.
+  for (const sp of SPECTRUMS) {
+    for (const art of (grounded.news_spectrum?.[sp] || [])) {
+      if (art._grounded && art.article_url) art.url_is_search_fallback = false;
+    }
+  }
+
+  let downFeeds = [];
+  try { downFeeds = await getDownFeeds(); } catch (e) { console.warn('[Reliability] getDownFeeds failed:', e.message); }
+  const blindspot = verifyBlindspots(spectra, downFeeds);
+
+  const reliability = buildReliabilityEnvelope({ corpusSpectra: spectra, grounding, blindspot });
+  console.log(`[Reliability] confidence=${reliability.confidence.score}/${reliability.confidence.band} grounded=${grounding.grounded}/${grounding.total} flagshipSilent=[${blindspot.flagshipSilences}] verifiedSilent=[${blindspot.verifiedSilences}]`);
+  return { analysis: grounded, reliability };
 }
 
 // Merge real RSS data into a Gemini-produced analysis object.
@@ -1025,6 +1060,7 @@ app.get('/api/analyze/stream', async (req, res) => {
     // ── Phase 2: Gemini analysis (runs in parallel with RSS) ─────────────────
     const deKey      = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v4`).digest('hex');
     let germanAnalysis, degraded;
+    let rssForReliability = null;   // corpus result used for grounding + reliability
 
     const cachedBase = await cacheGetLayered(deKey);
     if (cachedBase) {
@@ -1033,6 +1069,7 @@ app.get('/api/analyze/stream', async (req, res) => {
       // Always refresh coverage/RSS data even on cache hit — Gemini stays cached,
       // but article counts and _rss.spectra should reflect current feeds.
       const freshRssData = await rssPromise;
+      rssForReliability = freshRssData;
       if (freshRssData && freshRssData.total_articles > 0) {
         const rssCovDist = buildCoverageDistribution(freshRssData.spectra);
         const silenced   = detectSilence(freshRssData.spectra, freshRssData.total_articles);
@@ -1054,6 +1091,7 @@ app.get('/api/analyze/stream', async (req, res) => {
       // RSS-Direct: RSS must resolve before Gemini so we can pass articles as context.
       // Await rssPromise before acquiring the semaphore — don't hold the slot during feed fetch.
       const rssData = await rssPromise;
+      rssForReliability = rssData;
       console.log(`[RSS-Direct-Stream] Waiting for Gemini slot`);
       await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
       try {
@@ -1069,6 +1107,14 @@ app.get('/api/analyze/stream', async (req, res) => {
         geminiSemaphore.release();
       }
       await cacheSetLayered(deKey, { germanAnalysis, degraded }, degraded ? 300 : 86400);
+    }
+
+    // ── Phase 2.5: corpus grounding + reliability (corpus path only) ───────────
+    // Applied per-request (not cached) so source links resolve against the current
+    // corpus and the confidence/blindspot envelope is always fresh.
+    {
+      const rel = await applyCorpusReliability(germanAnalysis, rssForReliability);
+      germanAnalysis = rel.reliability ? { ...rel.analysis, _reliability: rel.reliability } : rel.analysis;
     }
 
     // ── Phase 3: Translation ─────────────────────────────────────────────────
@@ -1106,6 +1152,7 @@ app.get('/api/analyze/stream', async (req, res) => {
       response_language: lang,
       analyzed_at:       germanAnalysis.analyzed_at,
       ...(germanAnalysis._rss ? { _rss: germanAnalysis._rss } : {}),
+      ...(germanAnalysis._reliability ? { _reliability: germanAnalysis._reliability } : {}),
     };
     const fullResponse = {
       ...finalAnalysis,
