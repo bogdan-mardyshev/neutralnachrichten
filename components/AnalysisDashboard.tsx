@@ -6,6 +6,7 @@ import { BlindspotBanner } from './BlindspotBanner';
 import { ShareButtons } from './ShareButtons';
 import { DeepAnalysisBlock } from './DeepAnalysisBlock';
 import { HypeCounter } from './HypeCounter';
+import { ReliabilityPanel } from './ReliabilityPanel';
 import { translations, Language } from '../translations';
 
 // ── Sources known to be analysed (fixed list, matches rssSearch.js feeds) ─────
@@ -282,6 +283,11 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
           )}
         </div>
       </div>
+
+      {/* ── Reliability panel (confidence + grounding + verified silences) ── */}
+      {data._reliability && (
+        <ReliabilityPanel reliability={data._reliability} lang={lang} />
+      )}
 
       {/* ── Spectrum Grid ── */}
       <SpectrumGrid spectrum={news_spectrum} rssSpectra={data._rss?.spectra} lang={lang} analysisLoading={analysisLoading} />

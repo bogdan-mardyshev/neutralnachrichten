@@ -91,6 +91,26 @@ export interface NewsAnalysisResult {
     fetched_at:      string;
     spectra?:        Record<SpectrumKey, RssArticle[]>;
   };
+  _reliability?: ReliabilityEnvelope;
+}
+
+export interface ReliabilityEnvelope {
+  confidence: {
+    score:          number;            // 0..100
+    band:           'high' | 'medium' | 'low';
+    penaltyApplied: boolean;           // a source-contradicted claim was found
+    factors: {
+      spectrumBreadth: number;
+      grounding:       number;
+      claimSupport:    number;
+      volume:          number;
+    };
+  };
+  coverage?:   Record<SpectrumKey, { percent: number; weight: number; sources: number }>;
+  grounding?:  { total: number; grounded: number; ungrounded: number; groundingRatio: number } | null;
+  claims?:     { total: number; supported: number; contradicted: number; unsupported: number; supportRatio: number; hasContradiction: boolean } | null;
+  blindspots?: { verifiedSilences: SpectrumKey[]; flagshipSilences: SpectrumKey[]; unverifiable: SpectrumKey[] } | null;
+  sourceCount?: number;
 }
 
 export interface TopicCount {
