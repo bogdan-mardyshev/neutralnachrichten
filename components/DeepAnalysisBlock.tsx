@@ -429,6 +429,19 @@ export const DeepAnalysisBlock: React.FC<DeepAnalysisBlockProps> = ({ data, lang
                 );
               })}
             </div>
+            {(() => {
+              const dropped = SPECTRUM_ORDER.reduce((n, s) => n + ((data._experts_unverified?.[s]?.length) ?? 0), 0);
+              if (!dropped) return null;
+              return (
+                <p className="font-sans text-[10px] text-gray-400 dark:text-gray-500 mt-4 border-t border-[#e0d8cf] dark:border-[#252525] pt-2">
+                  {lang === 'de'
+                    ? `${dropped} weitere von der KI genannte Name(n) wurden ausgeblendet — im Quelltext nicht auffindbar (Halluzinationsschutz).`
+                    : lang === 'ru'
+                    ? `${dropped} имён, названных ИИ, скрыто — не найдены в тексте источников (защита от галлюцинаций).`
+                    : `${dropped} further AI-named expert(s) hidden — not found in the source text (hallucination guard).`}
+                </p>
+              );
+            })()}
           </div>
         </Section>
       )}
