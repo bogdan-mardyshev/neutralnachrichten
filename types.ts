@@ -19,6 +19,9 @@ export interface NewsSource {
   url_valid?: boolean;
   url_is_search_fallback?: boolean;
   sentiment?: 'positive' | 'negative' | 'neutral';
+  _tier?: 'flagship' | 'standard' | 'niche';      // source provenance (from source_ratings)
+  _factual?: 'high' | 'mixed' | 'low';
+  _grounded?: boolean;                              // matched to a corpus article
 }
 
 export interface Citation {

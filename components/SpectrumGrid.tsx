@@ -105,8 +105,10 @@ function mergeArticles(
       article_title:          r.article_title,
       article_url:            r.article_url,
       summary_of_perspective: r.description || r.article_title,
-      publication_date:       r.pub_date || undefined,
+      publication_date:       r.pub_date || r.pubDate || undefined,
       url_is_search_fallback: false,
+      _tier:                  r._tier,
+      _factual:               r._factual,
     });
     seenDomains.add(dom);
     const uk = urlKey(r.article_url); if (uk) seenUrls.add(uk);

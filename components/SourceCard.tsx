@@ -41,9 +41,24 @@ export const SourceCard: React.FC<SourceCardProps> = ({ source, leaning, lang })
         <span className={`text-xs font-semibold px-2.5 py-0.5 ${getLeaningBadge(leaning)}`}>
           {leaning}
         </span>
-        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">
-          {source.source_name}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {source._tier === 'flagship' && (
+            <span title={lang === 'de' ? 'Leitmedium' : lang === 'ru' ? 'Флагман' : 'Flagship outlet'}
+                  className="text-[10px]">★</span>
+          )}
+          {source._factual && (() => {
+            const F: Record<string, { c: string; de: string; en: string; ru: string }> = {
+              high:  { c: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400', de: 'Faktentreue hoch',     en: 'High factuality',  ru: 'Высокая фактологичность' },
+              mixed: { c: 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400',         de: 'Faktentreue gemischt', en: 'Mixed factuality', ru: 'Смешанная фактологичность' },
+              low:   { c: 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400',             de: 'Faktentreue niedrig',  en: 'Low factuality',   ru: 'Низкая фактологичность' },
+            };
+            const f = F[source._factual];
+            return <span title={f[lang] ?? f.en} className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${f.c}`}>{source._factual === 'high' ? '✓' : source._factual === 'mixed' ? '~' : '!'}</span>;
+          })()}
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">
+            {source.source_name}
+          </span>
+        </div>
       </div>
 
       <h4 className="font-serif text-base font-bold text-[#1a1a1a] dark:text-[#f0ece4] mb-2 leading-tight">
