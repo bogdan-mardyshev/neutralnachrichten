@@ -867,6 +867,9 @@ app.post('/api/analyze', async (req, res) => {
       } finally {
         geminiSemaphore.release();
       }
+      // Corpus grounding + reliability envelope (parity with the SSE path).
+      const rel = await applyCorpusReliability(germanAnalysis, rssData);
+      germanAnalysis = rel.reliability ? { ...rel.analysis, _reliability: rel.reliability } : rel.analysis;
       // Always cache the German base so /api/deep-analysis can find it.
       // Degraded results use a short TTL (5 min) so the next request retries Gemini.
       await cacheSetLayered(deKey, { germanAnalysis, degraded }, degraded ? 300 : 86400);
@@ -918,6 +921,7 @@ app.post('/api/analyze', async (req, res) => {
       response_language: lang,
       analyzed_at:      germanAnalysis.analyzed_at,
       ...(germanAnalysis._rss ? { _rss: germanAnalysis._rss } : {}),
+      ...(germanAnalysis._reliability ? { _reliability: germanAnalysis._reliability } : {}),
     };
     const response = {
       ...finalAnalysis,
