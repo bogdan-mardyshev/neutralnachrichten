@@ -8,6 +8,13 @@ interface SourceCardProps {
   lang: Language;
 }
 
+/** Only allow http(s) links — article URLs come from external RSS feeds, and an
+ *  unvalidated scheme (javascript:, data:) in an <a href> would be a click-XSS. */
+const safeHref = (url?: string | null): string | undefined => {
+  if (!url) return undefined;
+  return /^https?:\/\//i.test(url.trim()) ? url : undefined;
+};
+
 export const SourceCard: React.FC<SourceCardProps> = ({ source, leaning, lang }) => {
   const t = translations[lang];
 
@@ -32,7 +39,7 @@ export const SourceCard: React.FC<SourceCardProps> = ({ source, leaning, lang })
 
   return (
     <a
-      href={source.article_url}
+      href={safeHref(source.article_url)}
       target="_blank"
       rel="noopener noreferrer"
       className={`block p-5 border border-[#e0d8cf] dark:border-[#252525] shadow-sm hover:shadow-md transition-shadow h-full flex flex-col ${getLeaningStyles(leaning)}`}

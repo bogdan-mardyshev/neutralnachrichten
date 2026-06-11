@@ -74,7 +74,7 @@ const GEMINI_ATTEMPT_TIMEOUT = IS_PRODUCTION ? 50000 : 90000; // REST path — s
 const GLOBAL_TIMEOUT_MS     = IS_PRODUCTION ? 58000 : 120000;
 const GLOBAL_TRANSL_TIMEOUT = IS_PRODUCTION ? 35000 :  40000;
 
-const rawKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
+const rawKey = process.env.GEMINI_API_KEY || '';
 const GEMINI_API_KEY = rawKey.replace(/["']/g, '').trim();
 
 // Single genAI instance reused across all calls (query translate, search, analysis translate)
@@ -758,7 +758,7 @@ app.post('/api/analyze', async (req, res) => {
   serverStats.totalRequests++;
 
   const clientIP = getClientIP(req);
-  const adminKeyHeader = req.headers['x-admin-key'] || req.query.adminKey;
+  const adminKeyHeader = req.headers['x-admin-key'];
 
   // ── JWT user extraction (optional — enriches DB log) ─────────────────────
   let jwtUser = null;
@@ -979,7 +979,7 @@ app.get('/api/analyze/stream', async (req, res) => {
   serverStats.totalRequests++;
 
   const clientIP       = getClientIP(req);
-  const adminKeyHeader = req.headers['x-admin-key'] || req.query.adminKey;
+  const adminKeyHeader = req.headers['x-admin-key'];
 
   let jwtUser = null;
   try {
@@ -1741,7 +1741,7 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
 app.post('/api/dev/ensure-test-user', async (req, res) => {
   // This endpoint MUST NOT be available in production — test account would be a security risk
   if (IS_PRODUCTION) return res.status(403).json({ error: 'Not available in production' });
-  const key = req.headers['x-admin-key'] || req.query.adminKey;
+  const key = req.headers['x-admin-key'];
   if (!ADMIN_KEY || key !== ADMIN_KEY) {
     return res.status(403).json({ error: 'Forbidden' });
   }
@@ -2120,7 +2120,7 @@ app.put('/api/auth/digest', requireAuth, async (req, res) => {
 // ── Admin: Send Weekly Digest ─────────────────────────────────────────────────
 
 app.post('/api/admin/send-digest', async (req, res) => {
-  const key = req.headers['x-admin-key'] || req.query.key;
+  const key = req.headers['x-admin-key'];
   if (!ADMIN_KEY || key !== ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
   if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
 
@@ -2165,7 +2165,7 @@ app.post('/api/admin/send-digest', async (req, res) => {
 // ── Admin Dashboard API ───────────────────────────────────────────────────────
 // Protected by ADMIN_KEY env var. Returns full platform analytics.
 app.get('/api/admin/stats', async (req, res) => {
-  const key = req.headers['x-admin-key'] || req.query.key;
+  const key = req.headers['x-admin-key'];
   if (!ADMIN_KEY || key !== ADMIN_KEY) {
     return res.status(403).json({ error: 'Forbidden' });
   }
@@ -2243,7 +2243,7 @@ app.get('/api/admin/stats', async (req, res) => {
 // ── Admin User Management ─────────────────────────────────────────────────────
 
 app.post('/api/admin/users/:id', async (req, res) => {
-  const key = req.headers['x-admin-key'] || req.query.key;
+  const key = req.headers['x-admin-key'];
   if (!ADMIN_KEY || key !== ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
   if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
 
@@ -2501,14 +2501,16 @@ app.get('/api/public/analysis/:slug', async (req, res) => {
 // GET /api/experiment/rss-check?topic=X&lang=de
 //
 // Runs RSS-Direct analysis and returns full quality metrics for manual inspection.
-// Protected by ADMIN_SECRET.
-// Usage: curl "https://.../api/experiment/rss-check?topic=Klimawandel&secret=ADMIN_SECRET"
+// Protected by ADMIN_SECRET — sent via HEADER (never query string: query params
+// leak into HTTP/proxy logs and browser history).
+// Usage: curl -H "x-admin-secret: $ADMIN_SECRET" "https://.../api/experiment/rss-check?topic=Klimawandel"
 
 app.get('/api/experiment/rss-check', async (req, res) => {
-  const { topic, lang = 'de', secret } = req.query;
+  const { topic, lang = 'de' } = req.query;
 
-  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
-    return res.status(403).json({ error: 'Forbidden — ADMIN_SECRET required' });
+  const providedSecret = req.headers['x-admin-secret'];
+  if (!process.env.ADMIN_SECRET || providedSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Forbidden — x-admin-secret header required' });
   }
   if (!topic || topic.trim().length < 2) {
     return res.status(400).json({ error: 'topic query param required (min 2 chars)' });
