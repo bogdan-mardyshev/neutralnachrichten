@@ -34,6 +34,11 @@ const T2 = {
   ru: { comp: 'На чём построен разбор', compHint: 'Состав источников — прозрачность выборки', flagship: 'Флагманы', standard: 'Стандартные', niche: 'Нишевые', factTitle: 'Фактологичность источников',
         clusters: 'Под-сюжеты этой темы', clustersHint: 'Автоматически сгруппированные нити', solo: 'только один лагерь', camps: 'лагерей' },
 } as const;
+const T3 = {
+  de: { owners: 'Eigentümer der Quellen', ownersHint: 'Medienkonzentration: wem gehören die berichtenden Medien', first: 'Zuerst berichtet', lag: 'Verzögerung' },
+  en: { owners: 'Who owns the sources', ownersHint: 'Media concentration: who owns the outlets covering this', first: 'First to report', lag: 'lag' },
+  ru: { owners: 'Кому принадлежат источники', ownersHint: 'Медиаконцентрация: кто владеет освещающими изданиями', first: 'Первым сообщил', lag: 'отставание' },
+} as const;
 
 /** Collect corpus articles per spectrum from _rss.spectra. */
 function articlesBySpectrum(data: NewsAnalysisResult): Record<SpectrumKey, RssArticle[]> {
@@ -81,7 +86,7 @@ const ReachBalance: React.FC<{ data: NewsAnalysisResult; t: typeof T[Lang]; lang
 };
 
 // ── 2. Coverage timeline (articles per day, stacked by camp) ──────────────────
-const Timeline: React.FC<{ data: NewsAnalysisResult; t: typeof T[Lang] }> = ({ data, t }) => {
+const Timeline: React.FC<{ data: NewsAnalysisResult; t: typeof T[Lang]; t3: typeof T3[Lang]; lang: Lang }> = ({ data, t, t3, lang }) => {
   const bySp = articlesBySpectrum(data);
   const dayMap = new Map<string, Record<SpectrumKey, number>>();
   for (const sp of SP_ORDER) {
@@ -95,8 +100,32 @@ const Timeline: React.FC<{ data: NewsAnalysisResult; t: typeof T[Lang] }> = ({ d
   const days = [...dayMap.keys()].sort().slice(-14);
   if (days.length < 2) return null;
   const max = Math.max(...days.map(d => SP_ORDER.reduce((n, sp) => n + dayMap.get(d)![sp], 0)), 1);
+
+  // C2: who reported FIRST, and how far behind the slowest camp entered.
+  const firstBySp: Partial<Record<SpectrumKey, number>> = {};
+  for (const sp of SP_ORDER) {
+    for (const a of bySp[sp]) {
+      const p = pubOf(a); if (!p) continue;
+      const ts = Date.parse(String(p)); if (Number.isNaN(ts)) continue;
+      if (firstBySp[sp] == null || ts < firstBySp[sp]!) firstBySp[sp] = ts;
+    }
+  }
+  const entries = (Object.entries(firstBySp) as Array<[SpectrumKey, number]>).sort((a, b) => a[1] - b[1]);
+  const firstLine = entries.length >= 2 ? (() => {
+    const [firstSp, firstTs] = entries[0];
+    const [lastSp, lastTs] = entries[entries.length - 1];
+    const lagH = Math.round((lastTs - firstTs) / 3600000);
+    return { firstSp, lastSp, lagH };
+  })() : null;
+
   return (
     <Card title={t.timeline}>
+      {firstLine && firstLine.lagH >= 2 && (
+        <p className="font-sans text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+          🏁 {t3.first}: <b style={{ color: SP_COLOR[firstLine.firstSp] }}>{SP_LABEL[firstLine.firstSp][lang]}</b>
+          {' · '}<span style={{ color: SP_COLOR[firstLine.lastSp] }}>{SP_LABEL[firstLine.lastSp][lang]}</span> {t3.lag}: +{firstLine.lagH}h
+        </p>
+      )}
       <div className="flex items-end gap-1 h-28">
         {days.map(d => {
           const counts = dayMap.get(d)!;
@@ -247,6 +276,40 @@ const Composition: React.FC<{ data: NewsAnalysisResult; t2: typeof T2[Lang]; t: 
   );
 };
 
+// ── 5b. Ownership concentration (B4 — Ground News parity, German lens) ─────────
+const Ownership: React.FC<{ data: NewsAnalysisResult; t3: typeof T3[Lang] }> = ({ data, t3 }) => {
+  const bySp = articlesBySpectrum(data);
+  const ownerArticles = new Map<string, number>();
+  let total = 0;
+  for (const sp of SP_ORDER) for (const a of bySp[sp]) {
+    const owner = a._owner;
+    if (!owner) continue;
+    ownerArticles.set(owner, (ownerArticles.get(owner) || 0) + 1);
+    total++;
+  }
+  if (total < 4 || ownerArticles.size < 2) return null;
+  const top = [...ownerArticles.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  return (
+    <Card title={t3.owners} hint={t3.ownersHint}>
+      <div className="space-y-1.5">
+        {top.map(([owner, n]) => (
+          <div key={owner} className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex justify-between text-[11px] mb-0.5">
+                <span className="truncate text-[#1a1a1a] dark:text-[#f0ece4]">{owner}</span>
+                <span className="text-gray-400 shrink-0 ml-2">{Math.round((n / total) * 100)}%</span>
+              </div>
+              <div className="h-1.5 bg-gray-100 dark:bg-[#2a2a2a] rounded overflow-hidden">
+                <div className="h-full bg-slate-500" style={{ width: `${(n / total) * 100}%` }} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+};
+
 // ── 6. Sub-stories (clusters) ─────────────────────────────────────────────────
 const SubStories: React.FC<{ data: NewsAnalysisResult; t2: typeof T2[Lang]; lang: Lang }> = ({ data, t2, lang }) => {
   const clusters = (data._reliability?.clusters || []).filter(c => c.size >= 2);
@@ -284,6 +347,7 @@ const SubStories: React.FC<{ data: NewsAnalysisResult; t2: typeof T2[Lang]; lang
 export const DeepInsights: React.FC<Props> = ({ data, lang }) => {
   const t = T[lang] ?? T.de;
   const t2 = T2[lang] ?? T2.de;
+  const t3 = T3[lang] ?? T3.de;
   // Only meaningful for the corpus path (needs _rss.spectra / _reliability)
   if (!data._rss?.spectra && !data._reliability) return null;
   return (
@@ -291,8 +355,9 @@ export const DeepInsights: React.FC<Props> = ({ data, lang }) => {
       <ReachBalance data={data} t={t} lang={lang} />
       <SubStories data={data} t2={t2} lang={lang} />
       <Composition data={data} t2={t2} t={t} />
+      <Ownership data={data} t3={t3} />
       <Headlines data={data} t={t} lang={lang} />
-      <Timeline data={data} t={t} />
+      <Timeline data={data} t={t} t3={t3} lang={lang} />
       <SourceMap data={data} t={t} lang={lang} />
     </div>
   );

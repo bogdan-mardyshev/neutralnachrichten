@@ -91,6 +91,7 @@ export interface RssArticle {
   _tier?:        'flagship' | 'standard' | 'niche';
   _factual?:     'high' | 'mixed' | 'low';
   _reachWeight?: number;
+  _owner?:       string | null;   // owning media group (B4)
 }
 
 export interface NewsAnalysisResult {
