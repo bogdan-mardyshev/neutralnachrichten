@@ -332,6 +332,41 @@ const forgotLimiter = rateLimit({
   message: { error: 'Zu viele Anfragen. Bitte versuche es in einer Stunde erneut.' },
 });
 
+// Analyze burst limiter (audit fix A7): the per-day quota already exists
+// (FREE_DAILY_LIMIT via checkDailyLimitDB), but nothing stopped a burst of
+// expensive Gemini-backed requests within a minute. Cache hits are cheap and
+// pass through (the handler short-circuits before Gemini on a hit anyway).
+const analyzeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.ANALYZE_RATE_PER_MIN, 10) || 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getClientIP,
+  store: makeRedisStore('analyze')(),
+  message: { error: 'Zu viele Analysen pro Minute. Bitte kurz warten.' },
+  skip: (req) => !!(req.headers['x-admin-key'] && req.headers['x-admin-key'] === ADMIN_KEY),
+});
+
+// Daily Gemini budget guard (audit fix A7): a hard server-wide ceiling on
+// Gemini calls per UTC day. When exceeded we keep serving cache hits but refuse
+// new model-backed analyses with 503 — protects against abuse-driven bills.
+const GEMINI_DAILY_BUDGET = parseInt(process.env.GEMINI_DAILY_BUDGET, 10) || 3000;
+let geminiBudget = { day: todayUTC(), calls: 0 };
+function geminiBudgetOk() {
+  const today = todayUTC();
+  if (geminiBudget.day !== today) geminiBudget = { day: today, calls: 0 };
+  return geminiBudget.calls < GEMINI_DAILY_BUDGET;
+}
+function geminiBudgetSpend() {
+  const today = todayUTC();
+  if (geminiBudget.day !== today) geminiBudget = { day: today, calls: 0 };
+  geminiBudget.calls++;
+  if (geminiBudget.calls === GEMINI_DAILY_BUDGET) {
+    console.error(`[Budget] GEMINI_DAILY_BUDGET (${GEMINI_DAILY_BUDGET}) reached — refusing new model calls until UTC midnight`);
+    reportError(new Error('Gemini daily budget exhausted'), { budget: GEMINI_DAILY_BUDGET });
+  }
+}
+
 // ── Token helpers (SHA-256 hash stored in DB, plain token sent by email) ──────
 function generateToken() {
   return crypto.randomBytes(32).toString('hex'); // 256-bit, URL-safe hex
@@ -770,7 +805,7 @@ async function callDeepAnalysis(analysis, timeoutMs = 45000) {
   return deep;
 }
 
-app.post('/api/analyze', async (req, res) => {
+app.post('/api/analyze', analyzeLimiter, async (req, res) => {
   const { topic, lang } = req.body;
   if (!topic) return res.status(400).json({ error: 'Topic required' });
   if (!GEMINI_API_KEY) return res.status(500).json({ error: 'API Key Missing' });
@@ -872,11 +907,15 @@ app.post('/api/analyze', async (req, res) => {
       // RSS-Direct: wait for RSS first, then feed articles into Gemini as context.
       // Semaphore is acquired AFTER RSS resolves — slot not held during feed fetch.
       const rssData = await rssPromise;
+      if (!geminiBudgetOk()) {
+        return res.status(503).json({ error: 'budget_exhausted', message: 'Tageskontingent für neue Analysen erreicht. Bitte morgen erneut versuchen.' });
+      }
       console.log(`[RSS-Direct] Waiting for Gemini slot (active=${geminiSemaphore.active}, queue=${geminiSemaphore.waiting})`);
       await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
       try {
         const timeoutBudget = Math.max(10000, TIMEOUT_MS - (Date.now() - requestStart) - 3000);
         metrics.recordGeminiCall('analysis');
+        geminiBudgetSpend();
         const { analysis: rawAnalysis, degraded: deg, meta: rssMeta } =
           await callGeminiWithRSSContext(topic, 'de', rssData?.spectra ?? {}, {
             timeoutMs:      timeoutBudget,
@@ -992,7 +1031,7 @@ app.post('/api/analyze', async (req, res) => {
 //
 // Railway 60s hard-kill is not a problem because the first event (RSS) is
 // written within 2 seconds, keeping the connection alive for the full analysis.
-app.get('/api/analyze/stream', async (req, res) => {
+app.get('/api/analyze/stream', analyzeLimiter, async (req, res) => {
   const topic = ((req.query.topic || '') + '').trim().slice(0, 200);
   const lang  = ['de', 'en', 'ru'].includes(req.query.lang) ? req.query.lang : 'de';
 
@@ -1147,10 +1186,16 @@ app.get('/api/analyze/stream', async (req, res) => {
       // Await rssPromise before acquiring the semaphore — don't hold the slot during feed fetch.
       const rssData = await rssPromise;
       rssForReliability = rssData;
+      if (!geminiBudgetOk()) {
+        emit('error', { message: 'Tageskontingent für neue Analysen erreicht. Bitte morgen erneut versuchen.', code: 'budget_exhausted' });
+        closeStream();
+        return;
+      }
       console.log(`[RSS-Direct-Stream] Waiting for Gemini slot`);
       await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
       try {
         metrics.recordGeminiCall('analysis');
+        geminiBudgetSpend();
         const { analysis: rawAnalysis, degraded: deg, meta: rssMeta } =
           await callGeminiWithRSSContext(topic, 'de', rssData?.spectra ?? {}, {
             timeoutMs:      GEMINI_TIMEOUT_SSE,
@@ -2295,6 +2340,12 @@ app.get('/api/admin/metrics', async (req, res) => {
       corpusAnalysisEnabled: CORPUS_ANALYSIS_ENABLED,
       sentry: !!process.env.SENTRY_DSN,
       geminiMaxPerSpectrum: GEMINI_MAX_PER_SPECTRUM,
+    },
+    budget: {
+      day: geminiBudget.day,
+      callsToday: geminiBudget.calls,
+      dailyLimit: GEMINI_DAILY_BUDGET,
+      remaining: Math.max(0, GEMINI_DAILY_BUDGET - geminiBudget.calls),
     },
   });
 });
