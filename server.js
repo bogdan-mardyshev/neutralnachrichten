@@ -27,11 +27,29 @@ import { verifyBlindspots } from './lib/blindspotVerification.js';
 import { buildReliabilityEnvelope } from './lib/confidenceScore.js';
 import { enrichDeepAnalysis, flattenSpectra } from './lib/deepAnalysisEnrich.js';
 import { clusterArticles } from './lib/storyClustering.js';
-import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds } from './db.js';
+import { metrics } from './lib/metrics.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds, getCorpusStats } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, getRedisClient, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
 dotenv.config();
+
+// ── Sentry (audit fix A4): without this, production errors only ever hit stdout.
+// No-op when SENTRY_DSN is unset (local dev). Must run before request handling.
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.RAILWAY_ENVIRONMENT || 'development',
+    tracesSampleRate: 0.1,
+  });
+  console.log('[Sentry] error reporting enabled');
+} else {
+  console.warn('[Sentry] SENTRY_DSN not set — errors only go to stdout');
+}
+/** Report an error to Sentry (if configured) without ever throwing. */
+function reportError(err, context = {}) {
+  try { if (process.env.SENTRY_DSN) Sentry.captureException(err, { extra: context }); } catch { /* never block on telemetry */ }
+}
 
 // ── DB + Redis init (non-blocking — server starts even without either) ────────
 initDB().then(ok => {
@@ -503,6 +521,8 @@ async function applyCorpusReliability(analysis, rssData) {
   } catch (e) { console.warn('[Clusters] skipped:', e.message); }
 
   console.log(`[Reliability] confidence=${reliability.confidence.score}/${reliability.confidence.band} grounded=${grounding.grounded}/${grounding.total} flagshipSilent=[${blindspot.flagshipSilences}] verifiedSilent=[${blindspot.verifiedSilences}]`);
+  metrics.recordConfidence(reliability.confidence.score);
+  metrics.recordGrounding(grounding.groundingRatio);
   return { analysis: grounded, reliability };
 }
 
@@ -802,6 +822,7 @@ app.post('/api/analyze', async (req, res) => {
   if (cached) {
     console.log(`[Cache] HIT for "${topic}" (${lang})`);
     serverStats.cacheHits++;
+    metrics.recordAnalysis({ cacheHit: true });
     // Still count as usage even on cache hit (reading data costs resources)
     if (!isAdmin) await incrementUsageForIP(clientIP);
     const { remaining } = await checkDailyLimitDB(clientIP);
@@ -855,6 +876,7 @@ app.post('/api/analyze', async (req, res) => {
       await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
       try {
         const timeoutBudget = Math.max(10000, TIMEOUT_MS - (Date.now() - requestStart) - 3000);
+        metrics.recordGeminiCall('analysis');
         const { analysis: rawAnalysis, degraded: deg, meta: rssMeta } =
           await callGeminiWithRSSContext(topic, 'de', rssData?.spectra ?? {}, {
             timeoutMs:      timeoutBudget,
@@ -898,6 +920,7 @@ app.post('/api/analyze', async (req, res) => {
       }
       await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
       try {
+        metrics.recordGeminiCall('translate');
         finalAnalysis = await Promise.race([
           translateAnalysis(analysisForTranslation, lang, genAI),
           new Promise((_, reject) =>
@@ -1004,6 +1027,7 @@ app.get('/api/analyze/stream', async (req, res) => {
   }
 
   // ── SSE headers ─────────────────────────────────────────────────────────────
+  const requestStart = Date.now();
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection',    'keep-alive');
@@ -1029,6 +1053,7 @@ app.get('/api/analyze/stream', async (req, res) => {
     if (cached) {
       console.log(`[Cache] HIT stream "${topic}" (${lang})`);
       serverStats.cacheHits++;
+      metrics.recordAnalysis({ cacheHit: true });
       if (!isAdmin) await incrementUsageForIP(clientIP);
       const { remaining } = await checkDailyLimitDB(clientIP);
       logSearch({ topic, lang, degraded: cached._meta?.degraded ?? false, cacheHit: true, userId: jwtUser?.id, ipHash }).catch(() => {});
@@ -1125,6 +1150,7 @@ app.get('/api/analyze/stream', async (req, res) => {
       console.log(`[RSS-Direct-Stream] Waiting for Gemini slot`);
       await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
       try {
+        metrics.recordGeminiCall('analysis');
         const { analysis: rawAnalysis, degraded: deg, meta: rssMeta } =
           await callGeminiWithRSSContext(topic, 'de', rssData?.spectra ?? {}, {
             timeoutMs:      GEMINI_TIMEOUT_SSE,
@@ -1161,6 +1187,7 @@ app.get('/api/analyze/stream', async (req, res) => {
       }
       await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
       try {
+        metrics.recordGeminiCall('translate');
         finalAnalysis = await Promise.race([
           translateAnalysis(forTranslation, lang, genAI),
           new Promise((_, rej) => setTimeout(() => rej(new Error('translate timeout')), GLOBAL_TRANSL_TIMEOUT)),
@@ -1213,12 +1240,18 @@ app.get('/api/analyze/stream', async (req, res) => {
 
     logSearch({ topic, lang, degraded, cacheHit: false, userId: jwtUser?.id, ipHash }).catch(() => {});
 
+    metrics.recordAnalysis({ source: rssForReliability?.search_meta?.source === 'corpus' ? 'corpus' : 'live', degraded });
+    metrics.recordTranslation(translationSucceeded);
+    metrics.recordLatency('stream_total', Date.now() - requestStart);
+
     emit('result', { ...fullResponse, _usage: { remaining, limit: FREE_DAILY_LIMIT } });
     emit('done', {});
     closeStream();
 
   } catch (err) {
     serverStats.errors++;
+    metrics.recordError();
+    reportError(err, { endpoint: '/api/analyze/stream', topic });
     console.error('[Stream Error]:', err.message);
     if (err.message === 'semaphore_timeout') {
       emit('error', { message: 'Server busy', code: 'semaphore_timeout' });
@@ -1266,7 +1299,13 @@ app.post('/api/deep-analysis', async (req, res) => {
     await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
     let deep;
     try {
+      metrics.recordGeminiCall('deep');
       deep = await callDeepAnalysis(germanAnalysis, 45000);
+      metrics.recordDeepAnalysis(true);
+    } catch (e) {
+      metrics.recordDeepAnalysis(false);
+      reportError(e, { endpoint: '/api/deep-analysis', topic });
+      throw e;
     } finally {
       geminiSemaphore.release();
     }
@@ -2237,6 +2276,26 @@ app.get('/api/admin/stats', async (req, res) => {
     users: dbUsers,
     db: dbStats,
     hourlyLast24h: dbStats?.hourlyLast24h ?? [],
+  });
+});
+
+// ── Admin: reliability & ops metrics (audit fix A4) ─────────────────────────────
+// Everything the audit found us blind on: confidence distribution, grounding
+// ratio, corpus vs live split, degraded rate, Gemini call counts, per-stage
+// latency, corpus size + feed health. Header-auth like all admin endpoints.
+app.get('/api/admin/metrics', async (req, res) => {
+  const key = req.headers['x-admin-key'];
+  if (!ADMIN_KEY || key !== ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
+
+  const [corpus] = await Promise.all([getCorpusStats().catch(() => null)]);
+  res.json({
+    process: metrics.snapshot(),
+    corpus,
+    flags: {
+      corpusAnalysisEnabled: CORPUS_ANALYSIS_ENABLED,
+      sentry: !!process.env.SENTRY_DSN,
+      geminiMaxPerSpectrum: GEMINI_MAX_PER_SPECTRUM,
+    },
   });
 });
 

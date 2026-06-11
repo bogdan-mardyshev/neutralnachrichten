@@ -1127,6 +1127,43 @@ export async function recordFeedFailure(feedUrl, sourceName, spectrum) {
   }
 }
 
+/**
+ * Corpus + feed-health stats for the admin metrics dashboard (audit fix A4).
+ * Single round trip per query; null-safe when DB is down.
+ */
+export async function getCorpusStats() {
+  if (!pool) return null;
+  try {
+    const [bySpectrum, embeddings, feeds] = await Promise.all([
+      pool.query(`SELECT spectrum, COUNT(*)::int AS n, MAX(fetched_at) AS last_fetched
+                  FROM corpus_articles GROUP BY spectrum`),
+      pgvectorReady
+        ? pool.query(`SELECT COUNT(*)::int AS n FROM corpus_embeddings`)
+        : Promise.resolve({ rows: [{ n: 0 }] }),
+      pool.query(`SELECT feed_url, source_name, spectrum, status, consecutive_failures,
+                         last_success, last_failure
+                  FROM feed_health ORDER BY status DESC, source_name`),
+    ]);
+    const spectra = {};
+    let total = 0, lastFetched = null;
+    for (const r of bySpectrum.rows) {
+      spectra[r.spectrum] = r.n;
+      total += r.n;
+      if (!lastFetched || (r.last_fetched && r.last_fetched > lastFetched)) lastFetched = r.last_fetched;
+    }
+    return {
+      articles: { total, bySpectrum: spectra, lastFetched },
+      embeddings: embeddings.rows[0]?.n ?? 0,
+      pgvector: pgvectorReady,
+      feeds: feeds.rows,
+      feedsDown: feeds.rows.filter(f => f.status !== 'ok').length,
+    };
+  } catch (err) {
+    console.error('[DB:getCorpusStats]', err.message);
+    return null;
+  }
+}
+
 /** Get feeds that are degraded/down (optionally per spectrum). */
 export async function getDownFeeds(spectra) {
   if (!pool) return [];
