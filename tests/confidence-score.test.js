@@ -68,9 +68,16 @@ describe('computeConfidence', () => {
       coveredSpectra: 1, groundingRatio: 1, claimSupportRatio: 1,
       hasContradiction: false, sourceCount: VOLUME_TARGET,
     });
-    // breadth 1/5 → loses most of the 30% breadth weight
-    expect(c.score).toBeLessThan(80);
+    // breadth 1/5 → loses most of the 25% breadth weight (recalibrated A1)
+    expect(c.score).toBeLessThanOrEqual(80);
+    expect(c.score).toBeLessThan(100);
     expect(c.factors.spectrumBreadth).toBeCloseTo(0.2, 3);
+  });
+
+  it('weak claim support drags the score down hard (claimSupport carries 35%)', () => {
+    const good = computeConfidence({ coveredSpectra: 5, groundingRatio: 1, claimSupportRatio: 1, sourceCount: VOLUME_TARGET });
+    const weak = computeConfidence({ coveredSpectra: 5, groundingRatio: 1, claimSupportRatio: 0.3, sourceCount: VOLUME_TARGET });
+    expect(good.score - weak.score).toBeGreaterThanOrEqual(20);
   });
 
   it('applies the contradiction penalty', () => {
@@ -86,10 +93,11 @@ describe('computeConfidence', () => {
     expect(pen.score).toBe(Math.round(base.score * CONTRADICTION_PENALTY));
   });
 
-  it('missing ratios default to 1 (no false penalty when no claims emitted)', () => {
+  it('UNMEASURED signals score 0.85, not a perfect 1 (anti-inflation, A1)', () => {
     const c = computeConfidence({ coveredSpectra: 5, sourceCount: VOLUME_TARGET });
-    expect(c.factors.grounding).toBe(1);
-    expect(c.factors.claimSupport).toBe(1);
+    expect(c.factors.grounding).toBe(0.85);
+    expect(c.factors.claimSupport).toBe(0.85);
+    expect(c.score).toBeLessThan(100); // unmeasured can never look perfect
   });
 
   it('clamps garbage inputs', () => {

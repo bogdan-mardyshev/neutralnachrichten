@@ -38,6 +38,25 @@ describe('expertAppears', () => {
   it('false for empty/short', () => {
     expect(expertAppears('', arts)).toBe(false);
   });
+
+  it('A3: a different first name with the same SHORT surname does NOT verify', () => {
+    // Article mentions "Max Müller"; "Anna Müller" must not pass on surname alone (müller < 6 chars distinctive rule)
+    expect(expertAppears('Anna Müller', arts)).toBe(false);
+  });
+
+  it('A3: surname alone is NOT enough — strict full-phrase policy', () => {
+    const a = [{ article_title: 'Studie', our_summary: 'Wirtschaftsweise Schnitzenbaumer kritisierte die Reform.' }];
+    // Even a distinctive surname does not verify a full name we never saw —
+    // strictness beats recall for an anti-hallucination gate.
+    expect(expertAppears('Hubert Schnitzenbaumer', a)).toBe(false);
+    expect(expertAppears('Schnitzenbaumer', a)).toBe(true); // the name as cited DOES verify
+  });
+
+  it('A3: full-name phrase match is required, scattered tokens are not enough', () => {
+    const a = [{ article_title: 'Max plant Reform', our_summary: 'Der Plan von Herrn Müller über Max-Strategien.' }];
+    // "max" and "müller" both appear, but never as the phrase "max müller"
+    expect(expertAppears('Max Müller', a)).toBe(false);
+  });
 });
 
 describe('enrichDeepAnalysis', () => {
