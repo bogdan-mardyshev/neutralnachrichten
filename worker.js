@@ -25,6 +25,7 @@ import {
   isPgvectorAvailable,
   upsertCorpusArticle,
   upsertCorpusEmbedding,
+  listArticleIdsMissingEmbeddings,
   recordFeedSuccess,
   recordFeedFailure,
   upsertSourceRating,
@@ -44,6 +45,7 @@ function buildDeps() {
     upsertArticle:  (article) => upsertCorpusArticle(article),
     embedBatch:     (texts) => getEmbeddingsBatch(texts),
     upsertEmbedding:(id, vec) => upsertCorpusEmbedding(id, vec),
+    listMissingEmbeddings: (ids) => listArticleIdsMissingEmbeddings(ids),
     recordSuccess:  (url, name, spectrum) => recordFeedSuccess(url, name, spectrum),
     recordFailure:  (url, name, spectrum) => recordFeedFailure(url, name, spectrum),
   };

@@ -153,6 +153,46 @@ describe('ingestFeed — failures & edge cases', () => {
     expect(deps.upsertEmbedding).not.toHaveBeenCalled();
   });
 
+  it('DELTA: embeds only articles missing a vector (listMissingEmbeddings)', async () => {
+    const deps = makeDeps({
+      upsertArticle: vi.fn()
+        .mockResolvedValueOnce({ id: 1, inserted: false })   // already known
+        .mockResolvedValueOnce({ id: 2, inserted: true }),    // new
+      listMissingEmbeddings: vi.fn().mockResolvedValue([2]),  // only #2 lacks vector
+    });
+    const stats = await ingestFeed(FEED, deps);
+    expect(deps.listMissingEmbeddings).toHaveBeenCalledWith([1, 2]);
+    expect(deps.embedBatch).toHaveBeenCalledTimes(1);
+    expect(deps.embedBatch.mock.calls[0][0]).toHaveLength(1); // ONE text, not two
+    expect(stats.embedded).toBe(1);
+    expect(stats.embedSkipped).toBe(1);
+  });
+
+  it('DELTA fallback: without the dep, embeds only newly inserted rows', async () => {
+    const deps = makeDeps({
+      upsertArticle: vi.fn()
+        .mockResolvedValueOnce({ id: 1, inserted: false })
+        .mockResolvedValueOnce({ id: 2, inserted: true }),
+    });
+    delete deps.listMissingEmbeddings;
+    const stats = await ingestFeed(FEED, deps);
+    expect(deps.embedBatch.mock.calls[0][0]).toHaveLength(1);
+    expect(stats.embedded).toBe(1);
+    expect(stats.embedSkipped).toBe(1);
+  });
+
+  it('DELTA: backfills a previously-failed embedding for an updated row', async () => {
+    const deps = makeDeps({
+      upsertArticle: vi.fn()
+        .mockResolvedValueOnce({ id: 1, inserted: false })
+        .mockResolvedValueOnce({ id: 2, inserted: false }),
+      listMissingEmbeddings: vi.fn().mockResolvedValue([1, 2]), // both lost vectors (quota outage)
+    });
+    const stats = await ingestFeed(FEED, deps);
+    expect(stats.embedded).toBe(2);
+    expect(stats.embedSkipped).toBe(0);
+  });
+
   it('skips embedding entirely when withEmbeddings=false', async () => {
     const deps = makeDeps();
     const stats = await ingestFeed(FEED, deps, { withEmbeddings: false });

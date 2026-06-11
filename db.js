@@ -1032,6 +1032,30 @@ export async function upsertCorpusArticle(article) {
   }
 }
 
+/**
+ * Of the given article ids, return those that have NO embedding yet (audit fix
+ * A6 — delta embedding: the worker re-runs every 30 min over mostly-unchanged
+ * feeds; re-embedding ~1000 unchanged articles per pass burned the quota).
+ * Returns [] without pgvector/DB (caller then skips embedding entirely).
+ */
+export async function listArticleIdsMissingEmbeddings(articleIds) {
+  if (!pool || !pgvectorReady) return [];
+  const ids = (articleIds || []).map(n => parseInt(n, 10)).filter(Number.isInteger);
+  if (!ids.length) return [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT a.id FROM corpus_articles a
+       WHERE a.id = ANY($1::bigint[])
+         AND NOT EXISTS (SELECT 1 FROM corpus_embeddings e WHERE e.article_id = a.id)`,
+      [ids]
+    );
+    return rows.map(r => Number(r.id));
+  } catch (err) {
+    console.error('[DB:listArticleIdsMissingEmbeddings]', err.message);
+    return [];
+  }
+}
+
 /** Store/replace an article embedding. No-op (returns false) without pgvector. */
 export async function upsertCorpusEmbedding(articleId, embedding, model) {
   if (!pool || !pgvectorReady) return false;
