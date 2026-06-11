@@ -137,6 +137,7 @@ export interface ReliabilityEnvelope {
   sourceCount?: number;
   clusters?: StoryCluster[];
   clusterMeta?: { total: number; clusterCount: number; multiArticleClusters: number; soloCamps: Array<{ label: string; camp: SpectrumKey; size: number }> };
+  coverageWindow?: { days: number; outlets: number };
 }
 
 export interface StoryCluster {

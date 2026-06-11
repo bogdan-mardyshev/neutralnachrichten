@@ -30,6 +30,9 @@ const T = {
     verifiedSilent: (camp: string) => `Verifiziertes Verschweigen: Im Lager „${camp}" berichtet niemand, obwohl alle Quellen erreichbar waren.`,
     unverifiable: (camp: string) => `Lager „${camp}" nicht bewertbar: mindestens eine Quelle war nicht erreichbar.`,
     flagshipTag: 'Leitmedien still', silentTag: 'Verschweigen', unknownTag: 'Nicht bewertbar',
+    windowNote: (d: number, o: number) => `Datenbasis: Artikel der letzten ${d} Tage aus ${o} Medien.`,
+    howTitle: 'Wie wird der Wert berechnet?',
+    factors: { spectrumBreadth: 'Spektrumsbreite (25%)', grounding: 'Quellen-Verifizierung (15%)', claimSupport: 'Aussagen-Abdeckung (35%)', volume: 'Quellenvolumen (25%)' },
     methodologyNote: 'Berechnet aus Spektrumsbreite, Quellen-Verifizierung und Aussagen-Abdeckung.',
   },
   en: {
@@ -45,6 +48,9 @@ const T = {
     verifiedSilent: (camp: string) => `Verified silence: nobody in the "${camp}" camp reports this, though all their sources were reachable.`,
     unverifiable: (camp: string) => `"${camp}" camp not assessable: at least one source was unreachable.`,
     flagshipTag: 'Flagships silent', silentTag: 'Silenced', unknownTag: 'Not assessable',
+    windowNote: (d: number, o: number) => `Data basis: articles from the last ${d} days across ${o} outlets.`,
+    howTitle: 'How is this computed?',
+    factors: { spectrumBreadth: 'Spectrum breadth (25%)', grounding: 'Source verification (15%)', claimSupport: 'Statement coverage (35%)', volume: 'Source volume (25%)' },
     methodologyNote: 'Computed from spectrum breadth, source verification and statement coverage.',
   },
   ru: {
@@ -60,6 +66,9 @@ const T = {
     verifiedSilent: (camp: string) => `Подтверждённое замалчивание: в лагере «${camp}» никто не пишет, хотя все источники были доступны.`,
     unverifiable: (camp: string) => `Лагерь «${camp}» не оценить: хотя бы один источник был недоступен.`,
     flagshipTag: 'Флагманы молчат', silentTag: 'Замалчивание', unknownTag: 'Не оценить',
+    windowNote: (d: number, o: number) => `База данных: статьи за последние ${d} дней из ${o} изданий.`,
+    howTitle: 'Как считается?',
+    factors: { spectrumBreadth: 'Охват спектра (25%)', grounding: 'Проверка источников (15%)', claimSupport: 'Подкреплённость утверждений (35%)', volume: 'Объём источников (25%)' },
     methodologyNote: 'Рассчитано из охвата спектра, проверки источников и подкреплённости утверждений.',
   },
 } as const;
@@ -154,9 +163,33 @@ export const ReliabilityPanel: React.FC<Props> = ({ reliability, lang }) => {
         </div>
       )}
 
-      {/* Methodology note */}
-      <div className="px-4 sm:px-6 pb-3">
-        <p className="font-sans text-[10px] text-gray-400 dark:text-gray-500">{t.methodologyNote}</p>
+      {/* Coverage-window honesty badge (B2) + explainable score (D3) */}
+      <div className="px-4 sm:px-6 pb-3 space-y-1.5">
+        {reliability.coverageWindow && (
+          <p className="font-sans text-[10px] text-gray-400 dark:text-gray-500">
+            📅 {t.windowNote(reliability.coverageWindow.days, reliability.coverageWindow.outlets)}
+          </p>
+        )}
+        <details className="group">
+          <summary className="font-sans text-[10px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300 select-none">
+            {t.howTitle} <span className="group-open:hidden">▸</span><span className="hidden group-open:inline">▾</span>
+          </summary>
+          <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {(Object.keys(t.factors) as Array<keyof typeof t.factors>).map(k => {
+              const v = conf.factors?.[k as keyof typeof conf.factors];
+              return (
+                <div key={k} className="border border-[#e0d8cf] dark:border-[#2d2d2d] rounded px-2 py-1.5">
+                  <div className="font-sans text-[9px] uppercase tracking-wider text-gray-400">{t.factors[k]}</div>
+                  <div className="h-1.5 bg-gray-100 dark:bg-[#2a2a2a] rounded mt-1 overflow-hidden">
+                    <div className={`h-full ${ringFor(conf.band)}`} style={{ width: `${Math.round(((v as number) ?? 0) * 100)}%` }} />
+                  </div>
+                  <div className="font-sans text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">{v != null ? Math.round((v as number) * 100) : '—'}%</div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="font-sans text-[10px] text-gray-400 dark:text-gray-500 mt-1.5">{t.methodologyNote}</p>
+        </details>
       </div>
     </div>
   );

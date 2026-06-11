@@ -354,6 +354,12 @@ const analyzeLimiter = rateLimit({
 // Daily Gemini budget guard (audit fix A7): a hard server-wide ceiling on
 // Gemini calls per UTC day. When exceeded we keep serving cache hits but refuse
 // new model-backed analyses with 503 — protects against abuse-driven bills.
+// Cache schema version (audit D2). Bump whenever the cached analysis shape
+// changes (new _reliability fields, citation format, …) — old entries are then
+// simply missed instead of serving a stale/incompatible format for up to 24h.
+// v5: post-audit format (recalibrated confidence + NLI claim report).
+const CACHE_SCHEMA = 'v5';
+
 const GEMINI_DAILY_BUDGET = parseInt(process.env.GEMINI_DAILY_BUDGET, 10) || 3000;
 let geminiBudget = { day: todayUTC(), calls: 0 };
 function geminiBudgetOk() {
@@ -568,6 +574,13 @@ async function applyCorpusReliability(analysis, rssData) {
   } catch (e) { console.warn('[NLI] claim verification skipped:', e.message); }
 
   const reliability = buildReliabilityEnvelope({ corpusSpectra: spectra, grounding, claimVerification: claimReport, blindspot });
+
+  // Honesty badge (audit B2): the corpus is NOT "the whole internet" — it covers
+  // the last N days from our configured outlets. Say so right on the analysis.
+  reliability.coverageWindow = {
+    days: parseInt(process.env.INGEST_MAX_AGE_DAYS, 10) || 14,
+    outlets: 34,
+  };
 
   // Story clustering (Wave 4): group the topic's articles into sub-stories and
   // flag sub-angles only one camp tells (sub-story-level blindspots).
@@ -875,7 +888,7 @@ app.post('/api/analyze', analyzeLimiter, async (req, res) => {
   const TRANSLATION_TIMEOUT = GLOBAL_TRANSL_TIMEOUT;
 
   // v4 cache — 5-spectrum format, deep_analysis fetched separately
-  const cacheKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:v4`).digest('hex');
+  const cacheKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:${CACHE_SCHEMA}`).digest('hex');
   const cached = await cacheGetLayered(cacheKey);
   if (cached) {
     console.log(`[Cache] HIT for "${topic}" (${lang})`);
@@ -905,7 +918,7 @@ app.post('/api/analyze', analyzeLimiter, async (req, res) => {
 
   try {
     // Step 1: German Gemini search (cached per topic, shared across languages)
-    const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v4`).digest('hex');
+    const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:${CACHE_SCHEMA}`).digest('hex');
     let germanAnalysis, degraded;
 
     const cachedBase = await cacheGetLayered(deKey);
@@ -1108,7 +1121,7 @@ app.get('/api/analyze/stream', analyzeLimiter, async (req, res) => {
     trackSearch(topic);
 
     const ipHash    = crypto.createHash('sha256').update(clientIP).digest('hex').slice(0, 16);
-    const cacheKey  = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:v4`).digest('hex');
+    const cacheKey  = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:${CACHE_SCHEMA}`).digest('hex');
 
     // ── Fast path: full result already cached ────────────────────────────────
     const cached = await cacheGetLayered(cacheKey);
@@ -1175,7 +1188,7 @@ app.get('/api/analyze/stream', analyzeLimiter, async (req, res) => {
       });
 
     // ── Phase 2: Gemini analysis (runs in parallel with RSS) ─────────────────
-    const deKey      = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v4`).digest('hex');
+    const deKey      = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:${CACHE_SCHEMA}`).digest('hex');
     let germanAnalysis, degraded;
     let rssForReliability = null;   // corpus result used for grounding + reliability
 
@@ -1338,13 +1351,13 @@ app.post('/api/deep-analysis', async (req, res) => {
   if (!topic) return res.status(400).json({ error: 'Topic required' });
 
   // Separate cache for deep analysis results (independent of main analysis cache)
-  const deepKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:v4`).digest('hex');
+  const deepKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:${CACHE_SCHEMA}`).digest('hex');
   const cachedDeep = await cacheGetLayered(deepKey);
   if (cachedDeep) {
     console.log(`[DeepAnalysis] Cache hit for "${topic}"`);
     // For non-DE: check if we have a translated version stored
     if (lang !== 'de') {
-      const translatedKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:${lang}:v4`).digest('hex');
+      const translatedKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:${lang}:${CACHE_SCHEMA}`).digest('hex');
       const translatedDeep = await cacheGetLayered(translatedKey);
       if (translatedDeep) return res.json({ deep_analysis: translatedDeep });
     } else {
@@ -1353,7 +1366,7 @@ app.post('/api/deep-analysis', async (req, res) => {
   }
 
   // Fetch the German base analysis from cache (must run /api/analyze first)
-  const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v4`).digest('hex');
+  const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:${CACHE_SCHEMA}`).digest('hex');
   const cachedBase = await cacheGetLayered(deKey);
   if (!cachedBase?.germanAnalysis) {
     return res.status(404).json({ error: 'Base analysis not cached yet — run /api/analyze first' });
@@ -1420,7 +1433,7 @@ app.post('/api/deep-analysis', async (req, res) => {
           new Promise((_, reject) => setTimeout(() => reject(new Error('Deep translation timeout')), 20000)),
         ]);
         finalDeep = translated.deep_analysis ?? deep;
-        const translatedKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:${lang}:v4`).digest('hex');
+        const translatedKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:${lang}:${CACHE_SCHEMA}`).digest('hex');
         await cacheSetLayered(translatedKey, finalDeep, 86400);
       } catch (err) {
         console.warn('[DeepAnalysis] Translation failed, using German:', err.message);
@@ -2611,7 +2624,7 @@ app.get('/api/public/analysis/:slug', async (req, res) => {
 
   // Try to find the German base analysis by computing the actual MD5 cache key
   const topicNorm = slug.replace(/-/g, ' ').toLowerCase();
-  const deKey = crypto.createHash('md5').update(`${topicNorm}:de-base:v4`).digest('hex');
+  const deKey = crypto.createHash('md5').update(`${topicNorm}:de-base:${CACHE_SCHEMA}`).digest('hex');
   const cachedBase = await cacheGetLayered(deKey);
   if (cachedBase?.germanAnalysis) {
     return res.json({ analysis: cachedBase.germanAnalysis, topic: topicNorm });
