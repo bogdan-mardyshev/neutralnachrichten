@@ -29,6 +29,7 @@ import {
   recordFeedSuccess,
   recordFeedFailure,
   upsertSourceRating,
+  pruneCorpus,
 } from './db.js';
 import { seedSourceRatings } from './lib/sourceRatingsSeed.js';
 import { fetchRSSFeed } from './lib/rssSearch.js';
@@ -67,6 +68,17 @@ async function runPass() {
     await runIngestionOnce(buildDeps(), { withEmbeddings });
   } catch (err) {
     console.error('[Worker] ingestion pass failed:', err.message);
+  }
+
+  // Retention (audit B1): history accumulates for timelines/trends, but growth is
+  // capped — articles older than CORPUS_RETENTION_DAYS (default 180) are pruned
+  // after each pass (embeddings follow via ON DELETE CASCADE).
+  try {
+    const retentionDays = parseInt(process.env.CORPUS_RETENTION_DAYS, 10) || 180;
+    const pruned = await pruneCorpus(retentionDays);
+    if (pruned > 0) console.log(`[Worker] retention: pruned ${pruned} articles older than ${retentionDays}d`);
+  } catch (err) {
+    console.error('[Worker] retention prune failed:', err.message);
   }
 }
 

@@ -15,6 +15,7 @@ import {
   buildFeedFailureQuery,
   buildDownFeedsQuery,
   buildUpsertSourceRatingQuery,
+  buildPruneCorpusQuery,
   normalizeArticleRow,
   EMBEDDING_DIM,
   SHORT_LEAD_MAX,
@@ -386,5 +387,23 @@ describe('normalizeArticleRow', () => {
     expect(out.our_summary).toBe('');
     expect(out.short_lead).toBe('');
     expect(out.cluster_id).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Retention (audit B1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('buildPruneCorpusQuery', () => {
+  it('deletes by fetched_at horizon with the given days', () => {
+    const q = buildPruneCorpusQuery(180);
+    expect(q.text).toMatch(/DELETE FROM corpus_articles/);
+    expect(q.text).toMatch(/fetched_at < now\(\)/);
+    expect(q.values).toEqual(['180']);
+  });
+  it('never prunes below a week (floor 7) and defaults to 180', () => {
+    expect(buildPruneCorpusQuery(1).values).toEqual(['7']);
+    expect(buildPruneCorpusQuery(undefined).values).toEqual(['180']);
+    expect(buildPruneCorpusQuery('garbage').values).toEqual(['180']);
   });
 });
