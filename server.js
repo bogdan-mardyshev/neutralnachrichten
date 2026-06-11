@@ -26,6 +26,8 @@ import { groundAnalysis, dedupeArticles } from './lib/citationGrounding.js';
 import { verifyBlindspots } from './lib/blindspotVerification.js';
 import { buildReliabilityEnvelope } from './lib/confidenceScore.js';
 import { enrichDeepAnalysis, flattenSpectra } from './lib/deepAnalysisEnrich.js';
+import { extractClaims, verifyClaims } from './lib/claimVerification.js';
+import { makeBatchEntailment } from './lib/entailment.js';
 import { clusterArticles } from './lib/storyClustering.js';
 import { metrics } from './lib/metrics.js';
 import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds, getCorpusStats } from './db.js';
@@ -97,6 +99,8 @@ const GEMINI_API_KEY = rawKey.replace(/["']/g, '').trim();
 
 // Single genAI instance reused across all calls (query translate, search, analysis translate)
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+// One batched NLI call per fresh corpus analysis (audit A2) — see applyCorpusReliability.
+const batchEntailment = makeBatchEntailment(genAI);
 
 const app = express();
 
@@ -544,7 +548,26 @@ async function applyCorpusReliability(analysis, rssData) {
   try { downFeeds = await getDownFeeds(); } catch (e) { console.warn('[Reliability] getDownFeeds failed:', e.message); }
   const blindspot = verifyBlindspots(spectra, downFeeds);
 
-  const reliability = buildReliabilityEnvelope({ corpusSpectra: spectra, grounding, blindspot });
+  // Real claim verification in the LIVE path (audit A1+A2). Previously the
+  // envelope was built without it, so claimSupportRatio silently defaulted to a
+  // perfect 1.0 and confidence saturated at 100 on every corpus analysis. Now the
+  // overall-analysis sentences are checked against the corpus, with ONE batched
+  // Gemini NLI call upgrading lexical matches to entailment/contradiction.
+  let claimReport = null;
+  try {
+    const claims = extractClaims(grounded).slice(0, 8); // bound the work per analysis
+    const flatArts = flattenSpectra(spectra);
+    if (claims.length && flatArts.length) {
+      if (geminiBudgetOk()) { metrics.recordGeminiCall('entailment'); geminiBudgetSpend(); }
+      const { report } = await verifyClaims(claims, flatArts, {
+        batchEntailmentFn: geminiBudgetOk() ? batchEntailment : undefined,
+      });
+      claimReport = report;
+      console.log(`[NLI] claims=${report.total} supported=${report.supported} contradicted=${report.contradicted}`);
+    }
+  } catch (e) { console.warn('[NLI] claim verification skipped:', e.message); }
+
+  const reliability = buildReliabilityEnvelope({ corpusSpectra: spectra, grounding, claimVerification: claimReport, blindspot });
 
   // Story clustering (Wave 4): group the topic's articles into sub-stories and
   // flag sub-angles only one camp tells (sub-story-level blindspots).
