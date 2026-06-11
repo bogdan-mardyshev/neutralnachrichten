@@ -16,6 +16,7 @@ import {
   buildFeedFailureQuery,
   buildDownFeedsQuery,
   buildUpsertSourceRatingQuery,
+  buildPruneCorpusQuery,
   normalizeArticleRow,
 } from './lib/corpusQueries.js';
 import { combineRetrieval } from './lib/hybridRetrieval.js';
@@ -1148,6 +1149,19 @@ export async function recordFeedFailure(feedUrl, sourceName, spectrum) {
     await pool.query(text, values);
   } catch (err) {
     console.error('[DB:recordFeedFailure]', err.message);
+  }
+}
+
+/** Prune corpus articles older than `days` (retention, audit B1). Returns rows deleted. */
+export async function pruneCorpus(days) {
+  if (!pool) return 0;
+  try {
+    const { text, values } = buildPruneCorpusQuery(days);
+    const res = await pool.query(text, values);
+    return res.rowCount || 0;
+  } catch (err) {
+    console.error('[DB:pruneCorpus]', err.message);
+    return 0;
   }
 }
 
