@@ -454,6 +454,13 @@ export default function AdminPage() {
               <StatCard label="Deep-Analysen ok/fail" value={`${opsMetrics.process.deepAnalysis.ok} / ${opsMetrics.process.deepAnalysis.failed}`} />
               <StatCard label="Ø Latenz Stream" value={opsMetrics.process.latency?.stream_total ? `${(opsMetrics.process.latency.stream_total.avgMs / 1000).toFixed(1)}s` : '—'} sub={opsMetrics.process.latency?.stream_total ? `max ${(opsMetrics.process.latency.stream_total.maxMs / 1000).toFixed(1)}s` : undefined} />
               <StatCard label="Flags" value={opsMetrics.flags?.corpusAnalysisEnabled ? 'Corpus ON' : 'Corpus OFF'} sub={`Sentry: ${opsMetrics.flags?.sentry ? 'an' : 'AUS'} · ${opsMetrics.flags?.geminiMaxPerSpectrum}/Lager`} />
+              {opsMetrics.feedback && (
+                <StatCard
+                  label="Ausgewogen? (Leser-Votum)"
+                  value={`👍 ${opsMetrics.feedback.up} / 👎 ${opsMetrics.feedback.down}`}
+                  sub={`7 Tage: ${opsMetrics.feedback.up7d}/${opsMetrics.feedback.down7d}${(opsMetrics.feedback.up + opsMetrics.feedback.down) > 0 ? ` · ${Math.round((opsMetrics.feedback.up / (opsMetrics.feedback.up + opsMetrics.feedback.down)) * 100)}% positiv` : ''}`}
+                />
+              )}
             </div>
             {/* Corpus + feed health */}
             {opsMetrics.corpus && (

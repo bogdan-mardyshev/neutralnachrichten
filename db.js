@@ -187,6 +187,21 @@ async function runMigrations() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS email_digest BOOLEAN DEFAULT false;
   `);
 
+  // Analysis feedback (audit D5): the perceived-balance loop. One row per vote;
+  // aggregated in the admin metrics. ip_hash dedups repeat votes per topic.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS analysis_feedback (
+      id         BIGSERIAL PRIMARY KEY,
+      topic_norm TEXT NOT NULL,
+      lang       TEXT DEFAULT 'de',
+      verdict    TEXT NOT NULL CHECK (verdict IN ('up', 'down')),
+      ip_hash    TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (topic_norm, ip_hash)
+    );
+    CREATE INDEX IF NOT EXISTS analysis_feedback_topic ON analysis_feedback(topic_norm);
+  `);
+
   // Source suggestion submissions
   await pool.query(`
     CREATE TABLE IF NOT EXISTS source_suggestions (
@@ -1149,6 +1164,44 @@ export async function recordFeedFailure(feedUrl, sourceName, spectrum) {
     await pool.query(text, values);
   } catch (err) {
     console.error('[DB:recordFeedFailure]', err.message);
+  }
+}
+
+/** Save a balance-feedback vote (audit D5). Upsert: re-voting flips the verdict. */
+export async function saveAnalysisFeedback({ topicNorm, lang, verdict, ipHash }) {
+  if (!pool) return { ok: false };
+  try {
+    await pool.query(
+      `INSERT INTO analysis_feedback (topic_norm, lang, verdict, ip_hash)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (topic_norm, ip_hash) DO UPDATE SET verdict = EXCLUDED.verdict, created_at = now()`,
+      [topicNorm, lang || 'de', verdict, ipHash || null]
+    );
+    return { ok: true };
+  } catch (err) {
+    console.error('[DB:saveAnalysisFeedback]', err.message);
+    return { ok: false };
+  }
+}
+
+/** Aggregate feedback for the admin dashboard: totals + last-7-days split. */
+export async function getFeedbackStats() {
+  if (!pool) return null;
+  try {
+    const { rows } = await pool.query(
+      `SELECT verdict, COUNT(*)::int AS n,
+              COUNT(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS n7d
+       FROM analysis_feedback GROUP BY verdict`
+    );
+    const out = { up: 0, down: 0, up7d: 0, down7d: 0 };
+    for (const r of rows) {
+      out[r.verdict] = r.n;
+      out[`${r.verdict}7d`] = r.n7d;
+    }
+    return out;
+  } catch (err) {
+    console.error('[DB:getFeedbackStats]', err.message);
+    return null;
   }
 }
 

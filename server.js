@@ -30,7 +30,7 @@ import { extractClaims, verifyClaims } from './lib/claimVerification.js';
 import { makeBatchEntailment } from './lib/entailment.js';
 import { clusterArticles } from './lib/storyClustering.js';
 import { metrics } from './lib/metrics.js';
-import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds, getCorpusStats } from './db.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds, getCorpusStats, saveAnalysisFeedback, getFeedbackStats } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, getRedisClient, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
@@ -2360,6 +2360,24 @@ app.get('/api/admin/stats', async (req, res) => {
   });
 });
 
+// ── Feedback: perceived balance (audit D5) ──────────────────────────────────────
+// One vote per IP per topic (re-vote flips). The aggregate feeds the admin
+// dashboard — the only signal for how balanced REAL readers find the analyses.
+app.post('/api/feedback', async (req, res) => {
+  const { topic, lang, verdict } = req.body || {};
+  if (!topic || !['up', 'down'].includes(verdict)) {
+    return res.status(400).json({ error: 'topic and verdict (up|down) required' });
+  }
+  const ipHash = crypto.createHash('sha256').update(getClientIP(req)).digest('hex').slice(0, 16);
+  const result = await saveAnalysisFeedback({
+    topicNorm: String(topic).toLowerCase().trim().slice(0, 200),
+    lang: ['de', 'en', 'ru'].includes(lang) ? lang : 'de',
+    verdict,
+    ipHash,
+  });
+  res.json(result);
+});
+
 // ── Admin: reliability & ops metrics (audit fix A4) ─────────────────────────────
 // Everything the audit found us blind on: confidence distribution, grounding
 // ratio, corpus vs live split, degraded rate, Gemini call counts, per-stage
@@ -2368,10 +2386,14 @@ app.get('/api/admin/metrics', async (req, res) => {
   const key = req.headers['x-admin-key'];
   if (!ADMIN_KEY || key !== ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
 
-  const [corpus] = await Promise.all([getCorpusStats().catch(() => null)]);
+  const [corpus, feedback] = await Promise.all([
+    getCorpusStats().catch(() => null),
+    getFeedbackStats().catch(() => null),
+  ]);
   res.json({
     process: metrics.snapshot(),
     corpus,
+    feedback,
     flags: {
       corpusAnalysisEnabled: CORPUS_ANALYSIS_ENABLED,
       sentry: !!process.env.SENTRY_DSN,
