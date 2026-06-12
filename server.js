@@ -2928,17 +2928,23 @@ async function runWarmup() {
   await warmCategories();
 }
 
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Server] Listening on port ${PORT} (env=${IS_PRODUCTION ? 'production' : 'dev'})`);
+// Under tests (NODE_ENV=test) the app is imported by supertest — no listener,
+// no warmup timers, no Gemini warm calls. Export the app for those tests.
+let server = null;
+if (process.env.NODE_ENV !== 'test') {
+  server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Server] Listening on port ${PORT} (env=${IS_PRODUCTION ? 'production' : 'dev'})`);
 
-  // Initial warmup — delayed 8 s to let DB/Redis finish connecting
-  setTimeout(runWarmup, 8000);
+    // Initial warmup — delayed 8 s to let DB/Redis finish connecting
+    setTimeout(runWarmup, 8000);
 
-  // Rolling refresh: daily-news every 2 h, trending + categories every 4 h
-  setInterval(warmDailyNews,   2 * 60 * 60 * 1000);
-  setInterval(warmTrending,    4 * 60 * 60 * 1000);
-  setInterval(warmCategories,  4 * 60 * 60 * 1000);
-});
+    // Rolling refresh: daily-news every 2 h, trending + categories every 4 h
+    setInterval(warmDailyNews,   2 * 60 * 60 * 1000);
+    setInterval(warmTrending,    4 * 60 * 60 * 1000);
+    setInterval(warmCategories,  4 * 60 * 60 * 1000);
+  });
+}
+export { app };
 
 // ── Graceful Shutdown ─────────────────────────────────────────────────────────
 // Railway sends SIGTERM before killing the container. We stop accepting new
@@ -2946,7 +2952,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 async function shutdown(signal) {
   console.log(`[Server] ${signal} — starting graceful shutdown`);
 
-  // Stop new connections immediately
+  // Stop new connections immediately (no server under NODE_ENV=test)
+  if (!server) { process.exit(0); return; }
   server.close(async () => {
     console.log('[Server] HTTP server closed — draining connections');
     try {
