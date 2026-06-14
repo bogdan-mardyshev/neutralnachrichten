@@ -187,6 +187,21 @@ async function runMigrations() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS email_digest BOOLEAN DEFAULT false;
   `);
 
+  // NLI results per evidence source (audit B5 foundation): every claim
+  // verification vote is attributed to the outlet that provided the evidence.
+  // Over time this yields OUR OWN measured factuality per source — independent
+  // of MBFC. Aggregated by getSourceNliStats() for the admin dashboard.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS nli_results (
+      id            BIGSERIAL PRIMARY KEY,
+      source_domain TEXT NOT NULL,
+      label         TEXT NOT NULL CHECK (label IN ('supported','entailment','contradiction','unsupported')),
+      topic_norm    TEXT,
+      created_at    TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS nli_results_domain ON nli_results(source_domain);
+  `);
+
   // Analysis feedback (audit D5): the perceived-balance loop. One row per vote;
   // aggregated in the admin metrics. ip_hash dedups repeat votes per topic.
   await pool.query(`
@@ -1164,6 +1179,47 @@ export async function recordFeedFailure(feedUrl, sourceName, spectrum) {
     await pool.query(text, values);
   } catch (err) {
     console.error('[DB:recordFeedFailure]', err.message);
+  }
+}
+
+/** Persist NLI verification results attributed to evidence sources (B5 foundation). */
+export async function saveNliResults(rows) {
+  if (!pool || !Array.isArray(rows) || rows.length === 0) return;
+  try {
+    const values = [];
+    const params = [];
+    rows.forEach((r, i) => {
+      params.push(`($${i * 3 + 1}, $${i * 3 + 2}, $${i * 3 + 3})`);
+      values.push(r.source_domain, r.label, r.topic_norm || null);
+    });
+    await pool.query(
+      `INSERT INTO nli_results (source_domain, label, topic_norm) VALUES ${params.join(',')}`,
+      values
+    );
+  } catch (err) {
+    console.error('[DB:saveNliResults]', err.message);
+  }
+}
+
+/** Measured factuality per source: NLI support rate (min 5 datapoints to show). */
+export async function getSourceNliStats(minN = 5) {
+  if (!pool) return [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT source_domain,
+              COUNT(*)::int AS n,
+              COUNT(*) FILTER (WHERE label IN ('supported','entailment'))::int AS supported,
+              COUNT(*) FILTER (WHERE label = 'contradiction')::int AS contradicted
+       FROM nli_results
+       GROUP BY source_domain
+       HAVING COUNT(*) >= $1
+       ORDER BY (COUNT(*) FILTER (WHERE label IN ('supported','entailment')))::float / COUNT(*) DESC`,
+      [minN]
+    );
+    return rows.map(r => ({ ...r, supportRate: Math.round((r.supported / r.n) * 100) }));
+  } catch (err) {
+    console.error('[DB:getSourceNliStats]', err.message);
+    return [];
   }
 }
 

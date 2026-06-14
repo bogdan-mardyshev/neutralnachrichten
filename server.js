@@ -30,7 +30,7 @@ import { extractClaims, verifyClaims } from './lib/claimVerification.js';
 import { makeBatchEntailment } from './lib/entailment.js';
 import { clusterArticles } from './lib/storyClustering.js';
 import { metrics } from './lib/metrics.js';
-import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds, getCorpusStats, saveAnalysisFeedback, getFeedbackStats } from './db.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds, getCorpusStats, saveAnalysisFeedback, getFeedbackStats, saveNliResults, getSourceNliStats } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, getRedisClient, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
@@ -565,11 +565,21 @@ async function applyCorpusReliability(analysis, rssData) {
     const flatArts = flattenSpectra(spectra);
     if (claims.length && flatArts.length) {
       if (geminiBudgetOk()) { metrics.recordGeminiCall('entailment'); geminiBudgetSpend(); }
-      const { report } = await verifyClaims(claims, flatArts, {
+      const { results, report } = await verifyClaims(claims, flatArts, {
         batchEntailmentFn: geminiBudgetOk() ? batchEntailment : undefined,
       });
       claimReport = report;
       console.log(`[NLI] claims=${report.total} supported=${report.supported} contradicted=${report.contradicted}`);
+      // B5 foundation: attribute each verdict to the evidence outlet — accrues
+      // into OUR OWN measured factuality per source (fire-and-forget).
+      const nliRows = results
+        .filter(r => r.evidence?.url)
+        .map(r => ({
+          source_domain: (() => { try { return new URL(r.evidence.url).hostname.replace(/^www\./, ''); } catch { return r.evidence.source_name || 'unknown'; } })(),
+          label: r.label,
+          topic_norm: (analysis?.analysis_topic || '').toLowerCase().slice(0, 200) || null,
+        }));
+      if (nliRows.length) saveNliResults(nliRows).catch(() => {});
     }
   } catch (e) { console.warn('[NLI] claim verification skipped:', e.message); }
 
@@ -2386,14 +2396,16 @@ app.get('/api/admin/metrics', async (req, res) => {
   const key = req.headers['x-admin-key'];
   if (!ADMIN_KEY || key !== ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
 
-  const [corpus, feedback] = await Promise.all([
+  const [corpus, feedback, measuredFactuality] = await Promise.all([
     getCorpusStats().catch(() => null),
     getFeedbackStats().catch(() => null),
+    getSourceNliStats().catch(() => []),
   ]);
   res.json({
     process: metrics.snapshot(),
     corpus,
     feedback,
+    measuredFactuality,
     flags: {
       corpusAnalysisEnabled: CORPUS_ANALYSIS_ENABLED,
       sentry: !!process.env.SENTRY_DSN,
