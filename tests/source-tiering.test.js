@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   SOURCE_RATINGS,
+  SOURCE_OWNERS,
   buildRatingsMap,
   flagshipDomainsBySpectrum,
   lowConfidenceRatings,
@@ -46,6 +47,52 @@ describe('classification axes integrity', () => {
     const map = buildRatingsMap();
     expect(map['bild.de'].tier).toBe('flagship');
     expect(map['bild.de'].factual_rating).toBe('mixed');
+  });
+});
+
+describe('expanded source corpus (~55 outlets) integrity', () => {
+  it('has ≥50 outlets, every spectrum represented with breadth', () => {
+    expect(SOURCE_RATINGS.length).toBeGreaterThanOrEqual(50);
+    const counts = {};
+    for (const r of SOURCE_RATINGS) counts[r.spectrum] = (counts[r.spectrum] || 0) + 1;
+    for (const sp of ['left', 'center_left', 'center', 'center_right', 'right']) {
+      expect(counts[sp]).toBeGreaterThanOrEqual(5); // no thin camp → no structural blindspot
+    }
+  });
+
+  it('no duplicate domains', () => {
+    const domains = SOURCE_RATINGS.map(r => r.source_domain.toLowerCase());
+    expect(new Set(domains).size).toBe(domains.length);
+  });
+
+  it('every row is well-formed on all three axes + carries provenance', () => {
+    const SPECTRA = ['left', 'center_left', 'center', 'center_right', 'right'];
+    const TIERS = ['flagship', 'standard', 'niche'];
+    const FACTUAL = ['high', 'mixed', 'low'];
+    for (const r of SOURCE_RATINGS) {
+      expect(SPECTRA).toContain(r.spectrum);
+      expect(TIERS).toContain(r.tier);
+      expect(FACTUAL).toContain(r.factual_rating);
+      expect(r.rating_source).toBeTruthy();          // provenance never blank
+      expect(r.notes).toBeTruthy();                  // human-readable rationale
+      expect(r.confidence).toBeGreaterThan(0);
+      expect(r.confidence).toBeLessThanOrEqual(1);
+      expect(r.reach_weight).toBeGreaterThan(0);
+    }
+  });
+
+  it('every rated outlet has an ownership entry (concentration lens stays complete)', () => {
+    for (const r of SOURCE_RATINGS) {
+      expect(SOURCE_OWNERS[r.source_domain], `owner missing for ${r.source_domain}`).toBeTruthy();
+    }
+  });
+
+  it('extremist outlets are classed low-factual with a citable basis', () => {
+    const map = buildRatingsMap();
+    for (const d of ['compact-online.de', 'sezession.de', 'pi-news.net']) {
+      expect(map[d].factual_rating).toBe('low');
+      expect(map[d].rating_source).toMatch(/Verfassungsschutz|NewsGuard|ISD/);
+    }
   });
 });
 

@@ -30,7 +30,7 @@ import { composeReliability } from './lib/reliabilityPipeline.js';
 import { extractClaims, verifyClaims } from './lib/claimVerification.js';
 import { makeBatchEntailment } from './lib/entailment.js';
 import { analyzeBiasProfile } from './lib/biasProfile.js';
-import { buildRatingsMap, deriveMeasuredFactual, reconcileFactual } from './lib/sourceRatingsSeed.js';
+import { buildRatingsMap, deriveMeasuredFactual, reconcileFactual, SOURCE_RATINGS } from './lib/sourceRatingsSeed.js';
 import { clusterArticles } from './lib/storyClustering.js';
 import { metrics } from './lib/metrics.js';
 import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds, getCorpusStats, saveAnalysisFeedback, getFeedbackStats, saveNliResults, getSourceNliStats } from './db.js';
@@ -542,7 +542,7 @@ async function applyCorpusReliability(analysis, rssData) {
     recordEntailmentCall: () => metrics.recordGeminiCall('entailment'),
     onNli: (rows) => saveNliResults(rows).catch(() => {}),
     log: (msg) => console.log(msg),
-    coverageWindow: { days: parseInt(process.env.INGEST_MAX_AGE_DAYS, 10) || 14, outlets: 34 },
+    coverageWindow: { days: parseInt(process.env.INGEST_MAX_AGE_DAYS, 10) || 14, outlets: SOURCE_RATINGS.length },
   });
   if (out.reliability) {
     const r = out.reliability;
