@@ -29,6 +29,7 @@ import { enrichDeepAnalysis, flattenSpectra } from './lib/deepAnalysisEnrich.js'
 import { extractClaims, verifyClaims } from './lib/claimVerification.js';
 import { makeBatchEntailment } from './lib/entailment.js';
 import { analyzeBiasProfile } from './lib/biasProfile.js';
+import { buildRatingsMap, deriveMeasuredFactual, reconcileFactual } from './lib/sourceRatingsSeed.js';
 import { clusterArticles } from './lib/storyClustering.js';
 import { metrics } from './lib/metrics.js';
 import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds, getCorpusStats, saveAnalysisFeedback, getFeedbackStats, saveNliResults, getSourceNliStats } from './db.js';
@@ -2400,11 +2401,20 @@ app.get('/api/admin/metrics', async (req, res) => {
   const key = req.headers['x-admin-key'];
   if (!ADMIN_KEY || key !== ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
 
-  const [corpus, feedback, measuredFactuality] = await Promise.all([
+  const [corpus, feedback, nliStats] = await Promise.all([
     getCorpusStats().catch(() => null),
     getFeedbackStats().catch(() => null),
     getSourceNliStats().catch(() => []),
   ]);
+  // B5: annotate each measured source with its derived rating + divergence vs the
+  // declared (MBFC/editorial) rating, so reviewers see where reality disagrees.
+  const ratingsMap = buildRatingsMap();
+  const measuredFactuality = (nliStats || []).map(s => {
+    const measured = deriveMeasuredFactual(s);
+    const declared = ratingsMap[s.source_domain]?.factual_rating ?? null;
+    const { diverges } = reconcileFactual(declared, measured);
+    return { ...s, measured, declared, diverges };
+  });
   res.json({
     process: metrics.snapshot(),
     corpus,

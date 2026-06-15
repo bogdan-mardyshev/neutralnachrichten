@@ -468,8 +468,9 @@ export default function AdminPage() {
                 <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Gemessene Faktentreue (eigene NLI-Daten, min. 5 Messungen)</p>
                 <div className="flex flex-wrap gap-2 text-xs">
                   {opsMetrics.measuredFactuality.slice(0, 12).map((s: any) => (
-                    <span key={s.source_domain} className={`px-2 py-1 rounded ${s.supportRate >= 80 ? 'bg-emerald-100 text-emerald-700' : s.supportRate >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
-                      {s.source_domain}: <b>{s.supportRate}%</b> <span className="opacity-60">({s.n})</span>
+                    <span key={s.source_domain} className={`px-2 py-1 rounded ${s.supportRate >= 80 ? 'bg-emerald-100 text-emerald-700' : s.supportRate >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}
+                          title={s.measured ? `deklariert: ${s.declared ?? '—'} · gemessen: ${s.measured}${s.diverges ? ' (Abweichung!)' : ''}` : `${s.n} Messungen`}>
+                      {s.source_domain}: <b>{s.supportRate}%</b> <span className="opacity-60">({s.n})</span>{s.diverges && <span className="ml-0.5">⚑</span>}
                     </span>
                   ))}
                 </div>

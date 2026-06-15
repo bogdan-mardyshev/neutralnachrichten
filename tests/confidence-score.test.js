@@ -162,3 +162,38 @@ describe('buildReliabilityEnvelope', () => {
     expect(env.blindspots.verifiedSilences).toEqual(['center_left']);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Measured factuality (audit B5)
+// ─────────────────────────────────────────────────────────────────────────────
+import { deriveMeasuredFactual, reconcileFactual, MEASURED_MIN_N } from '../lib/sourceRatingsSeed.js';
+
+describe('deriveMeasuredFactual', () => {
+  it('returns null below the minimum sample size', () => {
+    expect(deriveMeasuredFactual({ n: 5, supportRate: 95, contradicted: 0 })).toBeNull();
+  });
+  it('high support, no contradictions → high', () => {
+    expect(deriveMeasuredFactual({ n: MEASURED_MIN_N, supportRate: 90, contradicted: 0 })).toBe('high');
+  });
+  it('medium support → mixed', () => {
+    expect(deriveMeasuredFactual({ n: MEASURED_MIN_N, supportRate: 65, contradicted: 0 })).toBe('mixed');
+  });
+  it('low support OR contradictions ≥10% → low', () => {
+    expect(deriveMeasuredFactual({ n: MEASURED_MIN_N, supportRate: 50, contradicted: 0 })).toBe('low');
+    expect(deriveMeasuredFactual({ n: MEASURED_MIN_N, supportRate: 90, contradicted: 4 })).toBe('low'); // 4/20=20%
+  });
+});
+
+describe('reconcileFactual', () => {
+  it('no measured data → static, no divergence', () => {
+    expect(reconcileFactual('high', null)).toEqual({ effective: 'high', measured: null, diverges: false });
+  });
+  it('flags divergence but never silently flips the effective rating', () => {
+    const r = reconcileFactual('high', 'low');
+    expect(r.effective).toBe('high');   // human review, not auto-flip
+    expect(r.diverges).toBe(true);
+  });
+  it('agreement → no divergence', () => {
+    expect(reconcileFactual('mixed', 'mixed').diverges).toBe(false);
+  });
+});
