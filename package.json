@@ -15,6 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "eval:rag": "node scripts/rag-eval.mjs",
     "deploy:staging": "bash scripts/deploy-staging.sh",
     "deploy:prod": "bash scripts/deploy-prod.sh",
     "logs:prod": "$HOME/.railway/bin/railway logs --environment production --tail",
