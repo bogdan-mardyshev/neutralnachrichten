@@ -1,0 +1,46 @@
+<svg width="1500" height="500" viewBox="0 0 1500 500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .serif { font-family: Georgia, 'Times New Roman', serif; }
+      .sans  { font-family: 'Arial', 'Helvetica Neue', sans-serif; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1500" height="500" fill="#FFF8F0"/>
+
+  <!-- Top spectrum bar -->
+  <rect x="0"    y="0" width="300" height="10" fill="#e11d48"/>
+  <rect x="300"  y="0" width="300" height="10" fill="#fb923c"/>
+  <rect x="600"  y="0" width="300" height="10" fill="#94a3b8"/>
+  <rect x="900"  y="0" width="300" height="10" fill="#0ea5e9"/>
+  <rect x="1200" y="0" width="300" height="10" fill="#1d4ed8"/>
+
+  <!-- Logo tile -->
+  <rect x="110" y="180" width="120" height="120" fill="#1a1a1a"/>
+  <text x="170" y="274" class="serif" font-size="84" font-weight="900"
+        fill="#FFF8F0" text-anchor="middle">N</text>
+
+  <!-- Wordmark -->
+  <text x="262" y="228" class="serif" font-size="52" font-weight="400" fill="#1a1a1a">Neutrale</text>
+  <text x="262" y="286" class="serif" font-size="52" font-weight="900" fill="#1a1a1a">Nachrichten</text>
+
+  <!-- Divider -->
+  <rect x="700" y="160" width="2" height="180" fill="#e0d8cf"/>
+
+  <!-- Tagline block -->
+  <text x="760" y="210" class="serif" font-size="40" font-weight="900" fill="#1a1a1a">Wie berichten deutsche</text>
+  <text x="760" y="262" class="serif" font-size="40" font-weight="900" fill="#1a1a1a">Medien <tspan fill="#e11d48">wirklich?</tspan></text>
+  <text x="762" y="306" class="sans" font-size="18" fill="#64748b">Dieselbe Nachricht. Fünf politische Perspektiven. Auf einen Blick.</text>
+
+  <!-- Bottom rule + footer -->
+  <rect x="0" y="452" width="1500" height="2" fill="#1a1a1a"/>
+  <text x="110"  y="478" class="sans" font-size="14" fill="#94a3b8">neutralnachrichten.com</text>
+
+  <!-- Bottom spectrum bar -->
+  <rect x="0"    y="490" width="300" height="10" fill="#e11d48"/>
+  <rect x="300"  y="490" width="300" height="10" fill="#fb923c"/>
+  <rect x="600"  y="490" width="300" height="10" fill="#94a3b8"/>
+  <rect x="900"  y="490" width="300" height="10" fill="#0ea5e9"/>
+  <rect x="1200" y="490" width="300" height="10" fill="#1d4ed8"/>
+</svg>
