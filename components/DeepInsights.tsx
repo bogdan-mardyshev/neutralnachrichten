@@ -330,15 +330,18 @@ const SubStories: React.FC<{ data: NewsAnalysisResult; t2: typeof T2[Lang]; lang
           <div key={c.id} className="border-l-2 pl-3 py-1"
                style={{ borderColor: c.soloCamp ? SP_COLOR[c.soloCamp] : '#94a3b8' }}>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] capitalize">{c.label}</span>
-              <span className="font-sans text-[10px] text-gray-400">{c.size} {lang === 'ru' ? 'ст.' : 'art.'}</span>
+              <span className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4] leading-snug">{c.label}</span>
+              <span className="font-sans text-[10px] text-gray-400 shrink-0">{c.size} {lang === 'ru' ? 'ст.' : 'art.'}</span>
               {c.soloCamp && (
-                <span className="font-sans text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-white"
+                <span className="font-sans text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-white shrink-0"
                       style={{ backgroundColor: SP_COLOR[c.soloCamp] }}>
                   {SP_LABEL[c.soloCamp][lang]} · {t2.solo}
                 </span>
               )}
             </div>
+            {c.keywords && (
+              <p className="font-sans text-[9px] uppercase tracking-wider text-gray-400 dark:text-gray-500 mt-0.5">{c.keywords}</p>
+            )}
             {/* camp dots */}
             <div className="flex items-center gap-1 mt-1">
               {c.coveredCamps.map(sp => (

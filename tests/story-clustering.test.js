@@ -31,9 +31,11 @@ describe('clusterArticles', () => {
     const { clusters, meta } = clusterArticles(articles, { threshold: 0.2 });
     // expect 2 sub-stories: OECD + Energiewende
     expect(meta.multiArticleClusters).toBe(2);
-    const labels = clusters.map(c => c.label).join(' ');
+    // label is now the lead article's real headline; keywords holds the tokens
+    const labels = clusters.map(c => c.label).join(' ').toLowerCase();
+    const keywords = clusters.map(c => c.keywords).join(' ').toLowerCase();
     expect(labels).toMatch(/oecd|prognose|wachstum/);
-    expect(labels).toMatch(/energiewende/);
+    expect((labels + ' ' + keywords)).toMatch(/energiewende/);
   });
 
   it('records which camps cover each cluster + flags solo-camp sub-angles', () => {
@@ -43,8 +45,9 @@ describe('clusterArticles', () => {
       art('Wetterbericht Sommer', 'Der Sommer wird warm.', 'left'),
     ];
     const { clusters, meta } = clusterArticles(articles, { threshold: 0.2, minSize: 2 });
-    const skandal = clusters.find(c => c.label.includes('skandal') || c.label.includes('ministerin'));
+    const skandal = clusters.find(c => /skandal|ministerin/i.test(`${c.label} ${c.keywords}`));
     expect(skandal).toBeTruthy();
+    expect(skandal.label).toMatch(/Skandal|Ministerin/); // human-readable headline, not token soup
     expect(skandal.soloCamp).toBe('right');     // only the right camp tells this sub-angle
     expect(meta.soloCamps.some(s => s.camp === 'right')).toBe(true);
   });

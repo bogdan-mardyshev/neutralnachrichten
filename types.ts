@@ -143,7 +143,8 @@ export interface ReliabilityEnvelope {
 
 export interface StoryCluster {
   id: number;
-  label: string;
+  label: string;       // human-readable: the lead article's real headline
+  keywords?: string;   // secondary token tags ("russland · ukraine · …")
   size: number;
   spectra: Record<SpectrumKey, number>;
   coveredCamps: SpectrumKey[];
