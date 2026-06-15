@@ -56,3 +56,12 @@ describe('retrieveCorpusSpectra', () => {
     expect(out.total_articles).toBe(0);
   });
 });
+
+describe('retrieveCorpusSpectra — symmetric query embedding (RAG quality)', () => {
+  it('embeds the natural-language topic, not the keyword bag', async () => {
+    const getEmbedding = vi.fn().mockResolvedValue(vec());
+    const searchHybrid = vi.fn().mockResolvedValue({ grouped: {}, meta: {} });
+    await retrieveCorpusSpectra('Rentenreform 2027 Bundestag', { getEmbedding, searchHybrid });
+    expect(getEmbedding).toHaveBeenCalledWith('Rentenreform 2027 Bundestag'); // raw topic, not "rentenreform 2027 bundestag" expanded bag
+  });
+});
