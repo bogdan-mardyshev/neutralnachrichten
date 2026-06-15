@@ -111,3 +111,38 @@ describe('corpusToSpectra', () => {
     expect(out.spectra.center.count_month).toBe(1);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Relevance gate (reputation fix): drop off-topic filler from camps
+// ─────────────────────────────────────────────────────────────────────────────
+import { minKeywordsFor } from '../lib/corpusToSpectra.js';
+
+describe('relevance gate', () => {
+  it('minKeywordsFor: 2 for multi-word topics, 1 for single', () => {
+    expect(minKeywordsFor(['deutschland', 'curacao', 'wm'])).toBe(2);
+    expect(minKeywordsFor(['klima'])).toBe(1);
+    expect(minKeywordsFor([])).toBe(1);
+  });
+
+  it('drops an article that matches only ONE common keyword (off-topic filler)', () => {
+    const onTopic = row(1, { spectrum: 'center', article_title: 'Deutschland gewinnt gegen Curacao', our_summary: 'WM-Spiel Deutschland Curacao.' });
+    const offTopic = row(2, { spectrum: 'left', article_title: 'Tomahawk-Raketen in Deutschland gestoppt', our_summary: 'Russland und die Stationierung.' });
+    const out = corpusToSpectra({ center: [onTopic], left: [offTopic] }, { keywords: ['deutschland', 'curacao', 'wm'] });
+    // center article has Deutschland+Curacao (2) → kept; left has only Deutschland (1) → dropped
+    expect(out.spectra.center.articles).toHaveLength(1);
+    expect(out.spectra.left.articles).toHaveLength(0);
+    expect(out.search_meta.relevanceDropped).toBe(1);
+  });
+
+  it('keeps a single-keyword match when the topic itself is single-word', () => {
+    const a = row(1, { spectrum: 'center', article_title: 'Großer Klimagipfel', our_summary: 'Klima Konferenz.' });
+    const out = corpusToSpectra({ center: [a] }, { keywords: ['klima'] });
+    expect(out.spectra.center.articles).toHaveLength(1);
+  });
+
+  it('no keywords → gate is a no-op (keeps everything)', () => {
+    const a = row(1, { spectrum: 'center', article_title: 'Irgendwas', our_summary: 'x' });
+    const out = corpusToSpectra({ center: [a] }, {});
+    expect(out.spectra.center.articles).toHaveLength(1);
+  });
+});

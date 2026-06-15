@@ -5,7 +5,7 @@ import { EMBEDDING_DIM } from '../lib/corpusQueries.js';
 const vec = () => Array(EMBEDDING_DIM).fill(0.1);
 const grouped = {
   center: [{ id: 1, url: 'https://t.de/1', source_name: 'Tagesschau', source_domain: 'tagesschau.de',
-             spectrum: 'center', article_title: 'Rentenreform beschlossen', our_summary: 'Zusammenfassung.',
+             spectrum: 'center', article_title: 'Rentenreform 2027 beschlossen', our_summary: 'Die Rentenreform 2027 tritt in Kraft.',
              short_lead: 'Lead.', pubDate: new Date().toISOString(), _rrfScore: 0.5, _retrievers: ['lexical'] }],
 };
 

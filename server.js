@@ -570,8 +570,11 @@ async function applyCorpusReliability(analysis, rssData) {
       const { results, report } = await verifyClaims(claims, flatArts, {
         batchEntailmentFn: geminiBudgetOk() ? batchEntailment : undefined,
       });
-      claimReport = report;
-      console.log(`[NLI] claims=${report.total} supported=${report.supported} contradicted=${report.contradicted}`);
+      // Only feed claim support into confidence when NLI actually ran. Lexical-only
+      // word-matching on abstract synthesis sentences is near-noise (it scored ~0
+      // and pinned confidence at 65); treat that as UNMEASURED instead.
+      claimReport = report.method === 'nli' ? report : null;
+      console.log(`[NLI] method=${report.method} claims=${report.total} supported=${report.supported} contradicted=${report.contradicted}`);
       // B5 foundation: attribute each verdict to the evidence outlet — accrues
       // into OUR OWN measured factuality per source (fire-and-forget).
       const nliRows = results

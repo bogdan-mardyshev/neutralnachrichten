@@ -139,3 +139,25 @@ describe('verifyClaims — entailment layer (injected)', () => {
     expect(results[0].label).toBe('unsupported');
   });
 });
+
+describe('verifyClaims — batch judges ALL claims regardless of lexical overlap (confidence fix)', () => {
+  it('an abstract claim with low word-overlap still gets a batch verdict + evidence', async () => {
+    const arts = [{ article_title: 'Bundestag beschließt Rentenreform', our_summary: 'Die Reform tritt 2027 in Kraft.', article_url: 'https://t.de/1', source_name: 'Tagesschau', _corpusId: 1 }];
+    // Abstract synthesis sentence — shares few exact words with the article
+    const claims = [{ text: 'Deutsche Medien berichten breit über das Vorhaben', kind: 'overall' }];
+    const batchFn = vi.fn().mockResolvedValue(['entailment']);
+    const { results, report } = await verifyClaims(claims, arts, { batchEntailmentFn: batchFn });
+    expect(batchFn).toHaveBeenCalledTimes(1);
+    expect(batchFn.mock.calls[0][0]).toHaveLength(1); // the abstract claim WAS sent
+    expect(results[0].label).toBe('entailment');
+    expect(results[0].evidence).toBeTruthy();          // evidence attached despite low lexical score
+    expect(report.method).toBe('nli');
+    expect(report.supportRatio).toBe(1);
+  });
+
+  it('report.method is "lexical" when no batch fn is given', async () => {
+    const arts = [{ article_title: 'x', our_summary: 'y', article_url: 'u', source_name: 's' }];
+    const { report } = await verifyClaims([{ text: 'something', kind: 'overall' }], arts);
+    expect(report.method).toBe('lexical');
+  });
+});
