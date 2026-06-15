@@ -26,6 +26,7 @@ import { groundAnalysis, dedupeArticles } from './lib/citationGrounding.js';
 import { verifyBlindspots } from './lib/blindspotVerification.js';
 import { buildReliabilityEnvelope } from './lib/confidenceScore.js';
 import { enrichDeepAnalysis, flattenSpectra } from './lib/deepAnalysisEnrich.js';
+import { composeReliability } from './lib/reliabilityPipeline.js';
 import { extractClaims, verifyClaims } from './lib/claimVerification.js';
 import { makeBatchEntailment } from './lib/entailment.js';
 import { analyzeBiasProfile } from './lib/biasProfile.js';
@@ -533,83 +534,23 @@ async function getSpectraForTopic(topic) {
 // computes verified blindspots (feed_health) + a confidence/coverage envelope.
 // No-op for the live-RSS path (returns the analysis unchanged, reliability null).
 async function applyCorpusReliability(analysis, rssData) {
-  if (!analysis || rssData?.search_meta?.source !== 'corpus') {
-    return { analysis, reliability: null };
+  const out = await composeReliability(analysis, rssData, {
+    getDownFeeds: () => getDownFeeds(),
+    batchEntailmentFn: batchEntailment,
+    budgetOk: geminiBudgetOk,
+    budgetSpend: geminiBudgetSpend,
+    recordEntailmentCall: () => metrics.recordGeminiCall('entailment'),
+    onNli: (rows) => saveNliResults(rows).catch(() => {}),
+    log: (msg) => console.log(msg),
+    coverageWindow: { days: parseInt(process.env.INGEST_MAX_AGE_DAYS, 10) || 14, outlets: 34 },
+  });
+  if (out.reliability) {
+    const r = out.reliability;
+    console.log(`[Reliability] confidence=${r.confidence.score}/${r.confidence.band} grounded=${r.grounding?.grounded ?? '?'}/${r.grounding?.total ?? '?'} flagshipSilent=[${r.blindspots?.flagshipSilences ?? ''}] verifiedSilent=[${r.blindspots?.verifiedSilences ?? ''}]`);
+    metrics.recordConfidence(r.confidence.score);
+    if (r.grounding) metrics.recordGrounding(r.grounding.groundingRatio);
   }
-  const spectra = rssData.spectra || {};
-  const { analysis: grounded, report: grounding } = groundAnalysis(analysis, spectra);
-
-  // Grounded article → real corpus URL is now set; mark it as a real (non-fallback)
-  // link so the UI renders "read article" with a working href. Then drop any twin
-  // cards (same canonical URL now resolved, or same outlet+headline) — safety net
-  // for duplicates the model may have emitted from near-duplicate corpus rows.
-  for (const sp of SPECTRUMS) {
-    for (const art of (grounded.news_spectrum?.[sp] || [])) {
-      if (art._grounded && art.article_url) art.url_is_search_fallback = false;
-    }
-    if (Array.isArray(grounded.news_spectrum?.[sp])) {
-      grounded.news_spectrum[sp] = dedupeArticles(grounded.news_spectrum[sp]);
-    }
-  }
-
-  let downFeeds = [];
-  try { downFeeds = await getDownFeeds(); } catch (e) { console.warn('[Reliability] getDownFeeds failed:', e.message); }
-  const blindspot = verifyBlindspots(spectra, downFeeds);
-
-  // Real claim verification in the LIVE path (audit A1+A2). Previously the
-  // envelope was built without it, so claimSupportRatio silently defaulted to a
-  // perfect 1.0 and confidence saturated at 100 on every corpus analysis. Now the
-  // overall-analysis sentences are checked against the corpus, with ONE batched
-  // Gemini NLI call upgrading lexical matches to entailment/contradiction.
-  let claimReport = null;
-  try {
-    const claims = extractClaims(grounded).slice(0, 8); // bound the work per analysis
-    const flatArts = flattenSpectra(spectra);
-    if (claims.length && flatArts.length) {
-      if (geminiBudgetOk()) { metrics.recordGeminiCall('entailment'); geminiBudgetSpend(); }
-      const { results, report } = await verifyClaims(claims, flatArts, {
-        batchEntailmentFn: geminiBudgetOk() ? batchEntailment : undefined,
-      });
-      // Only feed claim support into confidence when NLI actually ran. Lexical-only
-      // word-matching on abstract synthesis sentences is near-noise (it scored ~0
-      // and pinned confidence at 65); treat that as UNMEASURED instead.
-      claimReport = report.method === 'nli' ? report : null;
-      console.log(`[NLI] method=${report.method} claims=${report.total} supported=${report.supported} contradicted=${report.contradicted}`);
-      // B5 foundation: attribute each verdict to the evidence outlet — accrues
-      // into OUR OWN measured factuality per source (fire-and-forget).
-      const nliRows = results
-        .filter(r => r.evidence?.url)
-        .map(r => ({
-          source_domain: (() => { try { return new URL(r.evidence.url).hostname.replace(/^www\./, ''); } catch { return r.evidence.source_name || 'unknown'; } })(),
-          label: r.label,
-          topic_norm: (analysis?.analysis_topic || '').toLowerCase().slice(0, 200) || null,
-        }));
-      if (nliRows.length) saveNliResults(nliRows).catch(() => {});
-    }
-  } catch (e) { console.warn('[NLI] claim verification skipped:', e.message); }
-
-  const reliability = buildReliabilityEnvelope({ corpusSpectra: spectra, grounding, claimVerification: claimReport, blindspot });
-
-  // Honesty badge (audit B2): the corpus is NOT "the whole internet" — it covers
-  // the last N days from our configured outlets. Say so right on the analysis.
-  reliability.coverageWindow = {
-    days: parseInt(process.env.INGEST_MAX_AGE_DAYS, 10) || 14,
-    outlets: 34,
-  };
-
-  // Story clustering (Wave 4): group the topic's articles into sub-stories and
-  // flag sub-angles only one camp tells (sub-story-level blindspots).
-  try {
-    const { clusters, meta } = clusterArticles(flattenSpectra(spectra));
-    reliability.clusters = clusters;
-    reliability.clusterMeta = meta;
-    if (meta.soloCamps.length) console.log(`[Clusters] ${meta.clusterCount} sub-stories, solo-camp angles: ${meta.soloCamps.map(s => `${s.camp}:${s.label}`).join(' | ')}`);
-  } catch (e) { console.warn('[Clusters] skipped:', e.message); }
-
-  console.log(`[Reliability] confidence=${reliability.confidence.score}/${reliability.confidence.band} grounded=${grounding.grounded}/${grounding.total} flagshipSilent=[${blindspot.flagshipSilences}] verifiedSilent=[${blindspot.verifiedSilences}]`);
-  metrics.recordConfidence(reliability.confidence.score);
-  metrics.recordGrounding(grounding.groundingRatio);
-  return { analysis: grounded, reliability };
+  return out;
 }
 
 // Merge real RSS data into a Gemini-produced analysis object.
