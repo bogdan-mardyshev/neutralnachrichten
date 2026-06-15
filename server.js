@@ -28,6 +28,7 @@ import { buildReliabilityEnvelope } from './lib/confidenceScore.js';
 import { enrichDeepAnalysis, flattenSpectra } from './lib/deepAnalysisEnrich.js';
 import { extractClaims, verifyClaims } from './lib/claimVerification.js';
 import { makeBatchEntailment } from './lib/entailment.js';
+import { analyzeBiasProfile } from './lib/biasProfile.js';
 import { clusterArticles } from './lib/storyClustering.js';
 import { metrics } from './lib/metrics.js';
 import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds, getCorpusStats, saveAnalysisFeedback, getFeedbackStats, saveNliResults, getSourceNliStats } from './db.js';
@@ -1551,7 +1552,10 @@ app.post('/api/analyses/:topicNorm/view', async (req, res) => {
 app.get('/api/profile/media-spectrum', requireAuth, async (req, res) => {
   try {
     const spectrum = await getUserMediaSpectrum(req.user.id);
-    res.json(spectrum ?? null);
+    // C7: attach the actionable bias profile (lean, balance, blind spots,
+    // counter-source recommendations). Backward-compatible — spectrum fields stay.
+    const profile = analyzeBiasProfile(spectrum);
+    res.json(spectrum ? { ...spectrum, _profile: profile } : null);
   } catch {
     res.json(null);
   }

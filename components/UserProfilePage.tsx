@@ -397,7 +397,7 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
   const [exportLoading, setExportLoading] = useState(false);
 
   // Server-side media spectrum (more accurate — all devices)
-  const [serverSpectrum, setServerSpectrum] = useState<Record<string, number> & { total_searches?: number } | null>(null);
+  const [serverSpectrum, setServerSpectrum] = useState<Record<string, number> & { total_searches?: number; _profile?: any } | null>(null);
 
   // Liked analyses
   const [likedAnalyses, setLikedAnalyses] = useState<{ topic_norm: string; topic: string; lang: string; liked_at: string }[]>([]);
@@ -774,6 +774,38 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
                     {pt.profileSearches(serverSpectrum.total_searches)}
                   </p>
                 )}
+                {/* C7: balance score + blind spots + counter-source recommendations */}
+                {serverSpectrum?._profile && (() => {
+                  const p = serverSpectrum._profile;
+                  const CAMP = { left: { de: 'Links', en: 'Left', ru: 'Левые' }, center_left: { de: 'Mitte-Links', en: 'Center-Left', ru: 'Лево-центр' }, center: { de: 'Mitte', en: 'Center', ru: 'Центр' }, center_right: { de: 'Mitte-Rechts', en: 'Center-Right', ru: 'Право-центр' }, right: { de: 'Rechts', en: 'Right', ru: 'Правые' } } as const;
+                  const L = (lang === 'de' ? 'de' : lang === 'ru' ? 'ru' : 'en') as 'de' | 'en' | 'ru';
+                  const txt = {
+                    de: { balance: 'Ausgewogenheit', blind: 'Deine blinden Flecken', rec: 'Zum Ausgleich lesen', none: 'Gut ausbalanciert — keine blinden Flecken.' },
+                    en: { balance: 'Balance', blind: 'Your blind spots', rec: 'Read to balance', none: 'Well balanced — no blind spots.' },
+                    ru: { balance: 'Сбалансированность', blind: 'Твои слепые зоны', rec: 'Читай для баланса', none: 'Хорошо сбалансировано — слепых зон нет.' },
+                  }[L];
+                  const bColor = p.balanceScore >= 70 ? 'text-emerald-600' : p.balanceScore >= 40 ? 'text-amber-600' : 'text-rose-600';
+                  return (
+                    <div className="pt-3 mt-2 border-t border-[#e0d8cf] dark:border-gray-700 space-y-2">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400">{txt.balance}</span>
+                        <span className={`font-serif text-lg font-black ${bColor}`}>{p.balanceScore}<span className="text-[10px] text-gray-400">/100</span></span>
+                      </div>
+                      {p.blindCamps?.length > 0 ? (
+                        <>
+                          <p className="font-sans text-[10px] text-gray-500 dark:text-gray-400">{txt.blind}: {p.blindCamps.map((c: string) => CAMP[c as keyof typeof CAMP][L]).join(', ')}</p>
+                          {p.recommendations?.length > 0 && (
+                            <p className="font-sans text-[10px] text-gray-500 dark:text-gray-400">
+                              {txt.rec}: {p.recommendations.slice(0, 3).map((r: any) => r.outlets.join(' / ')).join(', ')}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="font-sans text-[10px] text-emerald-600">{txt.none}</p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               <div className="px-5 py-6 text-center dark:bg-[#141414]">
