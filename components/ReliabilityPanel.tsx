@@ -97,17 +97,19 @@ export const ReliabilityPanel: React.FC<Props> = ({ reliability, lang }) => {
   const label = (sp: SpectrumKey) => SPECTRUM_LABEL[sp]?.[lang] ?? sp;
 
   return (
-    <div className="border border-[#e0d8cf] dark:border-[#252525] bg-white dark:bg-[#1c1c1c] shadow-sm">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 sm:px-6 pt-4">
-        <div className={`w-1 h-4 ${ringFor(conf.band)}`} />
-        <p className="font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+    <div className="border-2 border-[#1a1a1a] dark:border-[#2d2d2d] overflow-hidden bg-[#FFF8F0] dark:bg-[#141414]">
+      {/* Header — matches the site's editorial blocks (dark bar, band on the right) */}
+      <div className="bg-[#1a1a1a] px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
+        <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">
           {t.title}
         </p>
+        <span className={`font-sans text-[9px] font-bold uppercase tracking-widest shrink-0 ${conf.band === 'high' ? 'text-emerald-400' : conf.band === 'medium' ? 'text-amber-400' : 'text-rose-400'}`}>
+          {conf.score} · {bandLabel}
+        </span>
       </div>
 
       {/* Metrics row */}
-      <div className="px-4 sm:px-6 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="px-4 sm:px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
         {/* Confidence score */}
         <div className={`flex flex-col border-l-2 pl-3 ${BAND_STYLE[conf.band]}`}>
           <span className="font-serif text-3xl font-black leading-none">{conf.score}</span>

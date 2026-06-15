@@ -48,12 +48,21 @@ function articlesBySpectrum(data: NewsAnalysisResult): Record<SpectrumKey, RssAr
 }
 const pubOf = (a: RssArticle) => a.pubDate || a.pub_date || null;
 
-const Card: React.FC<{ title: string; hint?: string; children: React.ReactNode }> = ({ title, hint, children }) => (
-  <div className="border border-[#e0d8cf] dark:border-[#252525] bg-white dark:bg-[#1c1c1c] p-4 sm:p-5">
-    <p className="font-sans text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">{title}</p>
-    {hint && <p className="font-sans text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 mb-3">{hint}</p>}
-    {!hint && <div className="mb-3" />}
-    {children}
+// Shared block shell — matches the site's editorial blocks (BiasBar, HypeCounter):
+// dark header bar with an uppercase label + optional right-aligned count, serif
+// italic explainer, then the body. Keeps every DeepInsights card on-brand.
+const Card: React.FC<{ title: string; hint?: string; count?: string | number; children: React.ReactNode }> = ({ title, hint, count, children }) => (
+  <div className="border-2 border-[#1a1a1a] dark:border-[#2d2d2d] overflow-hidden bg-[#FFF8F0] dark:bg-[#141414]">
+    <div className="bg-[#1a1a1a] px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
+      <p className="font-sans text-[10px] font-bold uppercase tracking-widest text-white">{title}</p>
+      {count != null && count !== '' && (
+        <span className="font-sans text-[9px] text-white/40 uppercase tracking-widest shrink-0">{count}</span>
+      )}
+    </div>
+    <div className="px-4 sm:px-5 py-4 sm:py-5">
+      {hint && <p className="font-serif text-xs text-gray-500 dark:text-gray-400 italic mb-3 leading-snug">{hint}</p>}
+      {children}
+    </div>
   </div>
 );
 
@@ -253,7 +262,7 @@ const Composition: React.FC<{ data: NewsAnalysisResult; t2: typeof T2[Lang]; t: 
   );
 
   return (
-    <Card title={`${t2.comp} · ${total}`} hint={t2.compHint}>
+    <Card title={t2.comp} count={total} hint={t2.compHint}>
       <div className="space-y-3">
         <div>
           <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 mb-1">{t2.factTitle}</p>
@@ -315,7 +324,7 @@ const SubStories: React.FC<{ data: NewsAnalysisResult; t2: typeof T2[Lang]; lang
   const clusters = (data._reliability?.clusters || []).filter(c => c.size >= 2);
   if (clusters.length < 2) return null;
   return (
-    <Card title={`${t2.clusters} · ${clusters.length}`} hint={t2.clustersHint}>
+    <Card title={t2.clusters} count={clusters.length} hint={t2.clustersHint}>
       <div className="space-y-2">
         {clusters.slice(0, 6).map(c => (
           <div key={c.id} className="border-l-2 pl-3 py-1"
