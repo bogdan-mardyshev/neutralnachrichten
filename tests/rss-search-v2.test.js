@@ -386,6 +386,28 @@ describe('recencyMultiplier — truth window', () => {
 // 5. scoreArticle
 // ─────────────────────────────────────────────────────────────────────────────
 
+describe('scoreArticle — specific vs generic keyword matches', () => {
+  // single-concept topic "Entgelttransparenzgesetz" → keywords incl. generic "gesetz"
+  const kws = ['entgelttransparenzgesetz', 'entgelttransparenz', 'gesetz'];
+
+  it('an off-topic "…gesetz" article matches only the generic word → specificMatchedCount 0', () => {
+    const r = scoreArticle(
+      makeItem({ title: 'Wehrdienstmodernisierungsgesetz beschlossen', description: 'Das Gesetz regelt den Wehrdienst.' }),
+      kws
+    );
+    expect(r.matchedKeywordCount).toBeGreaterThan(0);   // it does match "gesetz"
+    expect(r.specificMatchedCount).toBe(0);             // …but nothing specific → gate will drop it
+  });
+
+  it('the real topic article matches the specific keyword(s) → specificMatchedCount ≥ 1', () => {
+    const r = scoreArticle(
+      makeItem({ title: 'Entgelttransparenzgesetz: Bundestag beschließt Reform' }),
+      kws
+    );
+    expect(r.specificMatchedCount).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe('scoreArticle', () => {
   const kw = ['ukraine', 'krieg'];
 
