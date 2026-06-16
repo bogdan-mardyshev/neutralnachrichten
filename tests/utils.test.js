@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { extractJSON } from '../lib/utils.js';
+import { extractJSON, balanceJson } from '../lib/utils.js';
 
 describe('extractJSON', () => {
   it('parses a clean JSON object', () => {
@@ -68,5 +68,39 @@ describe('extractJSON', () => {
     const raw = 'start {"outer":{"inner":1}} end';
     const result = extractJSON(raw);
     expect(result).toEqual({ outer: { inner: 1 } });
+  });
+
+  // ── Recovery of malformed/truncated Gemini output (incident: [RSS-Direct] json_parse_error) ──
+  it('replaces raw control characters illegal inside JSON strings', () => {
+    expect(extractJSON('{"a":"line1\nline2\ttab"}')).toEqual({ a: 'line1 line2 tab' });
+  });
+
+  it('recovers a truncated array (no closing brackets)', () => {
+    expect(extractJSON('{"arr":[1,2,3')).toEqual({ arr: [1, 2, 3] });
+  });
+
+  it('recovers a truncated array of objects — keeps the complete elements', () => {
+    expect(extractJSON('{"news":[{"t":"a"},{"t":"b"')).toEqual({ news: [{ t: 'a' }] });
+  });
+
+  it('closes an unterminated string at truncation', () => {
+    expect(extractJSON('{"a":1,"b":"unterminated')).toEqual({ a: 1, b: 'unterminated' });
+  });
+
+  it('still throws when there is no JSON object at all', () => {
+    expect(() => extractJSON('totally not json')).toThrow();
+  });
+});
+
+describe('balanceJson', () => {
+  it('closes unclosed brackets in order', () => {
+    expect(JSON.parse(balanceJson('{"a":[1,2'))).toEqual({ a: [1, 2] });
+    expect(JSON.parse(balanceJson('{"a":{"b":1'))).toEqual({ a: { b: 1 } });
+  });
+  it('drops a dangling trailing comma before closing', () => {
+    expect(JSON.parse(balanceJson('{"a":[1,2,'))).toEqual({ a: [1, 2] });
+  });
+  it('leaves already-valid JSON parseable', () => {
+    expect(JSON.parse(balanceJson('{"a":1}'))).toEqual({ a: 1 });
   });
 });
