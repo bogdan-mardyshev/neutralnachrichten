@@ -65,6 +65,28 @@ describe('composeReliability', () => {
     expect(out.reliability.claims.total).toBeGreaterThan(0);
   });
 
+  it('never persists NLI-neutral verdicts (unmeasured → not attributed to a source, satisfies the DB label CHECK)', async () => {
+    // claim 0 entailment, claim 1 neutral — both have lexical evidence attached.
+    const batchEntailmentFn = vi.fn().mockResolvedValue(['entailment', 'neutral']);
+    const onNli = vi.fn();
+    await composeReliability(analysis(), corpusRss(), {
+      getDownFeeds: async () => [], batchEntailmentFn, onNli, budgetOk: () => true,
+    });
+    expect(onNli).toHaveBeenCalledTimes(1);
+    const rows = onNli.mock.calls[0][0];
+    expect(rows.every(r => r.label !== 'neutral')).toBe(true);   // no neutral persisted
+    expect(rows.every(r => ['supported', 'entailment', 'contradiction', 'unsupported'].includes(r.label))).toBe(true);
+  });
+
+  it('does not call onNli at all when every verdict is neutral', async () => {
+    const batchEntailmentFn = vi.fn().mockResolvedValue(['neutral', 'neutral']);
+    const onNli = vi.fn();
+    await composeReliability(analysis(), corpusRss(), {
+      getDownFeeds: async () => [], batchEntailmentFn, onNli, budgetOk: () => true,
+    });
+    expect(onNli).not.toHaveBeenCalled();   // nothing definite to attribute
+  });
+
   it('skips NLI when budget exhausted (claims treated as unmeasured)', async () => {
     const batchEntailmentFn = vi.fn().mockResolvedValue(['entailment']);
     const out = await composeReliability(analysis(), corpusRss(), {
