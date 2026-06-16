@@ -20,7 +20,9 @@ import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
+import { readdirSync, readFileSync } from 'node:fs';
 import { GOLDEN_SET } from '../eval/golden-set.js';
+import { labelledCases } from '../eval/loadLabeled.js';
 import { corpusToSpectra } from '../lib/corpusToSpectra.js';
 import { groundAnalysis, dedupeArticles } from '../lib/citationGrounding.js';
 import { extractClaims, verifyClaims, flattenCorpus } from '../lib/claimVerification.js';
@@ -31,7 +33,10 @@ const KS = [1, 3, 5];
 // and faithfulness (grounding × support). p@5 is reported but NOT gated — with
 // 3–4 relevant docs per topic it is capped below 1 by construction.
 const FLOORS = { precision: 0.85, 'r@5': 0.80, mrr: 0.85, faithfulness: 0.60 };
+// Real labelled captures carry no authored synthesis → retrieval metrics only.
+const REAL_FLOORS = { precision: 0.85, 'r@5': 0.80, mrr: 0.85 };
 
+const realMode = process.argv.includes('--real');
 const jsonOnly = process.argv.includes('--json');
 const log = (...a) => { if (!jsonOnly) console.log(...a); };
 
@@ -46,30 +51,53 @@ async function runCase(c) {
 
   const retrieval = scoreRetrievalCase(rankedIds, c.relevantIds, { ks: KS });
 
-  // 2) REAL grounding + claim verification (lexical — no model in offline mode).
-  const { report: grounding } = groundAnalysis(c.analysis, spectra);
-  const claims = extractClaims(c.analysis);
-  const flat = dedupeArticles(flattenCorpus(spectra));
-  const { report: claimReport } = await verifyClaims(claims, flat, {}); // no batchEntailmentFn → lexical
-  const faith = faithfulnessScore({ grounding, claims: claimReport });
+  const out = { id: c.id, topic: c.topic, retrieved: rankedIds.length, relevant: c.relevantIds.length, metrics: { ...retrieval } };
 
-  return {
-    id: c.id,
-    topic: c.topic,
-    retrieved: rankedIds.length,
-    relevant: c.relevantIds.length,
-    metrics: { ...retrieval, faithfulness: faith.score, grounding: faith.groundingRatio, claimSupport: faith.claimSupport, contradictions: faith.contradictions },
-  };
+  // 2) Faithfulness only when the case carries an authored synthesis (synthetic
+  //    golden set). Real captures are retrieval-only until an analysis is attached.
+  if (c.analysis) {
+    const { report: grounding } = groundAnalysis(c.analysis, spectra);
+    const claims = extractClaims(c.analysis);
+    const flat = dedupeArticles(flattenCorpus(spectra));
+    const { report: claimReport } = await verifyClaims(claims, flat, {}); // lexical
+    const faith = faithfulnessScore({ grounding, claims: claimReport });
+    Object.assign(out.metrics, { faithfulness: faith.score, grounding: faith.groundingRatio, claimSupport: faith.claimSupport, contradictions: faith.contradictions });
+  }
+  return out;
 }
 
-function pct(n) { return (n * 100).toFixed(0).padStart(3) + '%'; }
+function pct(n) { return Number.isFinite(n) ? (n * 100).toFixed(0).padStart(3) + '%' : '  —'; }
+
+/** Load + parse human-labelled capture files into scoreable cases. */
+function loadRealCases() {
+  let files = [];
+  try { files = readdirSync(join(here(), '..', 'eval', 'candidates')).filter((f) => f.endsWith('.json')); }
+  catch { return []; }
+  const parsed = [];
+  for (const f of files) {
+    try { parsed.push(JSON.parse(readFileSync(join(here(), '..', 'eval', 'candidates', f), 'utf-8'))); }
+    catch (e) { console.warn(`  skip ${f}: ${e.message}`); }
+  }
+  return labelledCases(parsed);
+}
+function here() { return dirname(fileURLToPath(import.meta.url)); }
 
 (async () => {
+  const source = realMode ? loadRealCases() : GOLDEN_SET;
+  if (realMode && source.length === 0) {
+    log('\n  No labelled captures in eval/candidates/ yet.');
+    log('  1) capture:  node scripts/rag-capture.mjs           (needs staging DATABASE_URL + embeddings)');
+    log('  2) label:    set "relevant": true/false in each eval/candidates/*.json');
+    log('  3) score:    npm run eval:rag -- --real\n');
+    process.exit(0);
+  }
+
   const cases = [];
-  for (const c of GOLDEN_SET) cases.push(await runCase(c));
+  for (const c of source) cases.push(await runCase(c));
 
   const agg = aggregate(cases.map((c) => c.metrics));
 
+  const floors = realMode ? REAL_FLOORS : FLOORS;
   const W = 30;
   const rowFmt = (label, m) =>
     '  ' + String(label).slice(0, W - 1).padEnd(W) +
@@ -77,28 +105,29 @@ function pct(n) { return (n * 100).toFixed(0).padStart(3) + '%'; }
     pct(m['ndcg@5']) + '   ' + pct(m.grounding) + '  ' + pct(m.claimSupport) + '  ' + pct(m.faithfulness) +
     (m.contradictions ? '  ⚠contra' : '');
 
-  log('\n  RAG EVALUATION — golden set (' + cases.length + ' topics, offline)\n');
+  log('\n  RAG EVALUATION — ' + (realMode ? 'REAL labelled corpus' : 'synthetic golden set') + ' (' + cases.length + ' topics)\n');
   log('  ' + 'topic'.padEnd(W) + ' prec  p@5   r@5   MRR   MAP  nDCG@5  ground claim  faith');
   log('  ' + '─'.repeat(W + 58));
   for (const c of cases) log(rowFmt(c.topic, c.metrics));
   log('  ' + '─'.repeat(W + 58));
   log(rowFmt('AGGREGATE', agg));
+  if (realMode) log('\n  (real captures are retrieval-only — grounding/claim/faith need an attached synthesis)');
 
   // Gate.
   const failures = [];
-  for (const [k, floor] of Object.entries(FLOORS)) {
+  for (const [k, floor] of Object.entries(floors)) {
     if ((agg[k] ?? 0) < floor) failures.push(`${k}=${(agg[k] ?? 0).toFixed(2)} < floor ${floor}`);
   }
 
-  const out = { ranAt: new Date().toISOString(), ks: KS, floors: FLOORS, aggregate: agg, cases, passed: failures.length === 0, failures };
-  const here = dirname(fileURLToPath(import.meta.url));
-  writeFileSync(join(here, '..', 'eval', 'last-run.json'), JSON.stringify(out, null, 2));
+  const outFile = realMode ? 'last-run-real.json' : 'last-run.json';
+  const out = { ranAt: new Date().toISOString(), mode: realMode ? 'real' : 'synthetic', ks: KS, floors, aggregate: agg, cases, passed: failures.length === 0, failures };
+  writeFileSync(join(here(), '..', 'eval', outFile), JSON.stringify(out, null, 2));
 
   if (jsonOnly) { console.log(JSON.stringify(out, null, 2)); }
   else {
     log('');
     if (failures.length) { log('  ❌ FAILED gate:'); for (const f of failures) log('     • ' + f); }
-    else log('  ✅ PASSED all floors: ' + Object.entries(FLOORS).map(([k, v]) => `${k}≥${v}`).join(', '));
+    else log('  ✅ PASSED all floors: ' + Object.entries(floors).map(([k, v]) => `${k}≥${v}`).join(', '));
     log('');
   }
   process.exit(failures.length ? 1 : 0);
