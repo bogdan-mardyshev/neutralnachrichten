@@ -339,6 +339,18 @@ const forgotLimiter = rateLimit({
   message: { error: 'Zu viele Anfragen. Bitte versuche es in einer Stunde erneut.' },
 });
 
+// Feedback burst limiter: /api/feedback writes a DB row per call (helpful/not),
+// so an unauthenticated client could spam votes and skew stats. Cap per-IP bursts.
+const feedbackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.FEEDBACK_RATE_PER_MIN, 10) || 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getClientIP,
+  store: makeRedisStore('feedback')(),
+  message: { error: 'Zu viele Feedback-Stimmen. Bitte kurz warten.' },
+});
+
 // Analyze burst limiter (audit fix A7): the per-day quota already exists
 // (FREE_DAILY_LIMIT via checkDailyLimitDB), but nothing stopped a burst of
 // expensive Gemini-backed requests within a minute. Cache hits are cheap and
@@ -2325,7 +2337,7 @@ app.get('/api/admin/stats', async (req, res) => {
 // ── Feedback: perceived balance (audit D5) ──────────────────────────────────────
 // One vote per IP per topic (re-vote flips). The aggregate feeds the admin
 // dashboard — the only signal for how balanced REAL readers find the analyses.
-app.post('/api/feedback', async (req, res) => {
+app.post('/api/feedback', feedbackLimiter, async (req, res) => {
   const { topic, lang, verdict } = req.body || {};
   if (!topic || !['up', 'down'].includes(verdict)) {
     return res.status(400).json({ error: 'topic and verdict (up|down) required' });
