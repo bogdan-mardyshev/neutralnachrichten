@@ -507,11 +507,11 @@ async function getSpectraForTopic(topic) {
       const corpus = await retrieveCorpusSpectra(
         topic,
         { getEmbedding, searchHybrid: (embedding, kw, o) => searchCorpusHybrid(embedding, kw, o) },
-        // Retrieve ALL matching articles per camp — the page shows the full,
-        // honest coverage (real links). The Gemini call is separately bounded
-        // (maxPerSpectrum) so the AI summary stays within model limits while the
-        // raw articles beyond that are still displayed.
-        { limit: 250, perSpectrum: 60 }
+        // Retrieve ALL matching articles per camp — no per-camp ceiling. The page
+        // shows the full, honest coverage (real links); the Gemini call is bounded
+        // separately (maxPerSpectrum), so this only affects what's displayed. The
+        // single remaining bound is a DB safety cap (1000) inside searchCorpusHybrid.
+        { limit: 1000, perSpectrum: Infinity }
       );
       if ((corpus?.total_articles ?? 0) >= CORPUS_MIN_ARTICLES) {
         console.log(`[Corpus] ${corpus.total_articles} articles (semantic=${corpus.search_meta?.usedSemantic})`);
@@ -522,7 +522,10 @@ async function getSpectraForTopic(topic) {
       console.error('[Corpus] retrieval failed, live RSS fallback:', err.message);
     }
   }
-  return searchAllFeeds(extractSearchKeywords(topic), { inputWordCount: getInputWordCount(topic) });
+  // No per-feed ceiling — the Analyzed-Sources carousel exposes every matched
+  // article per outlet. The Gemini summary is bounded separately by
+  // GEMINI_MAX_PER_SPECTRUM, so this only affects what's displayed.
+  return searchAllFeeds(extractSearchKeywords(topic), { inputWordCount: getInputWordCount(topic), maxPerFeed: Infinity });
 }
 
 // ── Step 12b: corpus citation grounding + reliability envelope ───────────────────

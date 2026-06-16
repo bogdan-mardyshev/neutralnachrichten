@@ -1147,7 +1147,9 @@ export async function searchCorpusSemantic(embedding, keywords, opts = {}) {
  */
 export async function searchCorpusHybrid(embedding, keywords, opts = {}) {
   if (!pool) return { ranked: [], grouped: {}, meta: { semanticCount: 0, lexicalCount: 0, fusedCount: 0, returnedCount: 0, bothRetrieversCount: 0 } };
-  const retrieveLimit = Math.min(200, Math.max(1, parseInt(opts.limit, 10) || 50));
+  // Safety ceiling on rows pulled from each retriever (protects the vector scan).
+  // Raised to 1000 so no real topic is capped — display has no per-camp limit.
+  const retrieveLimit = Math.min(1000, Math.max(1, parseInt(opts.limit, 10) || 50));
   const [semantic, lexical] = await Promise.all([
     embedding ? searchCorpusSemantic(embedding, keywords, { ...opts, limit: retrieveLimit }) : Promise.resolve([]),
     searchCorpusFTS(keywords, { ...opts, limit: retrieveLimit }),

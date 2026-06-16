@@ -82,23 +82,21 @@ function mergeArticles(
     (u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
 
   const merged: NewsSource[] = [];
-  const seenDomains = new Set<string>();
   const seenUrls = new Set<string>();
 
   // 1. Real Gemini articles first — they have AI-generated perspective summaries
   for (const a of geminiArticles) {
     if (isPlaceholder(a)) continue;
     merged.push(a);
-    if (a.source_domain) seenDomains.add(a.source_domain.replace(/^www\./, ''));
     const uk = urlKey(a.article_url); if (uk) seenUrls.add(uk);
   }
 
-  // 2. RSS articles from additional outlets not already covered by Gemini
+  // 2. EVERY other retrieved article (real links), de-duplicated only by canonical
+  //    URL. We deliberately do NOT collapse by outlet — the card carousel exposes
+  //    all available articles per camp (multiple per outlet included), no ceiling.
   for (const r of rssArticles) {
     if (!r.article_url) continue;
-    const dom = (r.source_domain || '').replace(/^www\./, '');
-    if (seenUrls.has(urlKey(r.article_url))) continue; // same article already shown (analyzed)
-    if (seenDomains.has(dom)) continue; // outlet already represented
+    if (seenUrls.has(urlKey(r.article_url))) continue; // same article already shown (analyzed copy)
     merged.push({
       source_name:            r.source_name,
       source_domain:          r.source_domain,
@@ -110,7 +108,6 @@ function mergeArticles(
       _tier:                  r._tier,
       _factual:               r._factual,
     });
-    seenDomains.add(dom);
     const uk = urlKey(r.article_url); if (uk) seenUrls.add(uk);
   }
 
