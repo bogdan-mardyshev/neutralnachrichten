@@ -161,6 +161,24 @@ describe('buildReliabilityEnvelope', () => {
     expect(env.coverage.center.percent).toBeGreaterThan(0);
     expect(env.blindspots.verifiedSilences).toEqual(['center_left']);
   });
+
+  it('null supportRatio (all-neutral NLI) is treated as UNMEASURED, not 0', () => {
+    // Regression: a 67-source, 5/5-camp, fully-grounded analysis whose abstractive
+    // sentences all came back NLI-neutral was pinned to confidence 65 because
+    // claimSupport read 0. With neutral excluded, supportRatio is null → the
+    // claimSupport factor falls back to UNMEASURED_FACTOR (0.85), not 0.
+    const full = {
+      left: { articles: [{ source_domain: 'taz.de' }] }, center_left: { articles: [{ source_domain: 'spiegel.de' }] },
+      center: { articles: [{ source_domain: 'tagesschau.de' }] }, center_right: { articles: [{ source_domain: 'faz.net' }] },
+      right: { articles: [{ source_domain: 'bild.de' }] },
+    };
+    const blindspot = { coveredSpectra: ['left', 'center_left', 'center', 'center_right', 'right'], verifiedSilences: [], unverifiable: [] };
+    const measured = buildReliabilityEnvelope({ corpusSpectra: full, grounding: { groundingRatio: 1 }, claimVerification: { supportRatio: 0, hasContradiction: false }, blindspot });
+    const unmeasured = buildReliabilityEnvelope({ corpusSpectra: full, grounding: { groundingRatio: 1 }, claimVerification: { supportRatio: null, hasContradiction: false }, blindspot });
+    expect(measured.confidence.factors.claimSupport).toBe(0);          // old behaviour → 65 band
+    expect(unmeasured.confidence.factors.claimSupport).toBeGreaterThan(0.8); // fixed → high band
+    expect(unmeasured.confidence.score).toBeGreaterThan(measured.confidence.score);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

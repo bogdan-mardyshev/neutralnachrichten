@@ -132,11 +132,65 @@ describe('verifyClaims — entailment layer (injected)', () => {
     expect(results[0].label).toBe('supported');
   });
 
-  it('neutral entailment downgrades to unsupported', async () => {
+  it('neutral entailment is labelled neutral (unmeasured, NOT a support failure)', async () => {
     const entailmentFn = vi.fn().mockResolvedValue('neutral');
     const claims = [{ text: 'Der Minister tritt von seinem Amt zurück', kind: 'overall' }];
-    const { results } = await verifyClaims(claims, arts, { entailmentFn });
-    expect(results[0].label).toBe('unsupported');
+    const { results, report } = await verifyClaims(claims, arts, { entailmentFn });
+    expect(results[0].label).toBe('neutral');
+    expect(report.neutral).toBe(1);
+  });
+});
+
+describe('verifyClaims — neutral is unmeasured, excluded from supportRatio', () => {
+  const arts = [{ article_title: 'Bundestag beschließt Rentenreform', our_summary: 'Die Reform tritt 2027 in Kraft.', article_url: 'https://t.de/1', source_name: 'Tagesschau', _corpusId: 1 }];
+
+  it('all-neutral → supportRatio null (caller treats as UNMEASURED, not 0)', async () => {
+    const claims = [{ text: 'Abstrakte Aussage A', kind: 'overall' }, { text: 'Abstrakte Aussage B', kind: 'overall' }];
+    const batchFn = vi.fn().mockResolvedValue(['neutral', 'neutral']);
+    const { report } = await verifyClaims(claims, arts, { batchEntailmentFn: batchFn });
+    expect(report.neutral).toBe(2);
+    expect(report.assessed).toBe(0);
+    expect(report.supportRatio).toBeNull();   // ← the fix: not 0
+    expect(report.method).toBe('nli');
+  });
+
+  it('mixed: ratio is over ASSESSED claims, neutral does not dilute it', async () => {
+    const claims = [
+      { text: 'Aussage eins', kind: 'overall' },
+      { text: 'Aussage zwei', kind: 'overall' },
+      { text: 'Aussage drei', kind: 'overall' },
+    ];
+    // one entailment, two neutral → 1 supported of 1 assessed = 1.0 (neutrals excluded)
+    const batchFn = vi.fn().mockResolvedValue(['entailment', 'neutral', 'neutral']);
+    const { report } = await verifyClaims(claims, arts, { batchEntailmentFn: batchFn });
+    expect(report.supported).toBe(1);
+    expect(report.neutral).toBe(2);
+    expect(report.assessed).toBe(1);
+    expect(report.supportRatio).toBe(1);
+  });
+
+  it('a contradiction still counts against the ratio and flags hasContradiction', async () => {
+    const claims = [{ text: 'Aussage eins', kind: 'overall' }, { text: 'Aussage zwei', kind: 'overall' }];
+    const batchFn = vi.fn().mockResolvedValue(['entailment', 'contradiction']);
+    const { report } = await verifyClaims(claims, arts, { batchEntailmentFn: batchFn });
+    expect(report.assessed).toBe(2);
+    expect(report.supportRatio).toBe(0.5);
+    expect(report.hasContradiction).toBe(true);
+  });
+});
+
+describe('topEvidence — bundle the union of sources for abstractive claims', () => {
+  it('returns the K best articles by coverage, best first', async () => {
+    const { topEvidence } = await import('../lib/claimVerification.js');
+    const articles = [
+      { article_title: 'Ukraine Krieg', our_summary: 'Verhandlungen im Ukraine Krieg.' },
+      { article_title: 'Nahost Konflikt', our_summary: 'Eskalation im Nahost Konflikt mit Iran.' },
+      { article_title: 'Wetter', our_summary: 'Sonnig morgen.' },
+    ];
+    const top = topEvidence('Ukraine Krieg und Nahost Konflikt mit Iran', articles, 2);
+    expect(top).toHaveLength(2);
+    expect(top[0].score).toBeGreaterThanOrEqual(top[1].score); // sorted best-first
+    expect(top.map(t => t.art.article_title)).not.toContain('Wetter'); // weakest dropped
   });
 });
 
