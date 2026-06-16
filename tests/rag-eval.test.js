@@ -47,10 +47,18 @@ describe('ragEval metrics — known inputs', () => {
 
   it('scoreRetrievalCase emits a flat metric map', () => {
     const m = scoreRetrievalCase(ranked, relevant, { ks: [1, 5] });
+    expect(m).toHaveProperty('precision');
     expect(m).toHaveProperty('p@1');
     expect(m).toHaveProperty('r@5');
     expect(m).toHaveProperty('mrr');
     expect(m).toHaveProperty('ndcg@5');
+  });
+
+  it('set-precision = relevant fraction of the whole retrieved list (not capped by k)', () => {
+    // 2 of 5 retrieved are relevant → 0.4, regardless of how few relevant exist
+    expect(scoreRetrievalCase(ranked, relevant).precision).toBeCloseTo(2 / 5);
+    // perfect small set: 2 retrieved, both relevant → 1.0 (p@5 would read 0.4)
+    expect(scoreRetrievalCase(['a', 'c'], ['a', 'c']).precision).toBe(1);
   });
 });
 

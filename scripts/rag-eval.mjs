@@ -27,7 +27,10 @@ import { extractClaims, verifyClaims, flattenCorpus } from '../lib/claimVerifica
 import { scoreRetrievalCase, faithfulnessScore, aggregate } from '../lib/ragEval.js';
 
 const KS = [1, 3, 5];
-const FLOORS = { 'p@5': 0.70, 'r@5': 0.70, mrr: 0.80, faithfulness: 0.45 };
+// Gate on SET-precision (off-topic filler), recall@5 (coverage), MRR (top hit),
+// and faithfulness (grounding × support). p@5 is reported but NOT gated — with
+// 3–4 relevant docs per topic it is capped below 1 by construction.
+const FLOORS = { precision: 0.85, 'r@5': 0.80, mrr: 0.85, faithfulness: 0.60 };
 
 const jsonOnly = process.argv.includes('--json');
 const log = (...a) => { if (!jsonOnly) console.log(...a); };
@@ -69,16 +72,16 @@ function pct(n) { return (n * 100).toFixed(0).padStart(3) + '%'; }
 
   const W = 30;
   const rowFmt = (label, m) =>
-    '  ' + String(label).slice(0, W).padEnd(W) +
-    pct(m['p@5']) + '  ' + pct(m['r@5']) + '  ' + pct(m.mrr) + '  ' + pct(m.map) + '  ' +
+    '  ' + String(label).slice(0, W - 1).padEnd(W) +
+    pct(m.precision) + '  ' + pct(m['p@5']) + '  ' + pct(m['r@5']) + '  ' + pct(m.mrr) + '  ' + pct(m.map) + '  ' +
     pct(m['ndcg@5']) + '   ' + pct(m.grounding) + '  ' + pct(m.claimSupport) + '  ' + pct(m.faithfulness) +
     (m.contradictions ? '  ⚠contra' : '');
 
   log('\n  RAG EVALUATION — golden set (' + cases.length + ' topics, offline)\n');
-  log('  ' + 'topic'.padEnd(W) + ' p@5   r@5   MRR   MAP  nDCG@5  ground claim  faith');
-  log('  ' + '─'.repeat(W + 52));
+  log('  ' + 'topic'.padEnd(W) + ' prec  p@5   r@5   MRR   MAP  nDCG@5  ground claim  faith');
+  log('  ' + '─'.repeat(W + 58));
   for (const c of cases) log(rowFmt(c.topic, c.metrics));
-  log('  ' + '─'.repeat(W + 52));
+  log('  ' + '─'.repeat(W + 58));
   log(rowFmt('AGGREGATE', agg));
 
   // Gate.
