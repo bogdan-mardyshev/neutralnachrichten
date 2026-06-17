@@ -31,12 +31,17 @@ import {
   upsertSourceRating,
   pruneCorpus,
   getDownFeeds,
+  listRecentForClustering,
+  updateClusterIds,
 } from './db.js';
 import { seedSourceRatings } from './lib/sourceRatingsSeed.js';
 import { fetchRSSFeed } from './lib/rssSearch.js';
 import { getEmbeddingsBatch, isEmbeddingAvailable } from './lib/embeddings.js';
 import { runIngestionOnce } from './lib/ingestionWorker.js';
 import { buildFeedHealthAlert } from './lib/feedHealthAlert.js';
+import { assignClusterIds, countClusters } from './lib/corpusClustering.js';
+
+const CLUSTERING_ENABLED = process.env.CLUSTERING_ENABLED === 'true';
 
 const INTERVAL_MIN = Math.max(5, parseInt(process.env.INGEST_INTERVAL_MINUTES, 10) || 30);
 const RUN_ONCE = process.argv.includes('--once');
@@ -93,6 +98,21 @@ async function runPass() {
     }
   } catch (err) {
     console.error('[Worker] feed-health alert failed:', err.message);
+  }
+
+  // Persistent clustering: assign stable story ids to the recent window so
+  // sub-stories survive across analyses instead of being recomputed per request.
+  if (CLUSTERING_ENABLED) {
+    try {
+      const recent = await listRecentForClustering({
+        sinceDays: parseInt(process.env.CLUSTERING_WINDOW_DAYS, 10) || 3,
+      });
+      const assignments = assignClusterIds(recent);
+      const updated = await updateClusterIds(assignments);
+      console.log(`[Worker] clustering: ${countClusters(assignments)} stories over ${recent.length} articles (${updated} updated)`);
+    } catch (err) {
+      console.error('[Worker] clustering pass failed:', err.message);
+    }
   }
 }
 

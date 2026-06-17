@@ -17,6 +17,8 @@ import {
   buildDownFeedsQuery,
   buildUpsertSourceRatingQuery,
   buildPruneCorpusQuery,
+  buildRecentForClusteringQuery,
+  buildUpdateClusterIdsQuery,
   normalizeArticleRow,
 } from './lib/corpusQueries.js';
 import { combineRetrieval } from './lib/hybridRetrieval.js';
@@ -1272,6 +1274,33 @@ export async function pruneCorpus(days) {
     return res.rowCount || 0;
   } catch (err) {
     console.error('[DB:pruneCorpus]', err.message);
+    return 0;
+  }
+}
+
+/** Recent corpus articles (id + text + spectrum) for the persistent-clustering pass. */
+export async function listRecentForClustering(opts = {}) {
+  if (!pool) return [];
+  try {
+    const { text, values } = buildRecentForClusteringQuery(opts);
+    const { rows } = await pool.query(text, values);
+    return rows;
+  } catch (err) {
+    console.error('[DB:listRecentForClustering]', err.message);
+    return [];
+  }
+}
+
+/** Batch-write stable cluster_id assignments. Returns rows updated. */
+export async function updateClusterIds(assignments) {
+  if (!pool) return 0;
+  const q = buildUpdateClusterIdsQuery(assignments);
+  if (!q) return 0;
+  try {
+    const res = await pool.query(q.text, q.values);
+    return res.rowCount || 0;
+  } catch (err) {
+    console.error('[DB:updateClusterIds]', err.message);
     return 0;
   }
 }
