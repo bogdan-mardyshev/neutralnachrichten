@@ -373,7 +373,10 @@ const analyzeLimiter = rateLimit({
 // changes (new _reliability fields, citation format, …) — old entries are then
 // simply missed instead of serving a stale/incompatible format for up to 24h.
 // v5: post-audit format (recalibrated confidence + NLI claim report).
-const CACHE_SCHEMA = 'v5';
+// v6: uncapped article retrieval (maxPerFeed/perSpectrum lifted) — old v5 entries
+//     carry the previously-capped _rss.spectra, so they must be invalidated for the
+//     "show all available articles" change to take effect on already-analysed topics.
+const CACHE_SCHEMA = 'v6';
 
 const GEMINI_DAILY_BUDGET = parseInt(process.env.GEMINI_DAILY_BUDGET, 10) || 3000;
 let geminiBudget = { day: todayUTC(), calls: 0 };
