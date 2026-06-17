@@ -30,11 +30,13 @@ import {
   recordFeedFailure,
   upsertSourceRating,
   pruneCorpus,
+  getDownFeeds,
 } from './db.js';
 import { seedSourceRatings } from './lib/sourceRatingsSeed.js';
 import { fetchRSSFeed } from './lib/rssSearch.js';
 import { getEmbeddingsBatch, isEmbeddingAvailable } from './lib/embeddings.js';
 import { runIngestionOnce } from './lib/ingestionWorker.js';
+import { buildFeedHealthAlert } from './lib/feedHealthAlert.js';
 
 const INTERVAL_MIN = Math.max(5, parseInt(process.env.INGEST_INTERVAL_MINUTES, 10) || 30);
 const RUN_ONCE = process.argv.includes('--once');
@@ -79,6 +81,18 @@ async function runPass() {
     if (pruned > 0) console.log(`[Worker] retention: pruned ${pruned} articles older than ${retentionDays}d`);
   } catch (err) {
     console.error('[Worker] retention prune failed:', err.message);
+  }
+
+  // Feed-health alert: surface unhealthy feeds so a broken feed never silently
+  // masquerades as editorial silence (false blindspot). Logged for Railway/Sentry.
+  try {
+    const alert = buildFeedHealthAlert(await getDownFeeds());
+    if (alert.shouldAlert) {
+      const line = `[FeedHealthAlert] ${alert.severity.toUpperCase()} — ${alert.message}`;
+      if (alert.severity === 'critical') console.error(line); else console.warn(line);
+    }
+  } catch (err) {
+    console.error('[Worker] feed-health alert failed:', err.message);
   }
 }
 
