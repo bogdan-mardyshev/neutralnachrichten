@@ -161,3 +161,29 @@ describe('flagship-aware blindspot (three-level silence)', () => {
     expect(r.verifiedSilences).not.toContain('right');
   });
 });
+
+describe('lead-silence (per-camp leading voice — works even where flagship-silence cannot)', () => {
+  const articlesFrom = (domains) => ({ articles: domains.map((d, i) => ({ id: i, source_domain: d })) });
+
+  it('left has NO mass flagship, so flagship-silence never fires — but lead-silence can', () => {
+    // left covered only by a tiny outlet; its lead voices (taz, Junge Welt) stayed silent
+    const r = verifyBlindspots({ left: articlesFrom(['jacobin.de']) }, []);
+    expect(r.perSpectrum.left.status).toBe('covered');
+    expect(r.perSpectrum.left.flagshipSilent).toBe(false);   // no flagship exists for left
+    expect(r.flagshipSilences).not.toContain('left');
+    expect(r.perSpectrum.left.leadSilent).toBe(true);        // lead voices silent → fires
+    expect(r.leadSilences).toContain('left');
+  });
+
+  it('lead-silence clears when a leading voice of the camp published', () => {
+    const r = verifyBlindspots({ left: articlesFrom(['taz.de', 'jacobin.de']) }, []); // taz is a lead voice
+    expect(r.perSpectrum.left.leadPublished).toBe(true);
+    expect(r.perSpectrum.left.leadSilent).toBe(false);
+    expect(r.leadSilences).not.toContain('left');
+  });
+
+  it('no lead-silence when the camp is fully silent (nothing to lead)', () => {
+    const r = verifyBlindspots({ left: { articles: [] } }, []);
+    expect(r.leadSilences).not.toContain('left');
+  });
+});
