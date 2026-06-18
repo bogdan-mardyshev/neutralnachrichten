@@ -7,6 +7,9 @@ import {
   DEFAULT_INGEST_OPTS,
 } from '../lib/ingestionWorker.js';
 import { EMBEDDING_DIM } from '../lib/corpusQueries.js';
+import { RSS_FEEDS } from '../lib/rssSearch.js';
+
+const TOTAL_FEEDS = Object.values(RSS_FEEDS).reduce((n, arr) => n + arr.length, 0);
 
 const FEED = { name: 'Tagesschau', domain: 'tagesschau.de', url: 'https://t.de/rss', spectrum: 'center' };
 const vec = () => Array(EMBEDDING_DIM).fill(0.1);
@@ -239,10 +242,10 @@ describe('runIngestionOnce', () => {
   it('runs every configured feed and returns a summary', async () => {
     const deps = makeDeps();
     const summary = await runIngestionOnce(deps, { maxPerFeed: 1 });
-    // 33 feeds configured across the spectrum (18 original + 15 added in Step 11)
-    expect(summary.feeds).toBe(33);
-    expect(summary.feedsOk).toBe(33);
-    expect(deps.fetchFeed).toHaveBeenCalledTimes(33);
+    // Every configured feed across the spectrum (derived — robust to feed-list growth)
+    expect(summary.feeds).toBe(TOTAL_FEEDS);
+    expect(summary.feedsOk).toBe(TOTAL_FEEDS);
+    expect(deps.fetchFeed).toHaveBeenCalledTimes(TOTAL_FEEDS);
     expect(summary.inserted).toBeGreaterThan(0);
   });
 });

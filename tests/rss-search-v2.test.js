@@ -25,6 +25,7 @@ import {
   parseRSSItems,
   searchAllFeeds,
   clearRSSCache,
+  RSS_FEEDS,
 } from '../lib/rssSearch.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -993,8 +994,8 @@ describe('searchAllFeeds — integration', () => {
     // Each feed should contribute at most 2 articles per spectrum
     for (const sp of ['left', 'center_left', 'center', 'center_right', 'right']) {
       // Multiple feeds per spectrum, each capped at 2 → max articles per spectrum = feeds × 2
-      const feedsPerSpectrum = { left: 5, center_left: 8, center: 5, center_right: 8, right: 7 };
-      expect(spectra[sp].articles.length).toBeLessThanOrEqual(feedsPerSpectrum[sp] * 2);
+      // (derived from RSS_FEEDS so adding feeds doesn't break the bound)
+      expect(spectra[sp].articles.length).toBeLessThanOrEqual(RSS_FEEDS[sp].length * 2);
     }
   });
 });

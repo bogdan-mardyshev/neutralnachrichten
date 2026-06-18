@@ -5,14 +5,14 @@ import {
   annotateSilencedTopics,
   totalFeedsForSpectrum,
 } from '../lib/blindspotVerification.js';
+import { RSS_FEEDS } from '../lib/rssSearch.js';
 
 describe('totalFeedsForSpectrum', () => {
-  it('reflects the configured RSS_FEEDS counts', () => {
-    expect(totalFeedsForSpectrum('left')).toBe(5);
-    expect(totalFeedsForSpectrum('center_left')).toBe(8);
-    expect(totalFeedsForSpectrum('center')).toBe(5);
-    expect(totalFeedsForSpectrum('center_right')).toBe(8);
-    expect(totalFeedsForSpectrum('right')).toBe(7);
+  it('reflects the configured RSS_FEEDS counts (derived, robust to feed-list changes)', () => {
+    for (const sp of ['left', 'center_left', 'center', 'center_right', 'right']) {
+      expect(totalFeedsForSpectrum(sp)).toBe(RSS_FEEDS[sp].length);
+      expect(totalFeedsForSpectrum(sp)).toBeGreaterThan(0);
+    }
     expect(totalFeedsForSpectrum('nonexistent')).toBe(0);
   });
 });
