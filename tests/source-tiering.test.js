@@ -186,4 +186,39 @@ describe('lead-silence (per-camp leading voice — works even where flagship-sil
     const r = verifyBlindspots({ left: { articles: [] } }, []);
     expect(r.leadSilences).not.toContain('left');
   });
+
+  // ── M5.1 leadOnly (kills the center tautology) ──────────────────────────────
+  it('leadOnlySilent fires for left (no flagship) but NOT for a camp where it is just flagship-silence', () => {
+    // left: only a tiny outlet wrote → lead-silent, and left has no flagship → leadOnly
+    const left = verifyBlindspots({ left: articlesFrom(['jacobin.de']) }, []);
+    expect(left.perSpectrum.left.leadOnlySilent).toBe(true);
+    expect(left.leadOnlySilences).toContain('left');
+
+    // center_right: only Cicero (niche) wrote → both flagship_silent AND lead_silent;
+    // leadOnly must be FALSE (already captured by flagship-silence — no duplicate signal)
+    const cr = verifyBlindspots({ center_right: articlesFrom(['cicero.de']) }, []);
+    expect(cr.perSpectrum.center_right.flagshipSilent).toBe(true);
+    expect(cr.perSpectrum.center_right.leadSilent).toBe(true);
+    expect(cr.perSpectrum.center_right.leadOnlySilent).toBe(false);
+    expect(cr.leadOnlySilences).not.toContain('center_right');
+  });
+
+  // ── M5.2 granularity: which lead voices were silent ─────────────────────────
+  it('exposes leadDomainsMissing/present instead of hiding a silent lead behind the OR', () => {
+    // JW wrote, taz did not → leadPublished true (OR), but taz must show as missing
+    const r = verifyBlindspots({ left: articlesFrom(['jungewelt.de', 'jacobin.de']) }, []);
+    expect(r.perSpectrum.left.leadPublished).toBe(true);
+    expect(r.perSpectrum.left.leadDomainsPresent).toContain('jungewelt.de');
+    expect(r.perSpectrum.left.leadDomainsMissing).toContain('taz.de'); // the OR-hidden gap, now visible
+  });
+
+  // ── M5.3 lead-level feed health: a down lead feed ≠ editorial silence ────────
+  it('does NOT accuse lead-silence when a lead outlet feed is down (uncertain instead)', () => {
+    // left covered only by jacobin; taz (a lead) feed is DOWN → taz could not publish
+    const down = [{ spectrum: 'left', source_name: 'taz', feed_url: 'https://taz.de/rss', status: 'down', consecutive_failures: 5 }];
+    const r = verifyBlindspots({ left: articlesFrom(['jacobin.de']) }, down);
+    expect(r.perSpectrum.left.leadSilent).toBe(false);          // not blamed
+    expect(r.perSpectrum.left.leadSilentUncertain).toBe(true);  // flagged uncertain
+    expect(r.leadSilences).not.toContain('left');
+  });
 });
