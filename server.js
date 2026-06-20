@@ -117,7 +117,23 @@ app.use(helmet({
   },
 }));
 
-app.use(cors());
+// CORS allowlist (audit M1): the bare cors() reflected ANY origin. Requests with
+// no Origin header (same-origin browser calls, curl, server-to-server) are always
+// allowed; cross-origin is restricted to localhost (dev), *.up.railway.app
+// (staging/preview) and the configured production hosts (CORS_ORIGINS).
+const CORS_ALLOWLIST = (process.env.CORS_ORIGINS ||
+  'https://neutralnachrichten.com,https://www.neutralnachrichten.com')
+  .split(',').map(s => s.trim()).filter(Boolean);
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin) return cb(null, true);
+    let host = '';
+    try { host = new URL(origin).hostname; } catch { return cb(null, false); }
+    const ok = host === 'localhost' || host === '127.0.0.1'
+      || host.endsWith('.up.railway.app') || CORS_ALLOWLIST.includes(origin);
+    cb(null, ok);
+  },
+}));
 app.use(express.json({ limit: '1kb' }));
 
 // ── Health check (Railway uses this for zero-downtime deploys) ────────────────
@@ -1419,7 +1435,7 @@ app.post('/api/deep-analysis', async (req, res) => {
     res.json({ deep_analysis: finalDeep });
   } catch (err) {
     console.error('[DeepAnalysis] Failed:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1564,7 +1580,7 @@ app.get('/api/trending', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error('[Trending] Failed:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1664,7 +1680,7 @@ app.get('/api/daily-news', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error('[DailyNews] Failed:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1757,7 +1773,7 @@ app.get('/api/category-news', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error(`[CategoryNews] Failed for ${category}:`, err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1854,7 +1870,7 @@ app.post('/api/dev/ensure-test-user', async (req, res) => {
     res.json({ ok: true, email: user.email, token });
   } catch (err) {
     console.error('[Dev/ensure-test-user]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1969,7 +1985,7 @@ app.delete('/api/history/:id', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[history] DELETE error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2255,7 +2271,7 @@ app.post('/api/admin/send-digest', async (req, res) => {
     res.json({ ok: true, sent, errors, topics: topicsForEmail });
   } catch (err) {
     console.error('[Digest/send]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2425,7 +2441,7 @@ app.post('/api/admin/users/:id', async (req, res) => {
     res.json({ ok: true, user: updated });
   } catch (err) {
     console.error('[Admin/updateUser]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2691,7 +2707,7 @@ app.get('/api/experiment/rss-check', async (req, res) => {
       maxPerSpectrum: Infinity,
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 
   const { analysis, degraded, meta } = analysisResult;
