@@ -26,6 +26,8 @@ import {
   searchAllFeeds,
   clearRSSCache,
   RSS_FEEDS,
+  fetchRSSFeed,
+  parseRetryAfter,
 } from '../lib/rssSearch.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1232,5 +1234,49 @@ describe('Age filter: truth window enforcement', () => {
     mockAllFeedsOk(xmlNoPubDate);
     const { total_articles } = await searchAllFeeds(['ukraine', 'krieg'], { maxAgeDays: 7 });
     expect(total_articles).toBeGreaterThan(0); // no-date articles pass through
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-feed backoff on 429 / errors (audit L4 — Junge Welt was 429-ing every pass)
+// ─────────────────────────────────────────────────────────────────────────────
+describe('parseRetryAfter', () => {
+  it('parses delta-seconds', () => {
+    expect(parseRetryAfter('120')).toBe(120000);
+  });
+  it('parses an HTTP-date into a future delta (>=0)', () => {
+    const future = new Date(Date.now() + 60000).toUTCString();
+    expect(parseRetryAfter(future)).toBeGreaterThan(0);
+  });
+  it('returns null for missing/invalid', () => {
+    expect(parseRetryAfter('')).toBeNull();
+    expect(parseRetryAfter('not-a-date')).toBeNull();
+  });
+});
+
+describe('fetchRSSFeed — backoff', () => {
+  const feed = { name: 'Junge Welt', domain: 'jungewelt.de', url: 'https://www.jungewelt.de/feeds/newsticker.rss' };
+
+  it('after a 429 the next fetch is skipped (backoff) — no second network hit', async () => {
+    mockFetch.mockReset(); clearRSSCache();
+    mockFetch.mockResolvedValue({ ok: false, status: 429, headers: { get: () => null }, text: () => Promise.resolve('') });
+
+    const first = await fetchRSSFeed(feed);
+    expect(first.error).toBe('HTTP 429');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    const second = await fetchRSSFeed(feed);     // should NOT hit the network again
+    expect(second.error).toBe('backoff');
+    expect(second.backoffUntil).toBeGreaterThan(Date.now());
+    expect(mockFetch).toHaveBeenCalledTimes(1);  // still 1 — we backed off
+  });
+
+  it('honours Retry-After for the cooldown window', async () => {
+    mockFetch.mockReset(); clearRSSCache();
+    mockFetch.mockResolvedValue({ ok: false, status: 429, headers: { get: (h) => (h === 'retry-after' ? '5' : null) }, text: () => Promise.resolve('') });
+    await fetchRSSFeed(feed);
+    const second = await fetchRSSFeed(feed);
+    // 5s Retry-After → backoffUntil within the next ~5s, not the 30min default
+    expect(second.backoffUntil - Date.now()).toBeLessThanOrEqual(5000 + 50);
   });
 });
