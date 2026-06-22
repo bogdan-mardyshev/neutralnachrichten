@@ -134,7 +134,7 @@ export interface ReliabilityEnvelope {
   coverage?:   Record<SpectrumKey, { percent: number; weight: number; sources: number }>;
   grounding?:  { total: number; grounded: number; ungrounded: number; groundingRatio: number } | null;
   claims?:     { total: number; supported: number; contradicted: number; unsupported: number; supportRatio: number; hasContradiction: boolean } | null;
-  blindspots?: { verifiedSilences: SpectrumKey[]; flagshipSilences: SpectrumKey[]; unverifiable: SpectrumKey[] } | null;
+  blindspots?: { verifiedSilences: SpectrumKey[]; flagshipSilences: SpectrumKey[]; leadSilences?: SpectrumKey[]; leadOnlySilences?: SpectrumKey[]; unverifiable: SpectrumKey[] } | null;
   sourceCount?: number;
   clusters?: StoryCluster[];
   clusterMeta?: { total: number; clusterCount: number; multiArticleClusters: number; soloCamps: Array<{ label: string; camp: SpectrumKey; size: number }> };

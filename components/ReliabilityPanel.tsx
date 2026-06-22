@@ -29,7 +29,8 @@ const T = {
     flagshipSilent: (camp: string) => `Leitmedien im Lager „${camp}" berichten nicht über dieses Thema — nur kleinere Titel.`,
     verifiedSilent: (camp: string) => `Verifiziertes Verschweigen: Im Lager „${camp}" berichtet niemand, obwohl alle Quellen erreichbar waren.`,
     unverifiable: (camp: string) => `Lager „${camp}" nicht bewertbar: mindestens eine Quelle war nicht erreichbar.`,
-    flagshipTag: 'Leitmedien still', silentTag: 'Verschweigen', unknownTag: 'Nicht bewertbar',
+    leadSilent: (camp: string) => `Die führenden Stimmen des Lagers „${camp}" greifen das Thema nicht auf — nur Randtitel berichten.`,
+    flagshipTag: 'Leitmedien still', silentTag: 'Verschweigen', unknownTag: 'Nicht bewertbar', leadTag: 'Leitstimmen still',
     windowNote: (d: number, o: number) => `Datenbasis: Artikel der letzten ${d} Tage aus ${o} Medien.`,
     howTitle: 'Wie wird der Wert berechnet?',
     factors: { spectrumBreadth: 'Spektrumsbreite (25%)', grounding: 'Quellen-Verifizierung (15%)', claimSupport: 'Aussagen-Abdeckung (35%)', volume: 'Quellenvolumen (25%)' },
@@ -47,7 +48,8 @@ const T = {
     flagshipSilent: (camp: string) => `Flagship outlets in the "${camp}" camp aren’t covering this topic — only smaller titles.`,
     verifiedSilent: (camp: string) => `Verified silence: nobody in the "${camp}" camp reports this, though all their sources were reachable.`,
     unverifiable: (camp: string) => `"${camp}" camp not assessable: at least one source was unreachable.`,
-    flagshipTag: 'Flagships silent', silentTag: 'Silenced', unknownTag: 'Not assessable',
+    leadSilent: (camp: string) => `The leading voices of the "${camp}" camp didn't pick this up — only minor titles covered it.`,
+    flagshipTag: 'Flagships silent', silentTag: 'Silenced', unknownTag: 'Not assessable', leadTag: 'Lead voices silent',
     windowNote: (d: number, o: number) => `Data basis: articles from the last ${d} days across ${o} outlets.`,
     howTitle: 'How is this computed?',
     factors: { spectrumBreadth: 'Spectrum breadth (25%)', grounding: 'Source verification (15%)', claimSupport: 'Statement coverage (35%)', volume: 'Source volume (25%)' },
@@ -65,7 +67,8 @@ const T = {
     flagshipSilent: (camp: string) => `Ведущие СМИ лагеря «${camp}» не пишут на эту тему — только мелкие издания.`,
     verifiedSilent: (camp: string) => `Подтверждённое замалчивание: в лагере «${camp}» никто не пишет, хотя все источники были доступны.`,
     unverifiable: (camp: string) => `Лагерь «${camp}» не оценить: хотя бы один источник был недоступен.`,
-    flagshipTag: 'Флагманы молчат', silentTag: 'Замалчивание', unknownTag: 'Не оценить',
+    leadSilent: (camp: string) => `Ведущие голоса лагеря «${camp}» не подключились к теме — пишут только мелкие издания.`,
+    flagshipTag: 'Флагманы молчат', silentTag: 'Замалчивание', unknownTag: 'Не оценить', leadTag: 'Лидеры молчат',
     windowNote: (d: number, o: number) => `База данных: статьи за последние ${d} дней из ${o} изданий.`,
     howTitle: 'Как считается?',
     factors: { spectrumBreadth: 'Охват спектра (25%)', grounding: 'Проверка источников (15%)', claimSupport: 'Подкреплённость утверждений (35%)', volume: 'Объём источников (25%)' },
@@ -151,13 +154,16 @@ export const ReliabilityPanel: React.FC<Props> = ({ reliability, lang }) => {
       )}
 
       {/* Silence banners */}
-      {blind && (blind.verifiedSilences.length > 0 || blind.flagshipSilences.length > 0 || blind.unverifiable.length > 0) && (
+      {blind && (blind.verifiedSilences.length > 0 || blind.flagshipSilences.length > 0 || (blind.leadOnlySilences?.length ?? 0) > 0 || blind.unverifiable.length > 0) && (
         <div className="px-4 sm:px-6 pb-4 space-y-2">
           {blind.verifiedSilences.map(sp => (
             <Banner key={`v-${sp}`} tone="red"   tag={t.silentTag}   text={t.verifiedSilent(label(sp))} />
           ))}
           {blind.flagshipSilences.map(sp => (
             <Banner key={`f-${sp}`} tone="amber" tag={t.flagshipTag} text={t.flagshipSilent(label(sp))} />
+          ))}
+          {(blind.leadOnlySilences ?? []).map(sp => (
+            <Banner key={`l-${sp}`} tone="blue"  tag={t.leadTag}     text={t.leadSilent(label(sp))} />
           ))}
           {blind.unverifiable.map(sp => (
             <Banner key={`u-${sp}`} tone="gray"  tag={t.unknownTag}  text={t.unverifiable(label(sp))} />
@@ -197,14 +203,15 @@ export const ReliabilityPanel: React.FC<Props> = ({ reliability, lang }) => {
   );
 };
 
-const TONE: Record<'red' | 'amber' | 'gray', string> = {
+const TONE: Record<'red' | 'amber' | 'gray' | 'blue', string> = {
   red:   'bg-rose-50 dark:bg-rose-950/30 border-rose-500 text-rose-700 dark:text-rose-300',
   amber: 'bg-amber-50 dark:bg-amber-950/30 border-amber-500 text-amber-800 dark:text-amber-300',
   gray:  'bg-gray-50 dark:bg-[#222] border-gray-400 text-gray-600 dark:text-gray-400',
+  blue:  'bg-sky-50 dark:bg-sky-950/30 border-sky-500 text-sky-700 dark:text-sky-300',
 };
-const DOT: Record<'red' | 'amber' | 'gray', string> = { red: '🔴', amber: '🟡', gray: '⚪' };
+const DOT: Record<'red' | 'amber' | 'gray' | 'blue', string> = { red: '🔴', amber: '🟡', gray: '⚪', blue: '🔵' };
 
-const Banner: React.FC<{ tone: 'red' | 'amber' | 'gray'; tag: string; text: string }> = ({ tone, tag, text }) => (
+const Banner: React.FC<{ tone: 'red' | 'amber' | 'gray' | 'blue'; tag: string; text: string }> = ({ tone, tag, text }) => (
   <div className={`flex items-start gap-2 px-3 py-2 border-l-2 ${TONE[tone]}`}>
     <span className="text-xs mt-0.5">{DOT[tone]}</span>
     <div>
