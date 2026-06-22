@@ -209,7 +209,7 @@ export const translations = {
       independenceBody: "NeutraleNachrichten ist bootstrapped und unabhängig. Wir nehmen keine Investitionen von deutschen Medienverlagen entgegen — einschließlich Axel Springer und Bertelsmann — um unsere redaktionelle Unabhängigkeit zu wahren.",
       contactTitle: "Kontakt",
       contactBody: "Fragen, Feedback oder Kooperationsanfragen:",
-      contactEmail: "feedback@neutralnachrichten.com",
+      contactEmail: "feedback@neutralenachrichten.com",
       suggestLink: "Quelle vorschlagen →",
     },
     methodology: {
@@ -555,7 +555,7 @@ export const translations = {
       independenceBody: "NeutraleNachrichten is bootstrapped and independent. We do not accept investment from German media publishers — including Axel Springer and Bertelsmann — to maintain our editorial independence.",
       contactTitle: "Get In Touch",
       contactBody: "Questions, feedback, or partnership inquiries:",
-      contactEmail: "feedback@neutralnachrichten.com",
+      contactEmail: "feedback@neutralenachrichten.com",
       suggestLink: "Suggest a source →",
     },
     methodology: {
@@ -901,7 +901,7 @@ export const translations = {
       independenceBody: "NeutraleNachrichten развивается без внешних инвестиций и полностью независим. Мы не принимаем финансирование от немецких медиаиздателей — включая Axel Springer и Bertelsmann — чтобы сохранять редакционную независимость.",
       contactTitle: "Связаться с нами",
       contactBody: "Вопросы, обратная связь или предложения о сотрудничестве:",
-      contactEmail: "feedback@neutralnachrichten.com",
+      contactEmail: "feedback@neutralenachrichten.com",
       suggestLink: "Предложить источник →",
     },
     methodology: {

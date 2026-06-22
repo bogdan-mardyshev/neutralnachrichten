@@ -122,7 +122,7 @@ app.use(helmet({
 // allowed; cross-origin is restricted to localhost (dev), *.up.railway.app
 // (staging/preview) and the configured production hosts (CORS_ORIGINS).
 const CORS_ALLOWLIST = (process.env.CORS_ORIGINS ||
-  'https://neutralnachrichten.com,https://www.neutralnachrichten.com')
+  'https://neutralenachrichten.com,https://www.neutralenachrichten.com')
   .split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors({
   origin(origin, cb) {
