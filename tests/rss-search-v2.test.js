@@ -25,6 +25,9 @@ import {
   parseRSSItems,
   searchAllFeeds,
   clearRSSCache,
+  RSS_FEEDS,
+  fetchRSSFeed,
+  parseRetryAfter,
 } from '../lib/rssSearch.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -386,6 +389,28 @@ describe('recencyMultiplier — truth window', () => {
 // 5. scoreArticle
 // ─────────────────────────────────────────────────────────────────────────────
 
+describe('scoreArticle — specific vs generic keyword matches', () => {
+  // single-concept topic "Entgelttransparenzgesetz" → keywords incl. generic "gesetz"
+  const kws = ['entgelttransparenzgesetz', 'entgelttransparenz', 'gesetz'];
+
+  it('an off-topic "…gesetz" article matches only the generic word → specificMatchedCount 0', () => {
+    const r = scoreArticle(
+      makeItem({ title: 'Wehrdienstmodernisierungsgesetz beschlossen', description: 'Das Gesetz regelt den Wehrdienst.' }),
+      kws
+    );
+    expect(r.matchedKeywordCount).toBeGreaterThan(0);   // it does match "gesetz"
+    expect(r.specificMatchedCount).toBe(0);             // …but nothing specific → gate will drop it
+  });
+
+  it('the real topic article matches the specific keyword(s) → specificMatchedCount ≥ 1', () => {
+    const r = scoreArticle(
+      makeItem({ title: 'Entgelttransparenzgesetz: Bundestag beschließt Reform' }),
+      kws
+    );
+    expect(r.specificMatchedCount).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe('scoreArticle', () => {
   const kw = ['ukraine', 'krieg'];
 
@@ -438,13 +463,15 @@ describe('scoreArticle', () => {
     expect(descHit.recency).toBe(1.5); // recency itself not penalised in the field
   });
 
-  it('titleScore counts per-keyword occurrences (×2 each)', () => {
+  it('titleScore: full standalone word gets +3, not counted multiple times', () => {
     const result = scoreArticle(
       makeItem({ title: 'Ukraine und Ukraine Krieg in ukraine' }),
       kw
     );
-    // "ukraine" appears 3× but score counts once per word: +2 for ukraine, +2 for krieg
-    expect(result.titleScore).toBe(4); // 2 keywords × 2
+    // "ukraine" appears 3× but is counted ONCE as a keyword hit (+3 standalone)
+    // "krieg" also matches once (+3 standalone)
+    // Total titleScore = 6 (2 full-word keywords × 3pts each)
+    expect(result.titleScore).toBe(6);
   });
 
   it('titleOnly=true when only title matches', () => {
@@ -509,6 +536,64 @@ describe('scoreArticle', () => {
       kw2
     );
     expect(result.titleScore).toBeGreaterThan(0);
+  });
+
+  // ── word-boundary scoring ──────────────────────────────────────────────────
+
+  it('full standalone word in title scores +3 (higher confidence)', () => {
+    // "Angriff" appears as standalone word → +3
+    const result = scoreArticle(
+      makeItem({ title: 'Angriff auf Holocaustmahnmal' }),
+      ['angriff', 'holocaust']
+    );
+    // "angriff" full-word → +3; "holocaust" substring of "holocaustmahnmal" → +1
+    expect(result.titleScore).toBe(4);
+  });
+
+  it('compound-embedded keyword in title scores only +1 (lower confidence)', () => {
+    // "angriff" is INSIDE "Frontalangriff" → only substring match → +1
+    const result = scoreArticle(
+      makeItem({ title: 'Frontalangriff auf Betriebsrat' }),
+      ['angriff']
+    );
+    expect(result.titleScore).toBe(1); // NOT +3, just +1
+  });
+
+  it('standalone "Angriff" scores 3× higher than compound-embedded "Frontalangriff"', () => {
+    const standalone = scoreArticle(
+      makeItem({ title: 'Angriff auf Mahnmal', pubDate: daysAgo(1) }),
+      ['angriff']
+    );
+    const compound = scoreArticle(
+      makeItem({ title: 'Frontalangriff auf Betriebsrat', pubDate: daysAgo(1) }),
+      ['angriff']
+    );
+    // standalone: titleScore=3; compound: titleScore=1 → same recency → ratio should be 3×
+    expect(standalone.titleScore / compound.titleScore).toBe(3);
+    expect(standalone.score).toBeGreaterThan(compound.score);
+  });
+
+  it('matchedTitleKeywordCount returns distinct keywords matched in title', () => {
+    const result = scoreArticle(
+      makeItem({ title: 'Holocaust Mahnmal Angriff Berlin' }),
+      ['holocaust', 'mahnmal', 'angriff', 'verhaftung']
+    );
+    // "verhaftung" not in title → matchedTitleKeywordCount = 3
+    expect(result.matchedTitleKeywordCount).toBe(3);
+    // total matched (title + desc check) = 3 (no desc provided)
+    expect(result.matchedKeywordCount).toBe(3);
+  });
+
+  it('matchedTitleKeywordCount = 0 for desc-only match', () => {
+    const result = scoreArticle(
+      makeItem({
+        title: 'Bundestag stimmt ab',
+        description: 'Dabei wurde auch das thema holocaust und verhaftung kurz erwähnt',
+      }),
+      ['holocaust', 'verhaftung']
+    );
+    expect(result.matchedTitleKeywordCount).toBe(0);
+    expect(result.matchedKeywordCount).toBe(2); // desc matched both
   });
 
   it('matchedKeywordCount reflects number of DISTINCT keywords that matched', () => {
@@ -618,6 +703,96 @@ describe('parseRSSItems', () => {
     const items = parseRSSItems(xml);
     expect(items[0].link).toBe('https://nd-aktuell.de/article/123');
   });
+
+  // ── content:encoded full-body extraction (corpus grounding input) ─────────────
+  describe('full-body extraction via content:encoded / Atom content', () => {
+    it('captures content:encoded as contentText, richer than description', () => {
+      const fullBody = 'Der ausführliche Artikeltext mit vielen Details. '.repeat(10);
+      const xml = `
+        <rss><channel>
+          <item>
+            <title>Klimapolitik im Bundestag</title>
+            <link>https://taz.de/klima</link>
+            <description>Kurzer Anriss.</description>
+            <content:encoded><![CDATA[<p>${fullBody}</p>]]></content:encoded>
+          </item>
+        </channel></rss>
+      `;
+      const items = parseRSSItems(xml);
+      expect(items).toHaveLength(1);
+      // description stays the short teaser (back-compat with scoring)
+      expect(items[0].description).toBe('Kurzer Anriss.');
+      // contentText carries the full body, HTML stripped, and is longer
+      expect(items[0].contentText).toContain('ausführliche Artikeltext');
+      expect(items[0].contentText).not.toContain('<p>');
+      expect(items[0].contentText.length).toBeGreaterThan(items[0].description.length);
+    });
+
+    it('falls back to description when content:encoded is absent', () => {
+      const xml = `
+        <rss><channel>
+          <item>
+            <title>Ohne Volltext</title>
+            <link>https://spiegel.de/x</link>
+            <description>Nur ein Teaser hier.</description>
+          </item>
+        </channel></rss>
+      `;
+      const items = parseRSSItems(xml);
+      expect(items[0].contentText).toBe('Nur ein Teaser hier.');
+    });
+
+    it('decodes HTML entities inside content:encoded', () => {
+      const xml = `
+        <rss><channel>
+          <item>
+            <title>Entit&#228;ten</title>
+            <link>https://a.de/e</link>
+            <description>kurz</description>
+            <content:encoded><![CDATA[Maßnahmen &amp; Reformen &#252;ber Jahre hinweg diskutiert.]]></content:encoded>
+          </item>
+        </channel></rss>
+      `;
+      const items = parseRSSItems(xml);
+      expect(items[0].contentText).toContain('Maßnahmen & Reformen');
+      expect(items[0].contentText).toContain('über Jahre');
+      expect(items[0].contentText).not.toContain('&amp;');
+    });
+
+    it('prefers Atom <content> over <summary> for contentText', () => {
+      const longContent = 'Vollständiger Atom-Inhalt mit Substanz. '.repeat(8);
+      const xml = `
+        <feed>
+          <entry>
+            <title>Atom Artikel</title>
+            <link href="https://zeit.de/atom"/>
+            <summary>Knappe Zusammenfassung.</summary>
+            <content>${longContent}</content>
+          </entry>
+        </feed>
+      `;
+      const items = parseRSSItems(xml);
+      expect(items).toHaveLength(1);
+      expect(items[0].description).toBe('Knappe Zusammenfassung.');
+      expect(items[0].contentText).toContain('Vollständiger Atom-Inhalt');
+      expect(items[0].contentText.length).toBeGreaterThan(items[0].description.length);
+    });
+
+    it('keeps contentText equal to description when content:encoded is shorter', () => {
+      const xml = `
+        <rss><channel>
+          <item>
+            <title>T</title>
+            <link>https://a.de/s</link>
+            <description>Dies ist eine deutlich längere und vollständigere Beschreibung des Artikels.</description>
+            <content:encoded><![CDATA[kurz]]></content:encoded>
+          </item>
+        </channel></rss>
+      `;
+      const items = parseRSSItems(xml);
+      expect(items[0].contentText).toBe('Dies ist eine deutlich längere und vollständigere Beschreibung des Artikels.');
+    });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -678,6 +853,49 @@ describe('searchAllFeeds — integration', () => {
     ]));
     const { total_articles } = await searchAllFeeds(['ukraine', 'krieg']);
     expect(total_articles).toBeGreaterThan(0);
+  });
+
+  it('attaches titleFullWordCount to returned articles (server step-4 guard depends on it)', async () => {
+    // Regression: searchAllFeeds previously dropped titleFullWordCount, so the
+    // server-side step-4 RSS backfill filter `art.titleFullWordCount > 0` was
+    // always false → empty spectra never got backfilled.
+    mockAllFeedsOk(buildRSSXML([
+      { title: 'Ukraine Krieg: Neue Entwicklungen', pubDate: hoursAgo(3) },
+    ]));
+    const { spectra } = await searchAllFeeds(['ukraine', 'krieg']);
+    const articles = Object.values(spectra).flatMap(s => s.articles);
+    expect(articles.length).toBeGreaterThan(0);
+    for (const art of articles) {
+      expect(art).toHaveProperty('titleFullWordCount');
+      expect(typeof art.titleFullWordCount).toBe('number');
+      // Both "ukraine" and "krieg" appear as full words in the title
+      expect(art.titleFullWordCount).toBeGreaterThan(0);
+    }
+  });
+
+  it('threads content_text (full body) onto returned articles for corpus grounding', async () => {
+    const fullBody = 'Ausführlicher Bericht über den Ukraine Krieg mit Hintergründen und Analyse. '.repeat(6);
+    const xml = `
+      <rss><channel>
+        <item>
+          <title>Ukraine Krieg: Neue Entwicklungen</title>
+          <link>https://test.de/uk</link>
+          <description>Kurzanriss zum Krieg.</description>
+          <content:encoded><![CDATA[<p>${fullBody}</p>]]></content:encoded>
+          <pubDate>${hoursAgo(3).toUTCString()}</pubDate>
+        </item>
+      </channel></rss>
+    `;
+    mockAllFeedsOk(xml);
+    const { spectra } = await searchAllFeeds(['ukraine', 'krieg']);
+    const articles = Object.values(spectra).flatMap(s => s.articles);
+    expect(articles.length).toBeGreaterThan(0);
+    for (const art of articles) {
+      expect(art).toHaveProperty('content_text');
+      expect(art.content_text).toContain('Ausführlicher Bericht');
+      // content_text is the richer full body, not just the short description
+      expect(art.content_text.length).toBeGreaterThan(art.description.length);
+    }
   });
 
   it('returns articles when substring matches (klima → klimakonferenz)', async () => {
@@ -778,8 +996,8 @@ describe('searchAllFeeds — integration', () => {
     // Each feed should contribute at most 2 articles per spectrum
     for (const sp of ['left', 'center_left', 'center', 'center_right', 'right']) {
       // Multiple feeds per spectrum, each capped at 2 → max articles per spectrum = feeds × 2
-      const feedsPerSpectrum = { left: 3, center_left: 4, center: 3, center_right: 5, right: 3 };
-      expect(spectra[sp].articles.length).toBeLessThanOrEqual(feedsPerSpectrum[sp] * 2);
+      // (derived from RSS_FEEDS so adding feeds doesn't break the bound)
+      expect(spectra[sp].articles.length).toBeLessThanOrEqual(RSS_FEEDS[sp].length * 2);
     }
   });
 });
@@ -896,6 +1114,47 @@ describe('minDistinctKeywords: false-positive filtering', () => {
     expect(total_articles).toBe(0);
   });
 
+  it('rejects description-only match for multi-word topic (minTitleKeywords=1)', async () => {
+    // Article title is completely off-topic; keywords only in description
+    mockAllFeedsOk(buildRSSXML([
+      {
+        title: 'Bundestag stimmt über Rentenreform ab',
+        description: 'Beim Thema Holocaust und Verhaftung kam es kurz zu Diskussionen.',
+        pubDate: hoursAgo(2),
+      },
+    ]));
+    const kw = ['holocaust', 'mahnmal', 'angriff', 'verhaftung'];
+    // inputWordCount=4 → minTitleKeywords=1. Title has no keywords → rejected
+    const { total_articles } = await searchAllFeeds(kw, { inputWordCount: 4 });
+    expect(total_articles).toBe(0);
+  });
+
+  it('accepts article where keywords appear in both title and description', async () => {
+    mockAllFeedsOk(buildRSSXML([
+      {
+        title: 'Angriff auf Holocaust-Mahnmal: Verdächtiger verhaftet',
+        description: 'Ein Syrer wurde nach dem Angriff auf das Berliner Holocaust-Mahnmal festgenommen.',
+        pubDate: hoursAgo(1),
+      },
+    ]));
+    const kw = ['holocaust', 'mahnmal', 'angriff', 'verhaftung'];
+    const { total_articles } = await searchAllFeeds(kw, { inputWordCount: 4 });
+    expect(total_articles).toBeGreaterThan(0);
+  });
+
+  it('single-word topic: desc-only match is still accepted (minTitleKeywords=0)', async () => {
+    mockAllFeedsOk(buildRSSXML([
+      {
+        title: 'Wirtschaftsminister trifft Industrie',
+        description: 'Dabei wurden klimawandel-bezogene Maßnahmen diskutiert.',
+        pubDate: hoursAgo(3),
+      },
+    ]));
+    // inputWordCount=1 → minTitleKeywords=0 → desc-only match accepted
+    const { total_articles } = await searchAllFeeds(['klimawandel', 'klima', 'wandel'], { inputWordCount: 1 });
+    expect(total_articles).toBeGreaterThan(0);
+  });
+
   it('minDistinctKeywords option can be overridden to 1 explicitly', async () => {
     mockAllFeedsOk(buildRSSXML([
       { title: 'Frontalangriff auf Betriebsrat', pubDate: hoursAgo(2) },
@@ -975,5 +1234,49 @@ describe('Age filter: truth window enforcement', () => {
     mockAllFeedsOk(xmlNoPubDate);
     const { total_articles } = await searchAllFeeds(['ukraine', 'krieg'], { maxAgeDays: 7 });
     expect(total_articles).toBeGreaterThan(0); // no-date articles pass through
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-feed backoff on 429 / errors (audit L4 — Junge Welt was 429-ing every pass)
+// ─────────────────────────────────────────────────────────────────────────────
+describe('parseRetryAfter', () => {
+  it('parses delta-seconds', () => {
+    expect(parseRetryAfter('120')).toBe(120000);
+  });
+  it('parses an HTTP-date into a future delta (>=0)', () => {
+    const future = new Date(Date.now() + 60000).toUTCString();
+    expect(parseRetryAfter(future)).toBeGreaterThan(0);
+  });
+  it('returns null for missing/invalid', () => {
+    expect(parseRetryAfter('')).toBeNull();
+    expect(parseRetryAfter('not-a-date')).toBeNull();
+  });
+});
+
+describe('fetchRSSFeed — backoff', () => {
+  const feed = { name: 'Junge Welt', domain: 'jungewelt.de', url: 'https://www.jungewelt.de/feeds/newsticker.rss' };
+
+  it('after a 429 the next fetch is skipped (backoff) — no second network hit', async () => {
+    mockFetch.mockReset(); clearRSSCache();
+    mockFetch.mockResolvedValue({ ok: false, status: 429, headers: { get: () => null }, text: () => Promise.resolve('') });
+
+    const first = await fetchRSSFeed(feed);
+    expect(first.error).toBe('HTTP 429');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    const second = await fetchRSSFeed(feed);     // should NOT hit the network again
+    expect(second.error).toBe('backoff');
+    expect(second.backoffUntil).toBeGreaterThan(Date.now());
+    expect(mockFetch).toHaveBeenCalledTimes(1);  // still 1 — we backed off
+  });
+
+  it('honours Retry-After for the cooldown window', async () => {
+    mockFetch.mockReset(); clearRSSCache();
+    mockFetch.mockResolvedValue({ ok: false, status: 429, headers: { get: (h) => (h === 'retry-after' ? '5' : null) }, text: () => Promise.resolve('') });
+    await fetchRSSFeed(feed);
+    const second = await fetchRSSFeed(feed);
+    // 5s Retry-After → backoffUntil within the next ~5s, not the 30min default
+    expect(second.backoffUntil - Date.now()).toBeLessThanOrEqual(5000 + 50);
   });
 });

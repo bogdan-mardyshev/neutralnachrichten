@@ -224,7 +224,7 @@ const PT = {
     usage_unlimited: 'Unbegrenzt', usage_of: (u: number, l: number) => `${u} / ${l} Analysen heute`,
     resets: 'Setzt täglich um Mitternacht UTC zurück', benefits_title: 'Ihr Plan enthält',
     upgrade_title: 'Auf Pro upgraden', upgrade_sub: 'Mehr Analysen · Priorität · Früher Zugang',
-    upgrade_cta: 'feedback@neutralnachrichten.com', logout: 'Abmelden', loading: 'Lade Profil…',
+    upgrade_cta: 'feedback@neutralenachrichten.com', logout: 'Abmelden', loading: 'Lade Profil…',
     unlimited_badge: 'Unbegrenzt ∞',
     historyLabel: 'Verlauf', historyEmpty: 'Noch keine Analysen gespeichert.',
     historySearch: 'Erneut suchen →', historyDelete: '×',
@@ -265,7 +265,7 @@ const PT = {
     usage_unlimited: 'Unlimited', usage_of: (u: number, l: number) => `${u} / ${l} analyses today`,
     resets: 'Resets daily at midnight UTC', benefits_title: 'Your plan includes',
     upgrade_title: 'Upgrade to Pro', upgrade_sub: 'More analyses · Priority · Early access',
-    upgrade_cta: 'feedback@neutralnachrichten.com', logout: 'Log out', loading: 'Loading profile…',
+    upgrade_cta: 'feedback@neutralenachrichten.com', logout: 'Log out', loading: 'Loading profile…',
     unlimited_badge: 'Unlimited ∞',
     historyLabel: 'History', historyEmpty: 'No analyses saved yet.',
     historySearch: 'Search again →', historyDelete: '×',
@@ -303,7 +303,7 @@ const PT = {
     usage_unlimited: 'Безлимитно', usage_of: (u: number, l: number) => `${u} / ${l} анализов сегодня`,
     resets: 'Сбрасывается каждый день в полночь UTC', benefits_title: 'Ваш тариф включает',
     upgrade_title: 'Перейти на Pro', upgrade_sub: 'Больше анализов · Приоритет · Ранний доступ',
-    upgrade_cta: 'feedback@neutralnachrichten.com', logout: 'Выйти', loading: 'Загрузка профиля…',
+    upgrade_cta: 'feedback@neutralenachrichten.com', logout: 'Выйти', loading: 'Загрузка профиля…',
     unlimited_badge: 'Безлимитно ∞',
     historyLabel: 'История', historyEmpty: 'Пока нет сохранённых анализов.',
     historySearch: 'Искать снова →', historyDelete: '×',
@@ -397,7 +397,7 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
   const [exportLoading, setExportLoading] = useState(false);
 
   // Server-side media spectrum (more accurate — all devices)
-  const [serverSpectrum, setServerSpectrum] = useState<Record<string, number> & { total_searches?: number } | null>(null);
+  const [serverSpectrum, setServerSpectrum] = useState<Record<string, number> & { total_searches?: number; _profile?: any } | null>(null);
 
   // Liked analyses
   const [likedAnalyses, setLikedAnalyses] = useState<{ topic_norm: string; topic: string; lang: string; liked_at: string }[]>([]);
@@ -774,6 +774,38 @@ export default function UserProfilePage({ lang, authToken, authUser, onLogout, o
                     {pt.profileSearches(serverSpectrum.total_searches)}
                   </p>
                 )}
+                {/* C7: balance score + blind spots + counter-source recommendations */}
+                {serverSpectrum?._profile && (() => {
+                  const p = serverSpectrum._profile;
+                  const CAMP = { left: { de: 'Links', en: 'Left', ru: 'Левые' }, center_left: { de: 'Mitte-Links', en: 'Center-Left', ru: 'Лево-центр' }, center: { de: 'Mitte', en: 'Center', ru: 'Центр' }, center_right: { de: 'Mitte-Rechts', en: 'Center-Right', ru: 'Право-центр' }, right: { de: 'Rechts', en: 'Right', ru: 'Правые' } } as const;
+                  const L = (lang === 'de' ? 'de' : lang === 'ru' ? 'ru' : 'en') as 'de' | 'en' | 'ru';
+                  const txt = {
+                    de: { balance: 'Ausgewogenheit', blind: 'Deine blinden Flecken', rec: 'Zum Ausgleich lesen', none: 'Gut ausbalanciert — keine blinden Flecken.' },
+                    en: { balance: 'Balance', blind: 'Your blind spots', rec: 'Read to balance', none: 'Well balanced — no blind spots.' },
+                    ru: { balance: 'Сбалансированность', blind: 'Твои слепые зоны', rec: 'Читай для баланса', none: 'Хорошо сбалансировано — слепых зон нет.' },
+                  }[L];
+                  const bColor = p.balanceScore >= 70 ? 'text-emerald-600' : p.balanceScore >= 40 ? 'text-amber-600' : 'text-rose-600';
+                  return (
+                    <div className="pt-3 mt-2 border-t border-[#e0d8cf] dark:border-gray-700 space-y-2">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-sans text-[9px] uppercase tracking-widest text-gray-400">{txt.balance}</span>
+                        <span className={`font-serif text-lg font-black ${bColor}`}>{p.balanceScore}<span className="text-[10px] text-gray-400">/100</span></span>
+                      </div>
+                      {p.blindCamps?.length > 0 ? (
+                        <>
+                          <p className="font-sans text-[10px] text-gray-500 dark:text-gray-400">{txt.blind}: {p.blindCamps.map((c: string) => CAMP[c as keyof typeof CAMP][L]).join(', ')}</p>
+                          {p.recommendations?.length > 0 && (
+                            <p className="font-sans text-[10px] text-gray-500 dark:text-gray-400">
+                              {txt.rec}: {p.recommendations.slice(0, 3).map((r: any) => r.outlets.join(' / ')).join(', ')}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="font-sans text-[10px] text-emerald-600">{txt.none}</p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               <div className="px-5 py-6 text-center dark:bg-[#141414]">

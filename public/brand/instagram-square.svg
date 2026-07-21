@@ -1,0 +1,72 @@
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .serif { font-family: Georgia, 'Times New Roman', serif; }
+      .sans  { font-family: 'Arial', 'Helvetica Neue', sans-serif; }
+    </style>
+  </defs>
+
+  <!-- Background + border -->
+  <rect width="1080" height="1080" fill="#FFF8F0"/>
+  <rect x="0" y="0" width="1080" height="1080" fill="none" stroke="#1a1a1a" stroke-width="8"/>
+
+  <!-- Top spectrum bar -->
+  <rect x="0"   y="0" width="216" height="12" fill="#e11d48"/>
+  <rect x="216" y="0" width="216" height="12" fill="#fb923c"/>
+  <rect x="432" y="0" width="216" height="12" fill="#94a3b8"/>
+  <rect x="648" y="0" width="216" height="12" fill="#0ea5e9"/>
+  <rect x="864" y="0" width="216" height="12" fill="#1d4ed8"/>
+
+  <!-- Edition strip -->
+  <rect x="0" y="12" width="1080" height="48" fill="#1a1a1a"/>
+  <text x="540" y="43" class="sans" font-size="13" font-weight="700"
+        fill="white" text-anchor="middle" letter-spacing="5">MEDIENANALYSE IN ECHTZEIT · UNABHÄNGIG</text>
+
+  <!-- Logo lockup -->
+  <rect x="100" y="120" width="92" height="92" fill="#1a1a1a"/>
+  <text x="146" y="191" class="serif" font-size="64" font-weight="900"
+        fill="#FFF8F0" text-anchor="middle">N</text>
+  <text x="210" y="158" class="serif" font-size="34" font-weight="400" fill="#1a1a1a">Neutrale</text>
+  <text x="210" y="198" class="serif" font-size="34" font-weight="900" fill="#1a1a1a">Nachrichten</text>
+
+  <!-- Headline -->
+  <text x="100" y="360" class="serif" font-size="76" font-weight="900" fill="#1a1a1a">Wie berichten</text>
+  <text x="100" y="448" class="serif" font-size="76" font-weight="900" fill="#1a1a1a">deutsche Medien</text>
+  <text x="100" y="536" class="serif" font-size="76" font-weight="900" fill="#e11d48">wirklich?</text>
+
+  <!-- Spectrum showcase -->
+  <text x="100" y="640" class="sans" font-size="14" font-weight="700" fill="#94a3b8" letter-spacing="4">POLITISCHES SPEKTRUM</text>
+  <rect x="100" y="652" width="880" height="2" fill="#1a1a1a"/>
+
+  <!-- rows -->
+  <rect x="100" y="680" width="8" height="44" fill="#e11d48"/>
+  <text x="128" y="700" class="sans" font-size="13" font-weight="700" fill="#e11d48" letter-spacing="3">LINKS</text>
+  <text x="128" y="720" class="serif" font-size="22" font-weight="700" fill="#1a1a1a">taz · junge Welt · nd</text>
+
+  <rect x="100" y="744" width="8" height="44" fill="#fb923c"/>
+  <text x="128" y="764" class="sans" font-size="13" font-weight="700" fill="#fb923c" letter-spacing="3">MITTE-LINKS</text>
+  <text x="128" y="784" class="serif" font-size="22" font-weight="700" fill="#1a1a1a">Spiegel · Süddeutsche · Zeit</text>
+
+  <rect x="100" y="808" width="8" height="44" fill="#94a3b8"/>
+  <text x="128" y="828" class="sans" font-size="13" font-weight="700" fill="#64748b" letter-spacing="3">MITTE</text>
+  <text x="128" y="848" class="serif" font-size="22" font-weight="700" fill="#1a1a1a">Tagesschau · ZDF · Stern</text>
+
+  <rect x="100" y="872" width="8" height="44" fill="#0ea5e9"/>
+  <text x="128" y="892" class="sans" font-size="13" font-weight="700" fill="#0ea5e9" letter-spacing="3">MITTE-RECHTS</text>
+  <text x="128" y="912" class="serif" font-size="22" font-weight="700" fill="#1a1a1a">FAZ · Welt · Focus</text>
+
+  <rect x="100" y="936" width="8" height="44" fill="#1d4ed8"/>
+  <text x="128" y="956" class="sans" font-size="13" font-weight="700" fill="#1d4ed8" letter-spacing="3">RECHTS</text>
+  <text x="128" y="976" class="serif" font-size="22" font-weight="700" fill="#1a1a1a">Junge Freiheit · Cicero</text>
+
+  <!-- Footer -->
+  <rect x="0" y="1018" width="1080" height="2" fill="#1a1a1a"/>
+  <text x="540" y="1052" class="sans" font-size="15" fill="#94a3b8" text-anchor="middle" letter-spacing="2">neutralnachrichten.com</text>
+
+  <!-- Bottom spectrum bar -->
+  <rect x="0"   y="1068" width="216" height="12" fill="#e11d48"/>
+  <rect x="216" y="1068" width="216" height="12" fill="#fb923c"/>
+  <rect x="432" y="1068" width="216" height="12" fill="#94a3b8"/>
+  <rect x="648" y="1068" width="216" height="12" fill="#0ea5e9"/>
+  <rect x="864" y="1068" width="216" height="12" fill="#1d4ed8"/>
+</svg>

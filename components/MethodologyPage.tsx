@@ -8,11 +8,11 @@ interface Props { lang: Language }
 // ── Data ─────────────────────────────────────────────────────────────────────
 
 const SOURCES = {
-  left:         ['taz', 'nd-aktuell', 'Junge Welt'],
-  center_left:  ['Der Spiegel', 'Süddeutsche Zeitung', 'Die Zeit', 'Tagesspiegel'],
-  center:       ['Tagesschau', 'ZDF heute', 'Deutschlandfunk'],
-  center_right: ['FAZ', 'Die Welt', 'Focus', 'NTV', 'Handelsblatt'],
-  right:        ['Bild', 'Junge Freiheit', 'Tichys Einblick'],
+  left:         ['taz', 'nd-aktuell', 'Junge Welt', 'Der Freitag', 'NachDenkSeiten'],
+  center_left:  ['Der Spiegel', 'Süddeutsche Zeitung', 'Die Zeit', 'Tagesspiegel', 'Stern', 'Frankfurter Rundschau', 'Berliner Zeitung', 'RND'],
+  center:       ['Tagesschau', 'ZDF heute', 'Deutschlandfunk', 'Deutsche Welle', 'MDR'],
+  center_right: ['FAZ', 'Die Welt', 'Focus', 'NTV', 'Handelsblatt', 'NZZ', 'WirtschaftsWoche', 'Cicero'],
+  right:        ['Bild', 'Junge Freiheit', 'Tichys Einblick', 'Nius', 'Apollo News', 'Epoch Times DE', 'Achgut'],
 } as const;
 
 const SPECTRUM_ORDER = ['left', 'center_left', 'center', 'center_right', 'right'] as const;
@@ -32,41 +32,47 @@ const SPECTRUM_CFG: Record<SpectrumKey, {
 
 const DEEP_FEATURES: Record<string, { icon: string; title: string; desc: string; accent: string }[]> = {
   de: [
-    { icon: '◎', title: 'Gemeinsame Fakten',         desc: 'Was alle fünf Lager übereinstimmend berichten — unbestrittener Konsens',                          accent: 'bg-emerald-500' },
-    { icon: '↕', title: 'Divergenzpunkte',           desc: 'Dieselben Ereignisse — unterschiedliche Deutungen über das Spektrum hinweg',                      accent: 'bg-amber-400'   },
-    { icon: '◌', title: 'Blinde Flecken',            desc: 'Aspekte, die nur von einem Lager oder gar nicht berichtet werden',                                accent: 'bg-rose-500'    },
-    { icon: '≡', title: 'Berichterstattungsvolumen', desc: 'Echte Artikelzahl pro Lager aus RSS — Woche und Monat, keine KI-Schätzung',                       accent: 'bg-violet-500'  },
-    { icon: '~', title: 'Sentiment-Analyse',         desc: 'Tonalität der Berichterstattung: positiv / neutral / negativ pro Lager',                          accent: 'bg-pink-500'    },
-    { icon: '#', title: 'Linguistische Analyse',     desc: 'Charakteristische Schlüsselwörter pro politischem Lager',                                          accent: 'bg-teal-500'    },
-    { icon: '◈', title: 'Experten-Karte',            desc: 'Wer wird von welchen Medien zitiert — Übersicht der Quellen und Autoritäten',                      accent: 'bg-indigo-500'  },
-    { icon: '📄', title: 'Original RSS-Snippets',    desc: 'Unter jeder KI-Zusammenfassung wird der originale RSS-Text gezeigt — für direkte Nachprüfbarkeit', accent: 'bg-orange-500'  },
+    { icon: '✓', title: 'Belegte Fakten (NLI)',      desc: 'Jeder gemeinsame Fakt wird gegen den Quelltext geprüft — Belegt / Unbelegt / Widerspruch — mit Link zur Quelle',                                accent: 'bg-emerald-500' },
+    { icon: '↕', title: 'Divergenzpunkte + Belege',  desc: 'Dieselben Ereignisse, unterschiedliche Deutungen — jede Lager-Sicht mit Quellenlink',                                                            accent: 'bg-amber-400'   },
+    { icon: '◌', title: 'Verifiziertes Verschweigen',desc: 'Über Feed-Gesundheit: echtes Verschweigen vs. „nur Leitmedien still" vs. „nicht bewertbar" (Ladefehler)',                                       accent: 'bg-rose-500'    },
+    { icon: '◆', title: 'Vertrauenswert (0–100)',    desc: 'Aus Spektrumsbreite, Beleg-Quote und Aussagen-Abdeckung — sichtbar bei jeder Analyse',                                                          accent: 'bg-violet-600'  },
+    { icon: '⊞', title: 'Quellen-Landkarte',         desc: 'Spektrum × Faktentreue — wer berichtet und wie verlässlich, auf einen Blick',                                                                    accent: 'bg-sky-500'     },
+    { icon: '≡', title: 'Reichweiten-Balance',       desc: 'Abdeckung gewichtet nach Publikumsreichweite, nicht nur nach Artikelzahl',                                                                       accent: 'bg-violet-500'  },
+    { icon: '⏱', title: 'Zeitverlauf',               desc: 'Wer berichtete zuerst, wer spät, wer gar nicht — Berichterstattung über die Zeit',                                                               accent: 'bg-pink-500'    },
+    { icon: '⌗', title: 'Unterthemen-Cluster',       desc: 'Die Story in Teilstränge zerlegt — inkl. Aspekten, die nur ein Lager erzählt',                                                                   accent: 'bg-teal-500'    },
+    { icon: '#', title: 'Geframte Sprache',          desc: 'Schlüsselwörter pro Lager — hervorgehoben, was nur ein Lager verwendet (Framing)',                                                               accent: 'bg-indigo-500'  },
+    { icon: '◈', title: 'Geprüfte Experten',         desc: 'Nur Namen, die wirklich im Quelltext vorkommen — erfundene werden ausgeblendet',                                                                 accent: 'bg-orange-500'  },
   ],
   en: [
-    { icon: '◎', title: 'Shared Facts',              desc: 'What all five camps agree on — undisputed consensus across the spectrum',                          accent: 'bg-emerald-500' },
-    { icon: '↕', title: 'Diverging Points',          desc: 'Same events — different framings and interpretations across the spectrum',                         accent: 'bg-amber-400'   },
-    { icon: '◌', title: 'Blind Spots',               desc: 'Angles barely covered or only covered by one side of the spectrum',                               accent: 'bg-rose-500'    },
-    { icon: '≡', title: 'Coverage Volume',           desc: 'Real article count per camp from RSS — week and month, no AI estimation',                          accent: 'bg-violet-500'  },
-    { icon: '~', title: 'Sentiment Analysis',        desc: 'Overall tone of coverage: positive / neutral / negative per camp',                                 accent: 'bg-pink-500'    },
-    { icon: '#', title: 'Linguistic Analysis',       desc: 'Characteristic keywords per political camp — their linguistic fingerprint',                        accent: 'bg-teal-500'    },
-    { icon: '◈', title: 'Expert Map',                desc: 'Who is cited by which media — overview of referenced sources and authorities',                     accent: 'bg-indigo-500'  },
-    { icon: '📄', title: 'Original RSS Snippets',    desc: 'Below each AI summary, the original RSS text is shown — for direct verification',                  accent: 'bg-orange-500'  },
+    { icon: '✓', title: 'Verified facts (NLI)',      desc: 'Every shared fact is checked against the source text — Verified / Unverified / Contradicted — with a link to the source',                          accent: 'bg-emerald-500' },
+    { icon: '↕', title: 'Diverging points + sources',desc: 'Same events, different framings — each camp view linked to its source article',                                                                  accent: 'bg-amber-400'   },
+    { icon: '◌', title: 'Verified silence',          desc: 'Via feed health: real silence vs. "flagships silent" vs. "not assessable" (load error)',                                                         accent: 'bg-rose-500'    },
+    { icon: '◆', title: 'Confidence score (0–100)',  desc: 'From spectrum breadth, citation ratio and statement coverage — shown on every analysis',                                                         accent: 'bg-violet-600'  },
+    { icon: '⊞', title: 'Source map',                desc: 'Spectrum × factuality — who covers it and how reliably, at a glance',                                                                            accent: 'bg-sky-500'     },
+    { icon: '≡', title: 'Reach balance',             desc: 'Coverage weighted by audience reach, not just article count',                                                                                    accent: 'bg-violet-500'  },
+    { icon: '⏱', title: 'Timeline',                  desc: 'Who reported first, who lagged, who ignored it — coverage over time',                                                                            accent: 'bg-pink-500'    },
+    { icon: '⌗', title: 'Sub-story clusters',        desc: 'The story split into threads — including angles only one camp tells',                                                                            accent: 'bg-teal-500'    },
+    { icon: '#', title: 'Framed language',           desc: 'Keywords per camp — highlighting words used by only one camp (framing)',                                                                         accent: 'bg-indigo-500'  },
+    { icon: '◈', title: 'Verified experts',          desc: 'Only names that actually appear in the source text — fabricated ones are hidden',                                                                accent: 'bg-orange-500'  },
   ],
 };
 
 const PIPELINE: Record<string, { n: string; title: string; desc: string; color: string; dotColor: string }[]> = {
   de: [
-    { n: '01', title: 'Thema eingeben',              desc: 'Du gibst ein Thema ein — auf Deutsch oder Englisch. Das System übersetzt intern ins Deutsche, falls nötig.',                                              color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
-    { n: '02', title: 'RSS-Streaming (~2s)',          desc: '18 RSS-Feeds werden parallel abgerufen und sofort per SSE an den Browser gestreamt — echte Artikel erscheinen, bevor die KI überhaupt startet.',        color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
-    { n: '03', title: 'KI-Analyse',                  desc: 'Gemini 2.5 Flash analysiert die gefundenen Artikel direkt als Kontext — innerhalb von Sekunden entstehen fünf perspektivische Zusammenfassungen.',       color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
-    { n: '04', title: 'Übersetzung & Deep Analysis', desc: 'Bei EN-Anfragen wird das Ergebnis semantisch übersetzt. Die Tiefenanalyse (Fakten, Divergenzen, Blind Spots) läuft parallel als zweiter Gemini-Call.',  color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
-    { n: '05', title: 'Cache & Auslieferung',        desc: 'Ergebnisse werden 24h in PostgreSQL + RAM gecacht. Nächste Anfrage zum gleichen Thema: sofort. RSS wird immer frisch abgerufen.',                        color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
+    { n: '01', title: 'Korpus-Aufbau (laufend)',     desc: 'Ein eigener Worker liest rund um die Uhr 33 RSS-Feeds aus 34 Medien. Aus jedem Artikel wird nur eine eigene Kurzzusammenfassung + ein kurzer Anriss + ein semantischer Vektor abgeleitet und gespeichert — der Volltext wird verworfen (rechtssicher).', color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
+    { n: '02', title: 'Hybride Suche',               desc: 'Dein Thema wird semantisch (Vektor-Ähnlichkeit) UND lexikalisch (Volltext) im Korpus gesucht und per Reciprocal-Rank-Fusion zusammengeführt — so finden wir auch Paraphrasen, nicht nur exakte Wörter.',                                   color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
+    { n: '03', title: 'KI-Analyse auf echtem Text',  desc: 'Gemini 2.5 Flash analysiert die abgerufenen Artikel und schreibt fünf perspektivische Zusammenfassungen — auf Basis des echten Artikeltexts, nicht nur der Schlagzeile.',                                                            color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
+    { n: '04', title: 'Verifikation & Belege',       desc: 'Jeder von der KI genannte Artikel wird gegen den Korpus geprüft und mit der echten Quell-URL verlinkt. Aussagen werden gegen den Quelltext gegengecheckt (NLI), nicht belegbare „Experten" werden entfernt.',                       color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
+    { n: '05', title: 'Verschweigen & Vertrauenswert', desc: 'Über die Feed-Gesundheit unterscheiden wir echtes Verschweigen von Ladefehlern. Aus Spektrumsbreite, Beleg-Quote und Aussagen-Abdeckung entsteht ein transparenter Vertrauenswert (0–100).',                                            color: 'border-violet-600',  dotColor: 'bg-violet-600'  },
+    { n: '06', title: 'Übersetzung & Cache',         desc: 'Bei EN/RU wird semantisch übersetzt; Ergebnisse werden gecacht. Die hybride Suche über den Korpus liefert die nächste Anfrage nahezu sofort.',                                                                                       color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
   ],
   en: [
-    { n: '01', title: 'Enter topic',                 desc: 'You enter a topic — in German or English. The system translates to German internally if needed.',                                                         color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
-    { n: '02', title: 'RSS streaming (~2s)',          desc: '18 RSS feeds are fetched in parallel and streamed to the browser instantly via SSE — real articles appear before the AI has even started.',               color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
-    { n: '03', title: 'AI analysis',                 desc: 'Gemini 2.5 Flash analyses the retrieved articles directly as context — five perspective summaries are produced within seconds.',                          color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
-    { n: '04', title: 'Translation & deep analysis', desc: 'For EN queries, results are semantically translated. Deep analysis (shared facts, diverging points, blind spots) runs in parallel as a second Gemini call.', color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
-    { n: '05', title: 'Cache & delivery',            desc: 'Results are cached 24h in PostgreSQL + RAM. Next request for the same topic: instant. RSS is always fetched fresh.',                                      color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
+    { n: '01', title: 'Corpus building (continuous)', desc: 'A dedicated worker reads 33 RSS feeds from 34 outlets around the clock. From each article we derive and store ONLY our own short summary + a brief lede + a semantic vector — the full text is discarded (legally clean).', color: 'border-rose-500',    dotColor: 'bg-rose-500'    },
+    { n: '02', title: 'Hybrid retrieval',            desc: 'Your topic is searched semantically (vector similarity) AND lexically (full-text) over the corpus, fused via Reciprocal Rank Fusion — so we catch paraphrases, not just exact words.',                                          color: 'border-orange-400',  dotColor: 'bg-orange-400'  },
+    { n: '03', title: 'AI analysis on real text',    desc: 'Gemini 2.5 Flash analyses the retrieved articles and writes five perspective summaries — based on the real article text, not just the headline.',                                                                                   color: 'border-amber-400',   dotColor: 'bg-amber-400'   },
+    { n: '04', title: 'Verification & citations',    desc: 'Every article the AI names is checked against the corpus and linked to its real source URL. Claims are cross-checked against the source text (NLI); unverifiable "experts" are removed.',                                color: 'border-emerald-500', dotColor: 'bg-emerald-500' },
+    { n: '05', title: 'Silence & confidence',        desc: 'Feed-health data distinguishes real editorial silence from load errors. A transparent confidence score (0–100) is computed from spectrum breadth, citation ratio and statement coverage.',                              color: 'border-violet-600',  dotColor: 'bg-violet-600'  },
+    { n: '06', title: 'Translation & cache',         desc: 'For EN/RU results are semantically translated; results are cached. Hybrid corpus search makes the next request near-instant.',                                                                                                   color: 'border-blue-600',    dotColor: 'bg-blue-600'    },
   ],
 };
 
@@ -134,8 +140,8 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
     ? 'Methodik – Wie wir analysieren | NeutralNachrichten'
     : 'Methodology – How we analyse | NeutralNachrichten';
   const methDesc = lang === 'de'
-    ? 'Erfahre, wie NeutralNachrichten 18 deutsche Medien aus 5 politischen Lagern in Echtzeit analysiert – mit KI, RSS-Streaming und voller Transparenz.'
-    : 'Learn how NeutralNachrichten analyses 18 German outlets from 5 political camps in real time – with AI, RSS streaming and full transparency.';
+    ? 'Erfahre, wie NeutralNachrichten 33 deutsche Medien aus 5 politischen Lagern in Echtzeit analysiert – mit KI, RSS-Streaming und voller Transparenz.'
+    : 'Learn how NeutralNachrichten analyses 33 German outlets from 5 political camps in real time – with AI, RSS streaming and full transparency.';
 
   return (
     <div className="max-w-4xl mx-auto pb-16">
@@ -183,7 +189,7 @@ export const MethodologyPage: React.FC<Props> = ({ lang }) => {
         {/* Stats bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 divide-x-2 divide-y-2 sm:divide-y-0 divide-[#1a1a1a] dark:divide-gray-700 border-t-2 border-[#1a1a1a] dark:border-gray-700">
           <div className="px-5 py-4 dark:bg-[#141414]">
-            <p className="font-serif font-black text-2xl text-rose-600">18</p>
+            <p className="font-serif font-black text-2xl text-rose-600">33</p>
             <p className="font-sans text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500">{L.totalSources}</p>
           </div>
           <div className="px-5 py-4 dark:bg-[#141414]">

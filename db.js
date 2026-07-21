@@ -7,6 +7,21 @@
 
 import pkg from 'pg';
 const { Pool } = pkg;
+import {
+  buildUpsertArticleQuery,
+  buildUpsertEmbeddingQuery,
+  buildFTSQuery,
+  buildVectorQuery,
+  buildFeedSuccessQuery,
+  buildFeedFailureQuery,
+  buildDownFeedsQuery,
+  buildUpsertSourceRatingQuery,
+  buildPruneCorpusQuery,
+  buildRecentForClusteringQuery,
+  buildUpdateClusterIdsQuery,
+  normalizeArticleRow,
+} from './lib/corpusQueries.js';
+import { combineRetrieval } from './lib/hybridRetrieval.js';
 
 let pool = null;
 
@@ -174,7 +189,180 @@ async function runMigrations() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS email_digest BOOLEAN DEFAULT false;
   `);
 
+  // NLI results per evidence source (audit B5 foundation): every claim
+  // verification vote is attributed to the outlet that provided the evidence.
+  // Over time this yields OUR OWN measured factuality per source — independent
+  // of MBFC. Aggregated by getSourceNliStats() for the admin dashboard.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS nli_results (
+      id            BIGSERIAL PRIMARY KEY,
+      source_domain TEXT NOT NULL,
+      label         TEXT NOT NULL CHECK (label IN ('supported','entailment','contradiction','unsupported')),
+      topic_norm    TEXT,
+      created_at    TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS nli_results_domain ON nli_results(source_domain);
+  `);
+
+  // Analysis feedback (audit D5): the perceived-balance loop. One row per vote;
+  // aggregated in the admin metrics. ip_hash dedups repeat votes per topic.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS analysis_feedback (
+      id         BIGSERIAL PRIMARY KEY,
+      topic_norm TEXT NOT NULL,
+      lang       TEXT DEFAULT 'de',
+      verdict    TEXT NOT NULL CHECK (verdict IN ('up', 'down')),
+      ip_hash    TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (topic_norm, ip_hash)
+    );
+    CREATE INDEX IF NOT EXISTS analysis_feedback_topic ON analysis_feedback(topic_norm);
+  `);
+
+  // Source suggestion submissions
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS source_suggestions (
+      id         BIGSERIAL PRIMARY KEY,
+      name       TEXT,
+      email      TEXT,
+      url        TEXT NOT NULL,
+      spectrum   TEXT,
+      why        TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+
+  // Corpus V2 (RSS-Direct corpus) — pgvector-aware, degrades to FTS if unavailable
+  await runCorpusMigrations();
+
   console.log('[DB] Migrations done ✓');
+}
+
+// ── Corpus V2 migrations ───────────────────────────────────────────────────────
+//
+// pgvector is OPTIONAL. If the extension can't be created (no superuser rights on
+// some managed Postgres), semantic search is disabled but the corpus + lexical
+// (FTS) retrieval still work fully. corpus_articles deliberately has NO vector
+// column — embeddings live in their own table — so the core schema is always
+// creatable regardless of pgvector availability.
+
+let pgvectorReady = false;
+
+/** True once pgvector + corpus_embeddings are confirmed usable. */
+export function isPgvectorAvailable() {
+  return pgvectorReady;
+}
+
+async function runCorpusMigrations() {
+  // 1) Try to enable pgvector — never throw; degrade to FTS-only on failure.
+  try {
+    await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
+    pgvectorReady = true;
+    console.log('[DB] pgvector enabled ✓ (semantic search on)');
+  } catch (err) {
+    pgvectorReady = false;
+    console.warn('[DB] pgvector unavailable — FTS-only mode:', err.message);
+  }
+
+  // 2) corpus_articles — derive-and-discard: NO full-body column. FTS over
+  //    title + our_summary (German dictionary), generated + GIN-indexed.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS corpus_articles (
+      id            BIGSERIAL PRIMARY KEY,
+      url           TEXT NOT NULL,
+      url_hash      TEXT NOT NULL UNIQUE,
+      source_name   TEXT NOT NULL,
+      source_domain TEXT NOT NULL,
+      spectrum      TEXT NOT NULL,
+      title         TEXT NOT NULL,
+      our_summary   TEXT,
+      short_lead    VARCHAR(200),
+      pub_date      TIMESTAMPTZ,
+      fetched_at    TIMESTAMPTZ DEFAULT now(),
+      cluster_id    BIGINT,
+      lang          TEXT DEFAULT 'de',
+      fts           tsvector GENERATED ALWAYS AS (
+                      to_tsvector('german', coalesce(title,'') || ' ' || coalesce(our_summary,''))
+                    ) STORED
+    );
+    CREATE INDEX IF NOT EXISTS corpus_articles_fts      ON corpus_articles USING GIN(fts);
+    CREATE INDEX IF NOT EXISTS corpus_articles_spectrum ON corpus_articles(spectrum);
+    CREATE INDEX IF NOT EXISTS corpus_articles_pubdate  ON corpus_articles(pub_date DESC);
+  `);
+
+  // 3) feed_health — distinguishes real editorial silence from a broken feed.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS feed_health (
+      feed_url             TEXT PRIMARY KEY,
+      source_name          TEXT NOT NULL,
+      spectrum             TEXT NOT NULL,
+      last_success         TIMESTAMPTZ,
+      last_failure         TIMESTAMPTZ,
+      consecutive_failures INTEGER DEFAULT 0,
+      status               TEXT DEFAULT 'unknown',
+      updated_at           TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS feed_health_status ON feed_health(status) WHERE status <> 'ok';
+  `);
+
+  // 4) source_ratings — auditable spectrum classification with provenance.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS source_ratings (
+      source_domain TEXT PRIMARY KEY,
+      source_name   TEXT NOT NULL,
+      spectrum      TEXT NOT NULL,
+      rating_source TEXT,
+      confidence    REAL DEFAULT 0.5,
+      reach_weight  REAL DEFAULT 1.0,
+      notes         TEXT,
+      updated_at    TIMESTAMPTZ DEFAULT now()
+    );
+    -- Two classification axes added in Step 11 (idempotent):
+    --   tier: flagship|standard|niche (reach/prominence)
+    --   factual_rating: high|mixed|low (factual quality, separate from spectrum)
+    ALTER TABLE source_ratings ADD COLUMN IF NOT EXISTS tier           TEXT DEFAULT 'standard';
+    ALTER TABLE source_ratings ADD COLUMN IF NOT EXISTS factual_rating TEXT DEFAULT 'mixed';
+  `);
+
+  // 5) story_clusters — base table (centroid added conditionally below).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS story_clusters (
+      id            BIGSERIAL PRIMARY KEY,
+      label         TEXT,
+      article_count INTEGER DEFAULT 0,
+      first_seen    TIMESTAMPTZ DEFAULT now(),
+      last_seen     TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+
+  // 6) pgvector-dependent pieces — only when the extension is available.
+  if (pgvectorReady) {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS corpus_embeddings (
+          article_id BIGINT NOT NULL REFERENCES corpus_articles(id) ON DELETE CASCADE,
+          model      TEXT NOT NULL DEFAULT 'text-embedding-004',
+          embedding  vector(768) NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT now(),
+          PRIMARY KEY (article_id, model)
+        );
+      `);
+      // HNSW index can be slow to build on big tables; isolate so a failure here
+      // doesn't abort startup — queries still work without it (just slower).
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS corpus_embeddings_hnsw
+           ON corpus_embeddings USING hnsw (embedding vector_cosine_ops)`
+      ).catch(e => console.warn('[DB] HNSW index skipped:', e.message));
+      await pool.query(`ALTER TABLE story_clusters ADD COLUMN IF NOT EXISTS centroid vector(768)`)
+        .catch(e => console.warn('[DB] cluster centroid column skipped:', e.message));
+    } catch (err) {
+      // If the embeddings table can't be created, fall back to FTS-only.
+      pgvectorReady = false;
+      console.warn('[DB] corpus_embeddings setup failed — FTS-only mode:', err.message);
+    }
+  }
+
+  console.log(`[DB] Corpus V2 ready ✓ (pgvector=${pgvectorReady})`);
 }
 
 // ── Content Cache ─────────────────────────────────────────────────────────────
@@ -467,6 +655,27 @@ export async function createUser(email, passwordHash) {
   const { rows } = await pool.query(
     `INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email, tier, daily_limit`,
     [email, passwordHash]
+  );
+  return rows[0];
+}
+
+/**
+ * Create or reset a dev/test account.
+ * Sets email_verified=true and daily_limit=-1 regardless of existing state.
+ * Only called from the protected /api/dev/ensure-test-user endpoint.
+ */
+export async function upsertDevUser(email, passwordHash) {
+  if (!pool) throw new Error('DB not available');
+  const { rows } = await pool.query(
+    `INSERT INTO users (email, password_hash, email_verified, daily_limit, is_active)
+     VALUES ($1, $2, true, -1, true)
+     ON CONFLICT (email) DO UPDATE
+       SET password_hash   = EXCLUDED.password_hash,
+           email_verified  = true,
+           daily_limit     = -1,
+           is_active       = true
+     RETURNING id, email, tier, daily_limit, email_verified`,
+    [email.toLowerCase().trim(), passwordHash]
   );
   return rows[0];
 }
@@ -812,6 +1021,367 @@ export async function setDigestPreference(userId, enabled) {
   } catch (err) {
     console.error('[DB:setDigestPreference]', err.message);
     throw err;
+  }
+}
+
+export async function saveSuggestion({ name, email, url, spectrum, why }) {
+  if (!pool) throw new Error('DB not available');
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO source_suggestions (name, email, url, spectrum, why)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [
+        (name || '').trim().slice(0, 100) || null,
+        (email || '').trim().slice(0, 200) || null,
+        (url || '').trim().slice(0, 500),
+        (spectrum || 'unsure').slice(0, 20),
+        (why || '').trim().slice(0, 1000),
+      ]
+    );
+    return rows[0];
+  } catch (err) {
+    console.error('[DB:saveSuggestion]', err.message);
+    throw err;
+  }
+}
+
+// ── Corpus V2 data helpers ─────────────────────────────────────────────────────
+//
+// Thin wrappers around the pure SQL builders in lib/corpusQueries.js. Query
+// construction (and all its branching) is unit-tested there; these wrappers only
+// add the live pool.query call + null-safety when the DB is unavailable.
+
+/** Upsert a corpus article. Returns { id, inserted } or null when DB is down. */
+export async function upsertCorpusArticle(article) {
+  if (!pool) return null;
+  try {
+    const { text, values } = buildUpsertArticleQuery(article);
+    const { rows } = await pool.query(text, values);
+    return rows[0] || null;
+  } catch (err) {
+    console.error('[DB:upsertCorpusArticle]', err.message);
+    throw err;
+  }
+}
+
+/**
+ * Of the given article ids, return those that have NO embedding yet (audit fix
+ * A6 — delta embedding: the worker re-runs every 30 min over mostly-unchanged
+ * feeds; re-embedding ~1000 unchanged articles per pass burned the quota).
+ * Returns [] without pgvector/DB (caller then skips embedding entirely).
+ */
+export async function listArticleIdsMissingEmbeddings(articleIds) {
+  if (!pool || !pgvectorReady) return [];
+  const ids = (articleIds || []).map(n => parseInt(n, 10)).filter(Number.isInteger);
+  if (!ids.length) return [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT a.id FROM corpus_articles a
+       WHERE a.id = ANY($1::bigint[])
+         AND NOT EXISTS (SELECT 1 FROM corpus_embeddings e WHERE e.article_id = a.id)`,
+      [ids]
+    );
+    return rows.map(r => Number(r.id));
+  } catch (err) {
+    console.error('[DB:listArticleIdsMissingEmbeddings]', err.message);
+    return [];
+  }
+}
+
+/** Store/replace an article embedding. No-op (returns false) without pgvector. */
+export async function upsertCorpusEmbedding(articleId, embedding, model) {
+  if (!pool || !pgvectorReady) return false;
+  try {
+    const { text, values } = buildUpsertEmbeddingQuery(articleId, embedding, model);
+    await pool.query(text, values);
+    return true;
+  } catch (err) {
+    console.error('[DB:upsertCorpusEmbedding]', err.message);
+    throw err;
+  }
+}
+
+/** Lexical (FTS) corpus retrieval. Always available. */
+export async function searchCorpusFTS(keywords, opts = {}) {
+  if (!pool) return [];
+  const spec = buildFTSQuery(keywords, opts);
+  if (!spec) return [];
+  try {
+    const { rows } = await pool.query(spec.text, spec.values);
+    return rows.map(normalizeArticleRow);
+  } catch (err) {
+    console.error('[DB:searchCorpusFTS]', err.message);
+    return [];
+  }
+}
+
+/**
+ * Semantic (vector) corpus retrieval. Falls back to FTS automatically when
+ * pgvector is unavailable, so callers get results either way.
+ *
+ * @param {number[]} embedding — query vector
+ * @param {string[]} keywords  — used for the FTS fallback path
+ */
+export async function searchCorpusSemantic(embedding, keywords, opts = {}) {
+  if (!pool) return [];
+  if (!pgvectorReady) return searchCorpusFTS(keywords, opts);
+  try {
+    const { text, values } = buildVectorQuery(embedding, opts);
+    const { rows } = await pool.query(text, values);
+    return rows.map(normalizeArticleRow);
+  } catch (err) {
+    console.error('[DB:searchCorpusSemantic] vector path failed, falling back to FTS:', err.message);
+    return searchCorpusFTS(keywords, opts);
+  }
+}
+
+/**
+ * Hybrid corpus retrieval: run semantic (vector) + lexical (FTS) in parallel and
+ * fuse with Reciprocal Rank Fusion. Falls back cleanly: when pgvector is off,
+ * searchCorpusSemantic already returns FTS results, so fusion still works (the two
+ * lists may overlap heavily — RRF dedups by id).
+ *
+ * @param {number[]|null} embedding — query vector (null → lexical-only)
+ * @param {string[]} keywords       — for the FTS path
+ * @param {object} opts — { spectra?, sinceDate?, limit?, perSpectrum?, k? }
+ * @returns {Promise<{ranked, grouped, meta}>}
+ */
+export async function searchCorpusHybrid(embedding, keywords, opts = {}) {
+  if (!pool) return { ranked: [], grouped: {}, meta: { semanticCount: 0, lexicalCount: 0, fusedCount: 0, returnedCount: 0, bothRetrieversCount: 0 } };
+  // Safety ceiling on rows pulled from each retriever (protects the vector scan).
+  // Raised to 1000 so no real topic is capped — display has no per-camp limit.
+  const retrieveLimit = Math.min(1000, Math.max(1, parseInt(opts.limit, 10) || 50));
+  const [semantic, lexical] = await Promise.all([
+    embedding ? searchCorpusSemantic(embedding, keywords, { ...opts, limit: retrieveLimit }) : Promise.resolve([]),
+    searchCorpusFTS(keywords, { ...opts, limit: retrieveLimit }),
+  ]);
+  return combineRetrieval({
+    semantic, lexical,
+    k: opts.k,
+    limit: opts.limit ?? 50,
+    perSpectrum: opts.perSpectrum,
+  });
+}
+
+/** Record a successful feed fetch (resets the failure counter). */
+export async function recordFeedSuccess(feedUrl, sourceName, spectrum) {
+  if (!pool) return;
+  try {
+    const { text, values } = buildFeedSuccessQuery(feedUrl, sourceName, spectrum);
+    await pool.query(text, values);
+  } catch (err) {
+    console.error('[DB:recordFeedSuccess]', err.message);
+  }
+}
+
+/** Record a failed feed fetch (increments counter, escalates status). */
+export async function recordFeedFailure(feedUrl, sourceName, spectrum) {
+  if (!pool) return;
+  try {
+    const { text, values } = buildFeedFailureQuery(feedUrl, sourceName, spectrum);
+    await pool.query(text, values);
+  } catch (err) {
+    console.error('[DB:recordFeedFailure]', err.message);
+  }
+}
+
+/** Persist NLI verification results attributed to evidence sources (B5 foundation). */
+export async function saveNliResults(rows) {
+  if (!pool || !Array.isArray(rows) || rows.length === 0) return;
+  try {
+    const values = [];
+    const params = [];
+    rows.forEach((r, i) => {
+      params.push(`($${i * 3 + 1}, $${i * 3 + 2}, $${i * 3 + 3})`);
+      values.push(r.source_domain, r.label, r.topic_norm || null);
+    });
+    await pool.query(
+      `INSERT INTO nli_results (source_domain, label, topic_norm) VALUES ${params.join(',')}`,
+      values
+    );
+  } catch (err) {
+    console.error('[DB:saveNliResults]', err.message);
+  }
+}
+
+/** Measured factuality per source: NLI support rate (min 5 datapoints to show). */
+export async function getSourceNliStats(minN = 5) {
+  if (!pool) return [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT source_domain,
+              COUNT(*)::int AS n,
+              COUNT(*) FILTER (WHERE label IN ('supported','entailment'))::int AS supported,
+              COUNT(*) FILTER (WHERE label = 'contradiction')::int AS contradicted
+       FROM nli_results
+       GROUP BY source_domain
+       HAVING COUNT(*) >= $1
+       ORDER BY (COUNT(*) FILTER (WHERE label IN ('supported','entailment')))::float / COUNT(*) DESC`,
+      [minN]
+    );
+    return rows.map(r => ({ ...r, supportRate: Math.round((r.supported / r.n) * 100) }));
+  } catch (err) {
+    console.error('[DB:getSourceNliStats]', err.message);
+    return [];
+  }
+}
+
+/** Save a balance-feedback vote (audit D5). Upsert: re-voting flips the verdict. */
+export async function saveAnalysisFeedback({ topicNorm, lang, verdict, ipHash }) {
+  if (!pool) return { ok: false };
+  try {
+    await pool.query(
+      `INSERT INTO analysis_feedback (topic_norm, lang, verdict, ip_hash)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (topic_norm, ip_hash) DO UPDATE SET verdict = EXCLUDED.verdict, created_at = now()`,
+      [topicNorm, lang || 'de', verdict, ipHash || null]
+    );
+    return { ok: true };
+  } catch (err) {
+    console.error('[DB:saveAnalysisFeedback]', err.message);
+    return { ok: false };
+  }
+}
+
+/** Aggregate feedback for the admin dashboard: totals + last-7-days split. */
+export async function getFeedbackStats() {
+  if (!pool) return null;
+  try {
+    const { rows } = await pool.query(
+      `SELECT verdict, COUNT(*)::int AS n,
+              COUNT(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS n7d
+       FROM analysis_feedback GROUP BY verdict`
+    );
+    const out = { up: 0, down: 0, up7d: 0, down7d: 0 };
+    for (const r of rows) {
+      out[r.verdict] = r.n;
+      out[`${r.verdict}7d`] = r.n7d;
+    }
+    return out;
+  } catch (err) {
+    console.error('[DB:getFeedbackStats]', err.message);
+    return null;
+  }
+}
+
+/** Prune corpus articles older than `days` (retention, audit B1). Returns rows deleted. */
+export async function pruneCorpus(days) {
+  if (!pool) return 0;
+  try {
+    const { text, values } = buildPruneCorpusQuery(days);
+    const res = await pool.query(text, values);
+    return res.rowCount || 0;
+  } catch (err) {
+    console.error('[DB:pruneCorpus]', err.message);
+    return 0;
+  }
+}
+
+/** Recent corpus articles (id + text + spectrum) for the persistent-clustering pass. */
+export async function listRecentForClustering(opts = {}) {
+  if (!pool) return [];
+  try {
+    const { text, values } = buildRecentForClusteringQuery(opts);
+    const { rows } = await pool.query(text, values);
+    return rows;
+  } catch (err) {
+    console.error('[DB:listRecentForClustering]', err.message);
+    return [];
+  }
+}
+
+/** Batch-write stable cluster_id assignments. Returns rows updated. */
+export async function updateClusterIds(assignments) {
+  if (!pool) return 0;
+  const q = buildUpdateClusterIdsQuery(assignments);
+  if (!q) return 0;
+  try {
+    const res = await pool.query(q.text, q.values);
+    return res.rowCount || 0;
+  } catch (err) {
+    console.error('[DB:updateClusterIds]', err.message);
+    return 0;
+  }
+}
+
+/**
+ * Corpus + feed-health stats for the admin metrics dashboard (audit fix A4).
+ * Single round trip per query; null-safe when DB is down.
+ */
+export async function getCorpusStats() {
+  if (!pool) return null;
+  try {
+    const [bySpectrum, embeddings, feeds] = await Promise.all([
+      pool.query(`SELECT spectrum, COUNT(*)::int AS n, MAX(fetched_at) AS last_fetched
+                  FROM corpus_articles GROUP BY spectrum`),
+      pgvectorReady
+        ? pool.query(`SELECT COUNT(*)::int AS n FROM corpus_embeddings`)
+        : Promise.resolve({ rows: [{ n: 0 }] }),
+      pool.query(`SELECT feed_url, source_name, spectrum, status, consecutive_failures,
+                         last_success, last_failure
+                  FROM feed_health ORDER BY status DESC, source_name`),
+    ]);
+    const spectra = {};
+    let total = 0, lastFetched = null;
+    for (const r of bySpectrum.rows) {
+      spectra[r.spectrum] = r.n;
+      total += r.n;
+      if (!lastFetched || (r.last_fetched && r.last_fetched > lastFetched)) lastFetched = r.last_fetched;
+    }
+    return {
+      articles: { total, bySpectrum: spectra, lastFetched },
+      embeddings: embeddings.rows[0]?.n ?? 0,
+      pgvector: pgvectorReady,
+      feeds: feeds.rows,
+      feedsDown: feeds.rows.filter(f => f.status !== 'ok').length,
+    };
+  } catch (err) {
+    console.error('[DB:getCorpusStats]', err.message);
+    return null;
+  }
+}
+
+/** Get feeds that are degraded/down (optionally per spectrum). */
+export async function getDownFeeds(spectra) {
+  if (!pool) return [];
+  try {
+    const { text, values } = buildDownFeedsQuery(spectra);
+    const { rows } = await pool.query(text, values);
+    return rows;
+  } catch (err) {
+    console.error('[DB:getDownFeeds]', err.message);
+    return [];
+  }
+}
+
+/** Upsert a source's spectrum rating with provenance. */
+export async function upsertSourceRating(rating) {
+  if (!pool) return null;
+  try {
+    const { text, values } = buildUpsertSourceRatingQuery(rating);
+    await pool.query(text, values);
+    return { ok: true };
+  } catch (err) {
+    console.error('[DB:upsertSourceRating]', err.message);
+    throw err;
+  }
+}
+
+/** Get a single source's rating by domain (normalized). */
+export async function getSourceRating(domain) {
+  if (!pool) return null;
+  try {
+    const norm = String(domain || '').toLowerCase().replace(/^www\./, '');
+    const { rows } = await pool.query(
+      `SELECT source_domain, source_name, spectrum, tier, factual_rating, rating_source, confidence, reach_weight, notes
+       FROM source_ratings WHERE source_domain = $1`,
+      [norm]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    console.error('[DB:getSourceRating]', err.message);
+    return null;
   }
 }
 

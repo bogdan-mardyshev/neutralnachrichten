@@ -14,18 +14,47 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { formatDomainsForPrompt } from './lib/mediaWhitelist.js';
-import { validateAnalysis, resolveArticleURL, isRecentEnough } from './lib/validation.js';
-import { translateQueryToGerman, translateAnalysis } from './lib/translate.js';
+import { extractJSON } from './lib/utils.js';
+import { translateAnalysis } from './lib/translate.js';
 import { SPECTRUMS, validateAnalysisStructure, buildDeepAnalysisPrompt } from './lib/analysisValidator.js';
 import { createOAuthCode, consumeOAuthCode } from './lib/oauthCodes.js';
 import { searchAllFeeds, buildCoverageDistribution, detectSilence, buildCoverageVolume, extractSearchKeywords, getInputWordCount } from './lib/rssSearch.js';
 import { callGeminiWithRSSContext } from './lib/rssDirectAnalysis.js';
-import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference } from './db.js';
+import { retrieveCorpusSpectra } from './lib/corpusRetrieval.js';
+import { getEmbedding } from './lib/embeddings.js';
+import { groundAnalysis, dedupeArticles } from './lib/citationGrounding.js';
+import { verifyBlindspots } from './lib/blindspotVerification.js';
+import { buildReliabilityEnvelope } from './lib/confidenceScore.js';
+import { enrichDeepAnalysis, flattenSpectra } from './lib/deepAnalysisEnrich.js';
+import { composeReliability } from './lib/reliabilityPipeline.js';
+import { extractClaims, verifyClaims } from './lib/claimVerification.js';
+import { makeBatchEntailment } from './lib/entailment.js';
+import { analyzeBiasProfile } from './lib/biasProfile.js';
+import { buildRatingsMap, deriveMeasuredFactual, reconcileFactual, SOURCE_RATINGS } from './lib/sourceRatingsSeed.js';
+import { clusterArticles } from './lib/storyClustering.js';
+import { metrics } from './lib/metrics.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds, getCorpusStats, saveAnalysisFeedback, getFeedbackStats, saveNliResults, getSourceNliStats } from './db.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, getRedisClient, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
 dotenv.config();
+
+// ── Sentry (audit fix A4): without this, production errors only ever hit stdout.
+// No-op when SENTRY_DSN is unset (local dev). Must run before request handling.
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.RAILWAY_ENVIRONMENT || 'development',
+    tracesSampleRate: 0.1,
+  });
+  console.log('[Sentry] error reporting enabled');
+} else {
+  console.warn('[Sentry] SENTRY_DSN not set — errors only go to stdout');
+}
+/** Report an error to Sentry (if configured) without ever throwing. */
+function reportError(err, context = {}) {
+  try { if (process.env.SENTRY_DSN) Sentry.captureException(err, { extra: context }); } catch { /* never block on telemetry */ }
+}
 
 // ── DB + Redis init (non-blocking — server starts even without either) ────────
 initDB().then(ok => {
@@ -66,13 +95,15 @@ const IS_PRODUCTION = !!process.env.RAILWAY_ENVIRONMENT;
 const GEMINI_TIMEOUT_SSE  = IS_PRODUCTION ? 90000 : 180000; // SSE path — no Railway kill
 const GEMINI_ATTEMPT_TIMEOUT = IS_PRODUCTION ? 50000 : 90000; // REST path — stays under 60s kill
 const GLOBAL_TIMEOUT_MS     = IS_PRODUCTION ? 58000 : 120000;
-const GLOBAL_TRANSL_TIMEOUT = IS_PRODUCTION ? 20000 :  40000;
+const GLOBAL_TRANSL_TIMEOUT = IS_PRODUCTION ? 35000 :  40000;
 
-const rawKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
+const rawKey = process.env.GEMINI_API_KEY || '';
 const GEMINI_API_KEY = rawKey.replace(/["']/g, '').trim();
 
 // Single genAI instance reused across all calls (query translate, search, analysis translate)
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+// One batched NLI call per fresh corpus analysis (audit A2) — see applyCorpusReliability.
+const batchEntailment = makeBatchEntailment(genAI);
 
 const app = express();
 
@@ -86,7 +117,23 @@ app.use(helmet({
   },
 }));
 
-app.use(cors());
+// CORS allowlist (audit M1): the bare cors() reflected ANY origin. Requests with
+// no Origin header (same-origin browser calls, curl, server-to-server) are always
+// allowed; cross-origin is restricted to localhost (dev), *.up.railway.app
+// (staging/preview) and the configured production hosts (CORS_ORIGINS).
+const CORS_ALLOWLIST = (process.env.CORS_ORIGINS ||
+  'https://neutralenachrichten.com,https://www.neutralenachrichten.com')
+  .split(',').map(s => s.trim()).filter(Boolean);
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin) return cb(null, true);
+    let host = '';
+    try { host = new URL(origin).hostname; } catch { return cb(null, false); }
+    const ok = host === 'localhost' || host === '127.0.0.1'
+      || host.endsWith('.up.railway.app') || CORS_ALLOWLIST.includes(origin);
+    cb(null, ok);
+  },
+}));
 app.use(express.json({ limit: '1kb' }));
 
 // ── Health check (Railway uses this for zero-downtime deploys) ────────────────
@@ -117,16 +164,30 @@ class Semaphore {
     this._active = 0;
     this._queue  = [];
   }
-  acquire() {
-    return new Promise((resolve) => {
-      if (this._active < this.max) { this._active++; resolve(); }
-      else this._queue.push(resolve);
+  /**
+   * Acquire a slot.
+   * @param {number} timeoutMs — max ms to wait in queue; 0 = unlimited.
+   *   If exceeded, rejects with Error('semaphore_timeout').
+   */
+  acquire(timeoutMs = 0) {
+    return new Promise((resolve, reject) => {
+      if (this._active < this.max) { this._active++; resolve(); return; }
+      const entry = { resolve, reject, timer: null };
+      this._queue.push(entry);
+      if (timeoutMs > 0) {
+        entry.timer = setTimeout(() => {
+          const idx = this._queue.indexOf(entry);
+          if (idx !== -1) this._queue.splice(idx, 1);
+          reject(new Error('semaphore_timeout'));
+        }, timeoutMs);
+      }
     });
   }
   release() {
     if (this._queue.length > 0) {
-      const next = this._queue.shift();
-      next(); // transfer slot directly — _active stays the same
+      const entry = this._queue.shift();
+      if (entry.timer) clearTimeout(entry.timer);
+      entry.resolve(); // transfer slot directly — _active stays the same
     } else {
       this._active--;
     }
@@ -137,6 +198,9 @@ class Semaphore {
 
 const MAX_CONCURRENT_GEMINI = parseInt(process.env.MAX_CONCURRENT_GEMINI || '6');
 const geminiSemaphore = new Semaphore(MAX_CONCURRENT_GEMINI);
+// Max time a request may wait in the semaphore queue before returning 503.
+// Prevents thundering-herd pile-ups from blocking indefinitely under high load.
+const SEMAPHORE_WAIT_TIMEOUT_MS = IS_PRODUCTION ? 45000 : 120000;
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
 // In-memory topic counts. Resets on redeploy — Redis stores persistent counts.
@@ -166,21 +230,19 @@ function trackSearch(topic) {
 const FREE_DAILY_LIMIT = parseInt(process.env.FREE_DAILY_LIMIT || '10');
 const ADMIN_KEY        = process.env.ADMIN_KEY || '';
 
-// Estimated Gemini 2.5 Flash costs per analysis (approximate):
-// Call 1 — main analysis (thinking ON, googleSearch):
-//   Input:    ~4 000 tokens × $0.075/1M  = $0.0003
+// Estimated Gemini 2.5 Flash costs per analysis (RSS-Direct, no grounding):
+// Call 1 — main analysis (thinking OFF, RSS context, no googleSearch):
+//   Input:    ~6 000 tokens × $0.075/1M  = $0.00045
 //   Output:   ~3 000 tokens × $0.30/1M   = $0.0009
-//   Thinking: ~12 000 tokens × $3.50/1M  = $0.042
-//   Search grounding: $0.035/request     = $0.035
-// Call 2 — deep analysis (thinking OFF, no search):
-//   Input:    ~1 000 tokens × $0.075/1M  = $0.000075
+// Call 2 — deep analysis (thinking OFF):
+//   Input:    ~2 000 tokens × $0.075/1M  = $0.00015
 //   Output:   ~1 500 tokens × $0.30/1M   = $0.00045
 // Call 3 — translation EN/RU (thinking OFF):
 //   Input:    ~7 000 tokens × $0.075/1M  = $0.000525
 //   Output:   ~6 000 tokens × $0.30/1M   = $0.0018
-// Total per DE analysis ≈ $0.079
-// Total per EN/RU analysis ≈ $0.081
-const COST_PER_ANALYSIS = 0.080;
+// Total per DE analysis  ≈ $0.0014
+// Total per EN/RU analysis ≈ $0.003
+const COST_PER_ANALYSIS = 0.003;
 const TOKENS_PER_ANALYSIS_INPUT  = 4000;
 const TOKENS_PER_ANALYSIS_OUTPUT = 3000;
 
@@ -212,22 +274,28 @@ function getIPUsage(ip) {
   return entry;
 }
 
-function checkDailyLimit(ip) {
-  const usage = getIPUsage(ip);
-  return { allowed: usage.count < FREE_DAILY_LIMIT, remaining: Math.max(0, FREE_DAILY_LIMIT - usage.count), usage };
-}
 
-function recordAnalysis(ip) {
-  const usage = getIPUsage(ip);
-  usage.count++;
-  usage.tokensIn  += TOKENS_PER_ANALYSIS_INPUT;
-  usage.tokensOut += TOKENS_PER_ANALYSIS_OUTPUT;
-}
-
-// Middleware: extract real IP behind Railway / Nginx proxy
+// Middleware: extract real IP behind Railway / Nginx proxy.
+//
+// SECURITY: X-Forwarded-For is a comma-separated chain "client, proxy1, proxy2, ...".
+// A malicious client can prepend arbitrary fake IPs to the LEFT of the chain; only the
+// entries APPENDED by trusted proxies (on the RIGHT) are reliable. The rightmost entry
+// is the IP that our edge proxy (Railway) observed as the TCP peer — i.e. the real client.
+// Taking the leftmost value (the old behaviour) let anyone spoof their IP per request and
+// bypass per-IP rate limits / daily usage caps. We take the rightmost trusted hop instead.
+//
+// TRUSTED_PROXY_HOPS = how many trailing hops are our own infrastructure (default 1 =
+// Railway edge). We return the entry just before those trusted hops.
+const TRUSTED_PROXY_HOPS = Math.max(1, parseInt(process.env.TRUSTED_PROXY_HOPS || '1', 10) || 1);
 function getClientIP(req) {
   const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) return forwarded.split(',')[0].trim();
+  if (forwarded) {
+    const chain = forwarded.split(',').map(s => s.trim()).filter(Boolean);
+    if (chain.length) {
+      const idx = Math.max(0, chain.length - TRUSTED_PROXY_HOPS);
+      return chain[idx];
+    }
+  }
   return req.socket?.remoteAddress || 'unknown';
 }
 
@@ -286,6 +354,62 @@ const forgotLimiter = rateLimit({
   store: makeRedisStore('forgot')(),
   message: { error: 'Zu viele Anfragen. Bitte versuche es in einer Stunde erneut.' },
 });
+
+// Feedback burst limiter: /api/feedback writes a DB row per call (helpful/not),
+// so an unauthenticated client could spam votes and skew stats. Cap per-IP bursts.
+const feedbackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.FEEDBACK_RATE_PER_MIN, 10) || 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getClientIP,
+  store: makeRedisStore('feedback')(),
+  message: { error: 'Zu viele Feedback-Stimmen. Bitte kurz warten.' },
+});
+
+// Analyze burst limiter (audit fix A7): the per-day quota already exists
+// (FREE_DAILY_LIMIT via checkDailyLimitDB), but nothing stopped a burst of
+// expensive Gemini-backed requests within a minute. Cache hits are cheap and
+// pass through (the handler short-circuits before Gemini on a hit anyway).
+const analyzeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.ANALYZE_RATE_PER_MIN, 10) || 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getClientIP,
+  store: makeRedisStore('analyze')(),
+  message: { error: 'Zu viele Analysen pro Minute. Bitte kurz warten.' },
+  skip: (req) => !!(req.headers['x-admin-key'] && req.headers['x-admin-key'] === ADMIN_KEY),
+});
+
+// Daily Gemini budget guard (audit fix A7): a hard server-wide ceiling on
+// Gemini calls per UTC day. When exceeded we keep serving cache hits but refuse
+// new model-backed analyses with 503 — protects against abuse-driven bills.
+// Cache schema version (audit D2). Bump whenever the cached analysis shape
+// changes (new _reliability fields, citation format, …) — old entries are then
+// simply missed instead of serving a stale/incompatible format for up to 24h.
+// v5: post-audit format (recalibrated confidence + NLI claim report).
+// v6: uncapped article retrieval (maxPerFeed/perSpectrum lifted) — old v5 entries
+//     carry the previously-capped _rss.spectra, so they must be invalidated for the
+//     "show all available articles" change to take effect on already-analysed topics.
+const CACHE_SCHEMA = 'v6';
+
+const GEMINI_DAILY_BUDGET = parseInt(process.env.GEMINI_DAILY_BUDGET, 10) || 3000;
+let geminiBudget = { day: todayUTC(), calls: 0 };
+function geminiBudgetOk() {
+  const today = todayUTC();
+  if (geminiBudget.day !== today) geminiBudget = { day: today, calls: 0 };
+  return geminiBudget.calls < GEMINI_DAILY_BUDGET;
+}
+function geminiBudgetSpend() {
+  const today = todayUTC();
+  if (geminiBudget.day !== today) geminiBudget = { day: today, calls: 0 };
+  geminiBudget.calls++;
+  if (geminiBudget.calls === GEMINI_DAILY_BUDGET) {
+    console.error(`[Budget] GEMINI_DAILY_BUDGET (${GEMINI_DAILY_BUDGET}) reached — refusing new model calls until UTC midnight`);
+    reportError(new Error('Gemini daily budget exhausted'), { budget: GEMINI_DAILY_BUDGET });
+  }
+}
 
 // ── Token helpers (SHA-256 hash stored in DB, plain token sent by email) ──────
 function generateToken() {
@@ -382,28 +506,7 @@ async function checkDailyLimitDB(ip) {
   return { allowed: count < FREE_DAILY_LIMIT, remaining };
 }
 
-function extractJSON(rawText) {
-  let cleaned = rawText.trim();
-  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
-
-  const first = cleaned.indexOf('{');
-  const last = cleaned.lastIndexOf('}');
-
-  if (first === -1 || last === -1 || last < first) {
-    throw new Error('No JSON object found in Gemini response');
-  }
-
-  const candidate = cleaned.substring(first, last + 1);
-  try {
-    return JSON.parse(candidate);
-  } catch {
-    // Attempt repair: remove trailing commas before } or ] (common Gemini truncation artifact)
-    const repaired = candidate
-      .replace(/,\s*([}\]])/g, '$1')
-      .replace(/:\s*undefined/g, ': null');
-    return JSON.parse(repaired);
-  }
-}
+// extractJSON imported from lib/utils.js
 
 // ── RSS helpers ───────────────────────────────────────────────────────────────
 
@@ -411,6 +514,78 @@ function extractJSON(rawText) {
 // RSS feeds are German, so German topics work best; English/Russian topics
 // still work for shared proper nouns (Ukraine, Inflation, AfD, etc.).
 // extractSearchKeywords is now in lib/rssSearch.js (v2) — imported above
+
+// ── Corpus-vs-live source selection (Step 12 cutover) ───────────────────────────
+//
+// When CORPUS_ANALYSIS_ENABLED=true and the corpus has enough articles for the
+// topic, analysis is sourced from Corpus V2 (hybrid semantic+lexical retrieval over
+// 33 stored outlets, every article carrying a REAL stored URL) instead of a live
+// per-request RSS fetch. Output shape is identical (corpusToSpectra is a drop-in),
+// so the rest of the pipeline is unchanged. Falls back to live RSS on:
+//   - flag off / DB down / corpus too thin / any retrieval error
+// → with the flag OFF this is byte-for-byte the previous searchAllFeeds behavior.
+const CORPUS_ANALYSIS_ENABLED = process.env.CORPUS_ANALYSIS_ENABLED === 'true';
+const CORPUS_MIN_ARTICLES = parseInt(process.env.CORPUS_MIN_ARTICLES, 10) || 8;
+// How many articles per camp Gemini writes perspective summaries for. ALL matching
+// articles are still retrieved, counted and DISPLAYED (with real links) — this only
+// bounds the AI-summary workload so one request stays within model token/latency
+// limits. Articles beyond this show as raw cards (original RSS excerpt + link).
+const GEMINI_MAX_PER_SPECTRUM = parseInt(process.env.GEMINI_MAX_PER_SPECTRUM, 10) || 12;
+
+async function getSpectraForTopic(topic) {
+  if (CORPUS_ANALYSIS_ENABLED && isDBAvailable()) {
+    try {
+      const corpus = await retrieveCorpusSpectra(
+        topic,
+        { getEmbedding, searchHybrid: (embedding, kw, o) => searchCorpusHybrid(embedding, kw, o) },
+        // Retrieve ALL matching articles per camp — no per-camp ceiling. The page
+        // shows the full, honest coverage (real links); the Gemini call is bounded
+        // separately (maxPerSpectrum), so this only affects what's displayed. The
+        // single remaining bound is a DB safety cap (1000) inside searchCorpusHybrid.
+        { limit: 1000, perSpectrum: Infinity }
+      );
+      if ((corpus?.total_articles ?? 0) >= CORPUS_MIN_ARTICLES) {
+        console.log(`[Corpus] ${corpus.total_articles} articles (semantic=${corpus.search_meta?.usedSemantic})`);
+        return corpus;
+      }
+      console.log(`[Corpus] only ${corpus?.total_articles ?? 0} articles for "${topic}" — live RSS fallback`);
+    } catch (err) {
+      console.error('[Corpus] retrieval failed, live RSS fallback:', err.message);
+    }
+  }
+  // No per-feed ceiling — the Analyzed-Sources carousel exposes every matched
+  // article per outlet. The Gemini summary is bounded separately by
+  // GEMINI_MAX_PER_SPECTRUM, so this only affects what's displayed.
+  return searchAllFeeds(extractSearchKeywords(topic), { inputWordCount: getInputWordCount(topic), maxPerFeed: Infinity });
+}
+
+// ── Step 12b: corpus citation grounding + reliability envelope ───────────────────
+//
+// For corpus-sourced analyses only. Gemini's prompt context carries source_name +
+// title but NOT the domain, so enrichWithRSSData's domain-keyed URL match misses;
+// citation grounding matches emitted articles to corpus rows by URL / title overlap
+// and stamps the REAL stored URL (this is what makes source links clickable). Also
+// computes verified blindspots (feed_health) + a confidence/coverage envelope.
+// No-op for the live-RSS path (returns the analysis unchanged, reliability null).
+async function applyCorpusReliability(analysis, rssData) {
+  const out = await composeReliability(analysis, rssData, {
+    getDownFeeds: () => getDownFeeds(),
+    batchEntailmentFn: batchEntailment,
+    budgetOk: geminiBudgetOk,
+    budgetSpend: geminiBudgetSpend,
+    recordEntailmentCall: () => metrics.recordGeminiCall('entailment'),
+    onNli: (rows) => saveNliResults(rows).catch(() => {}),
+    log: (msg) => console.log(msg),
+    coverageWindow: { days: parseInt(process.env.INGEST_MAX_AGE_DAYS, 10) || 14, outlets: SOURCE_RATINGS.length },
+  });
+  if (out.reliability) {
+    const r = out.reliability;
+    console.log(`[Reliability] confidence=${r.confidence.score}/${r.confidence.band} grounded=${r.grounding?.grounded ?? '?'}/${r.grounding?.total ?? '?'} flagshipSilent=[${r.blindspots?.flagshipSilences ?? ''}] verifiedSilent=[${r.blindspots?.verifiedSilences ?? ''}]`);
+    metrics.recordConfidence(r.confidence.score);
+    if (r.grounding) metrics.recordGrounding(r.grounding.groundingRatio);
+  }
+  return out;
+}
 
 // Merge real RSS data into a Gemini-produced analysis object.
 // Returns a new analysis object (original is not mutated).
@@ -440,7 +615,9 @@ function enrichWithRSSData(analysis, rssData) {
   let rssUrlsAdded = 0;
   for (const spectrum of SPECTRUMS) {
     result.news_spectrum[spectrum] = (analysis.news_spectrum[spectrum] || []).map(source => {
-      if (!source.url_is_search_fallback) return source; // grounding already gave a real URL
+      // Enrich if: no URL at all (RSS-Direct path) OR URL is a Google Search fallback (grounding path)
+      const needsUrl = !source.article_url || source.url_is_search_fallback;
+      if (!needsUrl) return source;
 
       const domain = (source.source_domain || '').replace(/^www\./, '');
       const candidates =
@@ -462,9 +639,9 @@ function enrichWithRSSData(analysis, rssData) {
         if (score > bestScore) { bestScore = score; bestArt = art; }
       }
 
-      // Only replace when there's meaningful title overlap (≥15% word match)
-      // — prevents linking to completely unrelated articles from the same outlet
-      if (!bestArt?.article_url || bestScore < 0.15) return source;
+      // RSS-Direct: Gemini copies exact titles from RSS → scores ≈1.0
+      // Threshold 0.30 guards against accidental domain matches on unrelated articles.
+      if (!bestArt?.article_url || bestScore < 0.30) return source;
 
       rssUrlsAdded++;
       return {
@@ -495,16 +672,35 @@ function enrichWithRSSData(analysis, rssData) {
   // Handles two cases:
   //   (a) Gemini returned empty array [] for this spectrum
   //   (b) Gemini was fully degraded and left a "Kein Artikel gefunden" placeholder
+  //
+  // Relevance guard: only use RSS articles that matched at least one keyword in
+  // the TITLE (titleScore > 0). Description-only matches are passing references,
+  // not actual coverage — showing them would mislead users.
+  //
+  // rss_only: true marks these articles so the UI can display a note that no
+  // Gemini perspective analysis is available for this outlet.
   const isPlaceholder = (art) =>
     art.source_name === 'Kein Artikel gefunden' || art.source_domain === 'n/a';
 
   let rssFilled = 0;
+  let rssSkippedNoTitle = 0;
   for (const spectrum of SPECTRUMS) {
     const existing = result.news_spectrum[spectrum] || [];
     const hasReal  = existing.some(a => !isPlaceholder(a));
     if (hasReal) continue; // Gemini already has real articles
-    const rssArts = (rssData.spectra[spectrum]?.articles || []).slice(0, 2);
+
+    // Only use articles where ≥1 keyword is a FULL WORD in the title (not compound-embedded).
+    // titleScore > 0 passes compound-embedded matches (+1pt) like "haushalt" in "Haushalte"
+    // which causes false positives — titleFullWordCount requires a real standalone match.
+    const rssArts = (rssData.spectra[spectrum]?.articles || [])
+      .filter(art => (art.titleFullWordCount ?? 0) > 0)
+      .slice(0, 2);
+
+    const skipped = (rssData.spectra[spectrum]?.articles || []).length - rssArts.length;
+    rssSkippedNoTitle += Math.max(0, skipped);
+
     if (rssArts.length === 0) continue;
+
     result.news_spectrum[spectrum] = rssArts.map(art => ({
       source_name:               art.source_name,
       source_domain:             art.source_domain,
@@ -512,6 +708,7 @@ function enrichWithRSSData(analysis, rssData) {
       article_url:               art.article_url || null,
       url_is_search_fallback:    !art.article_url,
       publication_date:          art.pubDate?.slice(0, 10) ?? undefined,
+      rss_only:                  true,   // ← no Gemini perspective analysis for this article
       // Brief machine-generated summary from RSS description (no Gemini context)
       summary_of_perspective:    art.description
         ? `${art.source_name} berichtet: ${art.description.slice(0, 300)}`
@@ -519,7 +716,20 @@ function enrichWithRSSData(analysis, rssData) {
     }));
     rssFilled += rssArts.length;
   }
-  if (rssFilled > 0) console.log(`[RSS→Spectrum] Added ${rssFilled} RSS articles to empty spectra`);
+  if (rssFilled > 0) console.log(`[RSS→Spectrum] Added ${rssFilled} RSS articles to empty spectra (skipped ${rssSkippedNoTitle} desc-only matches)`);
+
+  // ── 4b. Reconcile silence flags against final news_spectrum state ────────
+  // Gemini may have found an article for a spectrum that RSS missed.
+  // If news_spectrum[spectrum] now has real articles, the silence flag must
+  // be cleared — otherwise the coverage bar contradicts the article card.
+  for (const spectrum of SPECTRUMS) {
+    if (!result.coverage_distribution[spectrum]?.silence) continue;
+    const hasReal = (result.news_spectrum[spectrum] || []).some(a => !isPlaceholder(a));
+    if (hasReal) {
+      result.coverage_distribution[spectrum].silence = false;
+      console.log(`[RSS→Coverage] silence cleared for ${spectrum} (Gemini found articles RSS missed)`);
+    }
+  }
 
   // ── 5. Stamp analyzed_at + store RSS metadata for downstream use ──────────
   result.analyzed_at = new Date().toISOString();
@@ -543,275 +753,85 @@ function enrichWithRSSData(analysis, rssData) {
   return result;
 }
 
-function buildPrompt(topic, language) {
-  const langNames = { de: 'German', en: 'English', ru: 'Russian' };
-  const targetLang = langNames[language] || 'English';
-  const today = new Date().toISOString().split('T')[0];
-
-  const ninetyDaysAgo = new Date();
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-  const earliestDate = ninetyDaysAgo.toISOString().split('T')[0];
-
-  return `You are a German media analysis assistant. Use Google Search to find MULTIPLE real articles about "${topic}" from FIVE political spectrums in German-language media.
-
-OUTPUT RULES:
-- Output ONLY the JSON object. No markdown, no code fences, no preamble.
-- Response must start with { and end with }.
-- Use EXACTLY these English keys — NEVER translate keys to another language.
-- All text VALUES must be in ${targetLang}.
-
-GERMAN MEDIA SPECTRUM — search each group separately, find 2-4 DIFFERENT articles per spectrum:
-- LEFT (search: "${topic} site:taz.de OR site:nd-aktuell.de OR site:jungewelt.de"):
-  Outlets: taz (taz.de), nd-aktuell (nd-aktuell.de), Junge Welt (jungewelt.de)
-- CENTER_LEFT (search: "${topic} site:spiegel.de OR site:sueddeutsche.de OR site:zeit.de OR site:tagesspiegel.de"):
-  Outlets: Spiegel (spiegel.de), Süddeutsche Zeitung (sueddeutsche.de), Zeit (zeit.de), Tagesspiegel (tagesspiegel.de)
-- CENTER (search: "${topic} site:tagesschau.de OR site:zdf.de OR site:deutschlandfunk.de"):
-  Outlets: Tagesschau/ARD (tagesschau.de), ZDF (zdf.de), Deutschlandfunk (deutschlandfunk.de)
-- CENTER_RIGHT (search: "${topic} site:faz.net OR site:welt.de OR site:focus.de OR site:n-tv.de OR site:handelsblatt.com"):
-  Outlets: FAZ (faz.net), Welt (welt.de), Focus (focus.de), NTV (n-tv.de), Handelsblatt (handelsblatt.com)
-- RIGHT (search: "${topic} site:bild.de OR site:jungefreiheit.de OR site:tichyseinblick.de"):
-  Outlets: Bild (bild.de), Junge Freiheit (jungefreiheit.de), Tichys Einblick (tichyseinblick.de)
-
-RECENCY: Today: ${today}. Prefer last 90 days (after ${earliestDate}).
-IMPORTANT: Each spectrum MUST have 2-4 articles from DIFFERENT outlets where possible.
-publication_date MUST come from search results — omit if uncertain.
-DO NOT include article URLs — not part of the schema.
-
-COVERAGE ESTIMATE (one value per spectrum, based on how many articles you found):
-- "high"   → 3+ recent articles found across the spectrum
-- "medium" → 1-2 articles found, or only older coverage
-- "low"    → barely any coverage found
-- "none"   → zero articles found (deliberate silence possible)
-
-REQUIRED JSON STRUCTURE (each spectrum is an ARRAY of 2-4 article objects):
-{
-  "analysis_topic": "${topic}",
-  "response_language": "${language}",
-  "overall_non_partisan_analysis": "<3-4 sentence factual summary covering all angles in ${targetLang}>",
-  "news_spectrum": {
-    "left": [
-      { "source_name": "taz", "source_domain": "taz.de", "article_title": "<exact headline>", "summary_of_perspective": "<2-3 sentences on this outlet's angle in ${targetLang}>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" },
-      { "source_name": "nd-aktuell", "source_domain": "nd-aktuell.de", "article_title": "<exact headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" }
-    ],
-    "center_left": [
-      { "source_name": "Der Spiegel", "source_domain": "spiegel.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" },
-      { "source_name": "Süddeutsche Zeitung", "source_domain": "sueddeutsche.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" }
-    ],
-    "center": [
-      { "source_name": "Tagesschau", "source_domain": "tagesschau.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" },
-      { "source_name": "ZDF", "source_domain": "zdf.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" }
-    ],
-    "center_right": [
-      { "source_name": "FAZ", "source_domain": "faz.net", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" },
-      { "source_name": "Welt", "source_domain": "welt.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" }
-    ],
-    "right": [
-      { "source_name": "Bild", "source_domain": "bild.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" },
-      { "source_name": "Junge Freiheit", "source_domain": "jungefreiheit.de", "article_title": "<headline>", "summary_of_perspective": "<2-3 sentences>", "publication_date": "<YYYY-MM-DD or omit>", "coverage_estimate": "<high|medium|low|none>" }
-    ]
-  }
-}`;
-}
-
 // buildDeepAnalysisPrompt imported from lib/analysisValidator.js
 
-async function callDeepAnalysis(analysis, timeoutMs = 15000) {
-  // Text-only call — no googleSearch tool, so we can use responseMimeType: 'application/json'
-  // This forces Gemini to always return valid JSON (no markdown, no prose, no broken escaping)
+/**
+ * Run a single deep-analysis Gemini call.
+ * Returns the parsed deep object, or throws on timeout / invalid JSON / bad structure.
+ */
+async function callDeepAnalysisOnce(analysis, timeoutMs) {
   const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
   const prompt = buildDeepAnalysisPrompt(analysis);
 
-  const DEEP_TIMEOUT = timeoutMs;
   const result = await Promise.race([
     model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.3,
-        maxOutputTokens: 8192,
+        maxOutputTokens: 16384,
         responseMimeType: 'application/json',
-        thinkingConfig: { thinkingBudget: 0 }, // no search, no discovery — pure text comparison
-      }
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     }),
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Deep analysis timed out')), DEEP_TIMEOUT)
-    )
+      setTimeout(() => reject(new Error('Deep analysis timed out')), timeoutMs)
+    ),
   ]);
 
   const rawText = result.response.text();
   console.log(`[DeepAnalysis] Raw length=${rawText?.length}`);
-  const deep = extractJSON(rawText); // extractJSON strips any markdown wrapping
+  const deep = extractJSON(rawText);
 
-  // Basic sanity check on required arrays
   if (!Array.isArray(deep.shared_facts) || !Array.isArray(deep.diverging_points) || !Array.isArray(deep.silenced_topics)) {
-    throw new Error('Invalid deep_analysis structure');
+    throw new Error('Invalid deep_analysis structure — required arrays missing');
   }
-  // Ensure optional new fields default to empty structures if Gemini omitted them
-  const SPECTRUMS_DA = ['left', 'center_left', 'center', 'center_right', 'right'];
-  if (!deep.keywords)        deep.keywords        = Object.fromEntries(SPECTRUMS_DA.map(s => [s, []]));
-  if (!deep.sentiment)       deep.sentiment       = Object.fromEntries(SPECTRUMS_DA.map(s => [s, 'neutral']));
-  if (!deep.experts_cited)   deep.experts_cited   = Object.fromEntries(SPECTRUMS_DA.map(s => [s, []]));
-  if (!deep.coverage_volume) deep.coverage_volume = Object.fromEntries(SPECTRUMS_DA.map(s => [s, { week: 0, month: 0 }]));
+  // Ensure optional fields default to empty structures if Gemini omitted them
+  if (!deep.keywords)        deep.keywords        = Object.fromEntries(SPECTRUMS.map(s => [s, []]));
+  if (!deep.sentiment)       deep.sentiment       = Object.fromEntries(SPECTRUMS.map(s => [s, 'neutral']));
+  if (!deep.experts_cited)   deep.experts_cited   = Object.fromEntries(SPECTRUMS.map(s => [s, []]));
+  if (!deep.coverage_volume) deep.coverage_volume = Object.fromEntries(SPECTRUMS.map(s => [s, { week: 0, month: 0 }]));
 
   return deep;
 }
 
-function coverageToPercent(estimate) {
-  switch (estimate) {
-    case 'high':   return 75;
-    case 'medium': return 40;
-    case 'low':    return 10;
-    case 'none':   return 0;
-    default:       return 20;
+/**
+ * Run deep analysis with one automatic retry if Gemini returns empty arrays.
+ * Empty shared_facts + diverging_points = Gemini understood neither the topic
+ * nor the articles — worth a single retry before accepting the degraded result.
+ */
+async function callDeepAnalysis(analysis, timeoutMs = 45000) {
+  // Split budget: attempt-1 gets 60%, retry gets remaining minus 2s buffer
+  const attempt1Budget = Math.round(timeoutMs * 0.6);
+
+  let deep;
+  try {
+    deep = await callDeepAnalysisOnce(analysis, attempt1Budget);
+  } catch (err) {
+    console.error('[DeepAnalysis] Attempt 1 failed:', err.message);
+    // Don't retry on timeout — no budget left
+    if (err.message.includes('timed out')) throw err;
+    // Rethrow structure errors without retry
+    throw err;
   }
-}
 
-async function callGeminiWithRetry(topic, language, maxAttempts = 3, attemptTimeoutMs = GEMINI_ATTEMPT_TIMEOUT) {
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    tools: [{ googleSearch: {} }],
-  });
-
-  let lastError = null;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  // Quality check: if both key arrays are empty, Gemini missed the content
+  const isEmpty = deep.shared_facts.length === 0 && deep.diverging_points.length === 0;
+  if (isEmpty) {
+    const retryBudget = Math.max(10000, timeoutMs - attempt1Budget - 2000);
+    console.warn(`[DeepAnalysis] Empty result on attempt 1 — retrying (budget: ${retryBudget}ms)`);
     try {
-      console.log(`[Gemini] Attempt ${attempt}/${maxAttempts} for topic="${topic}" lang=${language}`);
-
-      const prompt = buildPrompt(topic, language);
-      const result = await Promise.race([
-        model.generateContent({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          // thinkingBudget: 0 must be here (call-level) — model-level generationConfig
-          // gets shallow-merged and may be overridden. Thinking adds 30-120s overhead
-          // which consistently exceeds our 90s SSE budget.
-          generationConfig: { temperature: 0.2, thinkingConfig: { thinkingBudget: 0 } }
-        }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Gemini attempt timed out')), attemptTimeoutMs)
-        )
-      ]);
-
-      const rawText = result.response.text();
-      if (!rawText || rawText.trim().length < 10) {
-        throw new Error('Empty or too-short response from Gemini');
-      }
-      const analysis = extractJSON(rawText);
-
-      if (!validateAnalysisStructure(analysis)) {
-        throw new Error('Invalid response structure');
-      }
-
-      // Extract real article URLs from grounding chunks (resolved redirects)
-      const groundingChunks = result.response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      const resolvedGroundingURLs = await Promise.all(
-        groundingChunks.map(chunk => resolveArticleURL(chunk?.web?.uri).catch(() => null))
-      );
-      console.log(`[Grounding] ${resolvedGroundingURLs.filter(Boolean).length} real URLs from grounding`);
-
-      // Match grounding URLs to spectrum sources by source_domain (arrays)
-      for (const spectrum of SPECTRUMS) {
-        const articles = analysis.news_spectrum[spectrum];
-        for (const source of articles) {
-          const domain = (source.source_domain || '').replace(/^www\./, '');
-          const matched = resolvedGroundingURLs.find(url => {
-            try { return new URL(url).hostname.replace(/^www\./, '').includes(domain); } catch { return false; }
-          });
-          if (matched) {
-            source.article_url = matched;
-            source.url_is_search_fallback = false;
-            console.log(`[Grounding] ${spectrum}/${source.source_name} → direct link`);
-          } else {
-            const fallbackDomain = (domain && domain !== 'n/a') ? domain : null;
-            const q = encodeURIComponent(fallbackDomain ? `site:${fallbackDomain} ${topic}` : `${topic} deutsche medien`);
-            source.article_url = `https://www.google.com/search?q=${q}`;
-            source.url_is_search_fallback = true;
-          }
-        }
-      }
-
-      // Strip fake/old dates
-      for (const spectrum of SPECTRUMS) {
-        for (const source of analysis.news_spectrum[spectrum]) {
-          if (source.publication_date && !isRecentEnough(source.publication_date)) {
-            delete source.publication_date;
-          }
-        }
-      }
-
-      const directCount = SPECTRUMS.reduce((acc, s) =>
-        acc + analysis.news_spectrum[s].filter(a => !a.url_is_search_fallback).length, 0);
-      const totalArticles = SPECTRUMS.reduce((acc, s) => acc + analysis.news_spectrum[s].length, 0);
-      console.log(`[Gemini] ${directCount}/${totalArticles} articles have direct links`);
-
-      // Build coverage_distribution: prefer Gemini's estimate, validate against actual count
-      const coverage_distribution = {};
-      const totalArticlesAll = SPECTRUMS.reduce((s, sp) => s + analysis.news_spectrum[sp].length, 0);
-
-      for (const spectrum of SPECTRUMS) {
-        const articles = analysis.news_spectrum[spectrum];
-        const count    = articles.length;
-
-        // Gemini's coverage_estimate from any article (preferably one that's not a fallback)
-        const withEstimate = articles.find(a => ['high','medium','low','none'].includes(a.coverage_estimate));
-        let estimate = withEstimate?.coverage_estimate;
-
-        // Override/correct based on real article count
-        if (!estimate || estimate === 'none') {
-          // No articles found at all
-          estimate = (count === 0) ? 'none' : count >= 3 ? 'high' : count === 2 ? 'medium' : 'low';
-        } else {
-          // Validate: Gemini said "high" but only gave 1 article → downgrade
-          if (estimate === 'high'   && count < 2) estimate = 'medium';
-          if (estimate === 'medium' && count < 1) estimate = 'none';
-        }
-
-        // Silence detection: if total >= 6 articles elsewhere but this spectrum has 0 → flag it
-        const silence = (count === 0 && totalArticlesAll >= 6);
-
-        coverage_distribution[spectrum] = {
-          estimate,
-          percent:  coverageToPercent(estimate),
-          count,
-          silence,  // potential deliberate non-coverage
-        };
-
-        // Clean coverage_estimate from individual article objects (UI doesn't need it)
-        for (const art of articles) delete art.coverage_estimate;
-      }
-      console.log(`[Coverage] ${JSON.stringify(coverage_distribution)}`);
-
-      // degraded = true only when Gemini returned the empty fallback (no articles found at all)
-      // search-fallback URLs are acceptable — content is still valid
-      return { analysis: { ...analysis, coverage_distribution }, degraded: false };
-    } catch (err) {
-      console.error(`[Gemini] Attempt ${attempt} failed:`, err.message);
-      lastError = err;
-      // Never retry timeouts — no time budget left for a second attempt
-      if (err.message.includes('timed out')) break;
+      deep = await callDeepAnalysisOnce(analysis, retryBudget);
+      console.log('[DeepAnalysis] Retry ✅ — non-empty result');
+    } catch (retryErr) {
+      console.warn('[DeepAnalysis] Retry failed:', retryErr.message);
+      // Return the (empty) first attempt rather than throwing — deep analysis is secondary
     }
   }
 
-  // All attempts failed — return a graceful "no coverage" result instead of throwing
-  console.warn(`[Gemini] All attempts failed for "${topic}", returning empty result`);
-  const noResult = () => ({
-    source_name: 'Kein Artikel gefunden',
-    source_domain: 'n/a',
-    article_title: 'Kein Artikel gefunden',
-    summary_of_perspective: 'Kein Artikel gefunden',
-    article_url: `https://www.google.com/search?q=${encodeURIComponent(topic + ' deutsche Medien')}`,
-    url_is_search_fallback: true,
-  });
-  const emptyAnalysis = {
-    analysis_topic: topic,
-    response_language: 'de',
-    overall_non_partisan_analysis: `Zu diesem Thema wurden keine aktuellen deutschen Medienberichte gefunden.`,
-    news_spectrum: Object.fromEntries(SPECTRUMS.map(s => [s, [noResult()]])),
-    coverage_distribution: Object.fromEntries(SPECTRUMS.map(s => [s, { estimate: 'low', percent: 5 }])),
-  };
-  return { analysis: emptyAnalysis, degraded: true };
+  return deep;
 }
 
-app.post('/api/analyze', async (req, res) => {
+app.post('/api/analyze', analyzeLimiter, async (req, res) => {
   const { topic, lang } = req.body;
   if (!topic) return res.status(400).json({ error: 'Topic required' });
   if (!GEMINI_API_KEY) return res.status(500).json({ error: 'API Key Missing' });
@@ -819,7 +839,7 @@ app.post('/api/analyze', async (req, res) => {
   serverStats.totalRequests++;
 
   const clientIP = getClientIP(req);
-  const adminKeyHeader = req.headers['x-admin-key'] || req.query.adminKey;
+  const adminKeyHeader = req.headers['x-admin-key'];
 
   // ── JWT user extraction (optional — enriches DB log) ─────────────────────
   let jwtUser = null;
@@ -858,11 +878,12 @@ app.post('/api/analyze', async (req, res) => {
   const TRANSLATION_TIMEOUT = GLOBAL_TRANSL_TIMEOUT;
 
   // v4 cache — 5-spectrum format, deep_analysis fetched separately
-  const cacheKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:v4`).digest('hex');
+  const cacheKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:${CACHE_SCHEMA}`).digest('hex');
   const cached = await cacheGetLayered(cacheKey);
   if (cached) {
     console.log(`[Cache] HIT for "${topic}" (${lang})`);
     serverStats.cacheHits++;
+    metrics.recordAnalysis({ cacheHit: true });
     // Still count as usage even on cache hit (reading data costs resources)
     if (!isAdmin) await incrementUsageForIP(clientIP);
     const { remaining } = await checkDailyLimitDB(clientIP);
@@ -887,7 +908,7 @@ app.post('/api/analyze', async (req, res) => {
 
   try {
     // Step 1: German Gemini search (cached per topic, shared across languages)
-    const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v4`).digest('hex');
+    const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:${CACHE_SCHEMA}`).digest('hex');
     let germanAnalysis, degraded;
 
     const cachedBase = await cacheGetLayered(deKey);
@@ -899,7 +920,7 @@ app.post('/api/analyze', async (req, res) => {
       // Runs in parallel while we wait for a Gemini slot — zero extra latency cost.
       const rssKeywords = extractSearchKeywords(topic);
       console.log(`[RSS] Parallel search for keywords: ${JSON.stringify(rssKeywords)}`);
-      const rssPromise = searchAllFeeds(rssKeywords, { inputWordCount: getInputWordCount(topic) })
+      const rssPromise = getSpectraForTopic(topic)
         .then(r => {
           console.log(`[RSS] Done — ${r.total_articles} articles found (${Date.now() - requestStart}ms elapsed)`);
           return r;
@@ -909,22 +930,33 @@ app.post('/api/analyze', async (req, res) => {
           return null;
         });
 
-      // Throttle concurrent Gemini calls — wait for a slot, then call
-      console.log(`[Gemini] Waiting for slot (active=${geminiSemaphore.active}, queue=${geminiSemaphore.waiting})`);
-      await geminiSemaphore.acquire();
-      let rssData = null;
+      // RSS-Direct: wait for RSS first, then feed articles into Gemini as context.
+      // Semaphore is acquired AFTER RSS resolves — slot not held during feed fetch.
+      const rssData = await rssPromise;
+      if (!geminiBudgetOk()) {
+        return res.status(503).json({ error: 'budget_exhausted', message: 'Tageskontingent für neue Analysen erreicht. Bitte morgen erneut versuchen.' });
+      }
+      console.log(`[RSS-Direct] Waiting for Gemini slot (active=${geminiSemaphore.active}, queue=${geminiSemaphore.waiting})`);
+      await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
       try {
-        // Run Gemini analysis + wait for RSS results in parallel
-        let rawAnalysis;
-        [{ analysis: rawAnalysis, degraded }, rssData] = await Promise.all([
-          callGeminiWithRetry(topic, 'de', 2),
-          rssPromise,
-        ]);
+        const timeoutBudget = Math.max(10000, TIMEOUT_MS - (Date.now() - requestStart) - 3000);
+        metrics.recordGeminiCall('analysis');
+        geminiBudgetSpend();
+        const { analysis: rawAnalysis, degraded: deg, meta: rssMeta } =
+          await callGeminiWithRSSContext(topic, 'de', rssData?.spectra ?? {}, {
+            timeoutMs:      timeoutBudget,
+            maxPerSpectrum: GEMINI_MAX_PER_SPECTRUM, // AI summarises top-N/camp; remaining articles still shown via _rss merge
+          });
+        degraded = deg;
+        if (rssMeta) console.log(`[RSS-Direct] meta: articles=${rssMeta.totalArticles} spectra=${rssMeta.coveredSpectra}/5 elapsed=${rssMeta.elapsedMs}ms${rssMeta.overallPatched ? ' (patched)' : ''}`);
         // Merge real RSS data into analysis (URLs, coverage counts, silence flags)
         germanAnalysis = enrichWithRSSData(rawAnalysis, rssData);
       } finally {
         geminiSemaphore.release();
       }
+      // Corpus grounding + reliability envelope (parity with the SSE path).
+      const rel = await applyCorpusReliability(germanAnalysis, rssData);
+      germanAnalysis = rel.reliability ? { ...rel.analysis, _reliability: rel.reliability } : rel.analysis;
       // Always cache the German base so /api/deep-analysis can find it.
       // Degraded results use a short TTL (5 min) so the next request retries Gemini.
       await cacheSetLayered(deKey, { germanAnalysis, degraded }, degraded ? 300 : 86400);
@@ -951,8 +983,9 @@ app.post('/api/analyze', async (req, res) => {
           }
         }
       }
-      await geminiSemaphore.acquire();
+      await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
       try {
+        metrics.recordGeminiCall('translate');
         finalAnalysis = await Promise.race([
           translateAnalysis(analysisForTranslation, lang, genAI),
           new Promise((_, reject) =>
@@ -976,6 +1009,7 @@ app.post('/api/analyze', async (req, res) => {
       response_language: lang,
       analyzed_at:      germanAnalysis.analyzed_at,
       ...(germanAnalysis._rss ? { _rss: germanAnalysis._rss } : {}),
+      ...(germanAnalysis._reliability ? { _reliability: germanAnalysis._reliability } : {}),
     };
     const response = {
       ...finalAnalysis,
@@ -1007,7 +1041,11 @@ app.post('/api/analyze', async (req, res) => {
     serverStats.errors++;
     clearTimeout(timeoutHandle);
     console.error('[Analyze Error]:', error.message);
-    if (!res.headersSent) res.status(500).json({ error: 'Analysis failed', message: error.message });
+    if (error.message === 'semaphore_timeout') {
+      if (!res.headersSent) res.status(503).json({ error: 'Server busy', message: 'Too many concurrent analyses. Please try again in a moment.' });
+    } else {
+      if (!res.headersSent) res.status(500).json({ error: 'Analysis failed', message: error.message });
+    }
   }
 });
 
@@ -1019,7 +1057,7 @@ app.post('/api/analyze', async (req, res) => {
 //
 // Railway 60s hard-kill is not a problem because the first event (RSS) is
 // written within 2 seconds, keeping the connection alive for the full analysis.
-app.get('/api/analyze/stream', async (req, res) => {
+app.get('/api/analyze/stream', analyzeLimiter, async (req, res) => {
   const topic = ((req.query.topic || '') + '').trim().slice(0, 200);
   const lang  = ['de', 'en', 'ru'].includes(req.query.lang) ? req.query.lang : 'de';
 
@@ -1029,7 +1067,7 @@ app.get('/api/analyze/stream', async (req, res) => {
   serverStats.totalRequests++;
 
   const clientIP       = getClientIP(req);
-  const adminKeyHeader = req.headers['x-admin-key'] || req.query.adminKey;
+  const adminKeyHeader = req.headers['x-admin-key'];
 
   let jwtUser = null;
   try {
@@ -1041,6 +1079,9 @@ app.get('/api/analyze/stream', async (req, res) => {
   const isUnlimited = jwtUser?.daily_limit === -1;
   if (!isAdmin && !isUnlimited) {
     const { allowed, remaining } = await checkDailyLimitDB(clientIP);
+    res.set('X-RateLimit-Limit',     String(FREE_DAILY_LIMIT));
+    res.set('X-RateLimit-Remaining', String(remaining));
+    res.set('X-RateLimit-Reset',     'midnight UTC');
     if (!allowed) {
       return res.status(429).json({
         error: 'daily_limit_reached',
@@ -1051,6 +1092,7 @@ app.get('/api/analyze/stream', async (req, res) => {
   }
 
   // ── SSE headers ─────────────────────────────────────────────────────────────
+  const requestStart = Date.now();
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection',    'keep-alive');
@@ -1069,13 +1111,14 @@ app.get('/api/analyze/stream', async (req, res) => {
     trackSearch(topic);
 
     const ipHash    = crypto.createHash('sha256').update(clientIP).digest('hex').slice(0, 16);
-    const cacheKey  = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:v4`).digest('hex');
+    const cacheKey  = crypto.createHash('md5').update(`${topic.toLowerCase()}:${lang}:${CACHE_SCHEMA}`).digest('hex');
 
     // ── Fast path: full result already cached ────────────────────────────────
     const cached = await cacheGetLayered(cacheKey);
     if (cached) {
       console.log(`[Cache] HIT stream "${topic}" (${lang})`);
       serverStats.cacheHits++;
+      metrics.recordAnalysis({ cacheHit: true });
       if (!isAdmin) await incrementUsageForIP(clientIP);
       const { remaining } = await checkDailyLimitDB(clientIP);
       logSearch({ topic, lang, degraded: cached._meta?.degraded ?? false, cacheHit: true, userId: jwtUser?.id, ipHash }).catch(() => {});
@@ -1092,7 +1135,7 @@ app.get('/api/analyze/stream', async (req, res) => {
     console.log(`[RSS-Stream] keywords: ${JSON.stringify(rssKeywords)}`);
 
     // rssPromise emits the 'rss' event as a side-effect when it resolves
-    const rssPromise = searchAllFeeds(rssKeywords, { inputWordCount: getInputWordCount(topic) })
+    const rssPromise = getSpectraForTopic(topic)
       .then(r => {
         console.log(`[RSS-Stream] ${r.total_articles} articles found`);
         const rssCovDist = buildCoverageDistribution(r.spectra);
@@ -1135,8 +1178,9 @@ app.get('/api/analyze/stream', async (req, res) => {
       });
 
     // ── Phase 2: Gemini analysis (runs in parallel with RSS) ─────────────────
-    const deKey      = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v4`).digest('hex');
+    const deKey      = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:${CACHE_SCHEMA}`).digest('hex');
     let germanAnalysis, degraded;
+    let rssForReliability = null;   // corpus result used for grounding + reliability
 
     const cachedBase = await cacheGetLayered(deKey);
     if (cachedBase) {
@@ -1145,6 +1189,7 @@ app.get('/api/analyze/stream', async (req, res) => {
       // Always refresh coverage/RSS data even on cache hit — Gemini stays cached,
       // but article counts and _rss.spectra should reflect current feeds.
       const freshRssData = await rssPromise;
+      rssForReliability = freshRssData;
       if (freshRssData && freshRssData.total_articles > 0) {
         const rssCovDist = buildCoverageDistribution(freshRssData.spectra);
         const silenced   = detectSilence(freshRssData.spectra, freshRssData.total_articles);
@@ -1163,20 +1208,40 @@ app.get('/api/analyze/stream', async (req, res) => {
         console.log(`[RSS→Coverage] (cache-hit refresh) ${JSON.stringify(Object.fromEntries(SPECTRUMS.map(s => [s, rssCovDist[s].count])))}`);
       }
     } else {
-      console.log(`[Gemini-Stream] Waiting for slot`);
-      await geminiSemaphore.acquire();
-      let rssData = null;
+      // RSS-Direct: RSS must resolve before Gemini so we can pass articles as context.
+      // Await rssPromise before acquiring the semaphore — don't hold the slot during feed fetch.
+      const rssData = await rssPromise;
+      rssForReliability = rssData;
+      if (!geminiBudgetOk()) {
+        emit('error', { message: 'Tageskontingent für neue Analysen erreicht. Bitte morgen erneut versuchen.', code: 'budget_exhausted' });
+        closeStream();
+        return;
+      }
+      console.log(`[RSS-Direct-Stream] Waiting for Gemini slot`);
+      await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
       try {
-        let rawAnalysis;
-        [{ analysis: rawAnalysis, degraded }, rssData] = await Promise.all([
-          callGeminiWithRetry(topic, 'de', 2, GEMINI_TIMEOUT_SSE),
-          rssPromise,
-        ]);
+        metrics.recordGeminiCall('analysis');
+        geminiBudgetSpend();
+        const { analysis: rawAnalysis, degraded: deg, meta: rssMeta } =
+          await callGeminiWithRSSContext(topic, 'de', rssData?.spectra ?? {}, {
+            timeoutMs:      GEMINI_TIMEOUT_SSE,
+            maxPerSpectrum: GEMINI_MAX_PER_SPECTRUM, // AI summarises top-N/camp; remaining articles still shown via _rss merge
+          });
+        degraded = deg;
+        if (rssMeta) console.log(`[RSS-Direct-Stream] meta: articles=${rssMeta.totalArticles} spectra=${rssMeta.coveredSpectra}/5 elapsed=${rssMeta.elapsedMs}ms${rssMeta.overallPatched ? ' (patched)' : ''}`);
         germanAnalysis = enrichWithRSSData(rawAnalysis, rssData);
       } finally {
         geminiSemaphore.release();
       }
       await cacheSetLayered(deKey, { germanAnalysis, degraded }, degraded ? 300 : 86400);
+    }
+
+    // ── Phase 2.5: corpus grounding + reliability (corpus path only) ───────────
+    // Applied per-request (not cached) so source links resolve against the current
+    // corpus and the confidence/blindspot envelope is always fresh.
+    {
+      const rel = await applyCorpusReliability(germanAnalysis, rssForReliability);
+      germanAnalysis = rel.reliability ? { ...rel.analysis, _reliability: rel.reliability } : rel.analysis;
     }
 
     // ── Phase 3: Translation ─────────────────────────────────────────────────
@@ -1191,8 +1256,9 @@ app.get('/api/analyze/stream', async (req, res) => {
             forTranslation.news_spectrum[sp] = forTranslation.news_spectrum[sp].slice(0, 2);
         }
       }
-      await geminiSemaphore.acquire();
+      await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
       try {
+        metrics.recordGeminiCall('translate');
         finalAnalysis = await Promise.race([
           translateAnalysis(forTranslation, lang, genAI),
           new Promise((_, rej) => setTimeout(() => rej(new Error('translate timeout')), GLOBAL_TRANSL_TIMEOUT)),
@@ -1214,7 +1280,18 @@ app.get('/api/analyze/stream', async (req, res) => {
       response_language: lang,
       analyzed_at:       germanAnalysis.analyzed_at,
       ...(germanAnalysis._rss ? { _rss: germanAnalysis._rss } : {}),
+      ...(germanAnalysis._reliability ? { _reliability: germanAnalysis._reliability } : {}),
     };
+    // Final belt-and-suspenders dedup on the SHIPPED spectrum — URLs survive
+    // translation, so this removes any same-article twin that slipped through
+    // (e.g. a German original + its translated copy resolving to one URL).
+    if (finalAnalysis.news_spectrum) {
+      for (const sp of SPECTRUMS) {
+        if (Array.isArray(finalAnalysis.news_spectrum[sp])) {
+          finalAnalysis.news_spectrum[sp] = dedupeArticles(finalAnalysis.news_spectrum[sp]);
+        }
+      }
+    }
     const fullResponse = {
       ...finalAnalysis,
       _meta: {
@@ -1234,14 +1311,24 @@ app.get('/api/analyze/stream', async (req, res) => {
 
     logSearch({ topic, lang, degraded, cacheHit: false, userId: jwtUser?.id, ipHash }).catch(() => {});
 
+    metrics.recordAnalysis({ source: rssForReliability?.search_meta?.source === 'corpus' ? 'corpus' : 'live', degraded });
+    metrics.recordTranslation(translationSucceeded);
+    metrics.recordLatency('stream_total', Date.now() - requestStart);
+
     emit('result', { ...fullResponse, _usage: { remaining, limit: FREE_DAILY_LIMIT } });
     emit('done', {});
     closeStream();
 
   } catch (err) {
     serverStats.errors++;
+    metrics.recordError();
+    reportError(err, { endpoint: '/api/analyze/stream', topic });
     console.error('[Stream Error]:', err.message);
-    emit('error', { message: err.message });
+    if (err.message === 'semaphore_timeout') {
+      emit('error', { message: 'Server busy', code: 'semaphore_timeout' });
+    } else {
+      emit('error', { message: err.message });
+    }
     closeStream();
   }
 });
@@ -1254,13 +1341,13 @@ app.post('/api/deep-analysis', async (req, res) => {
   if (!topic) return res.status(400).json({ error: 'Topic required' });
 
   // Separate cache for deep analysis results (independent of main analysis cache)
-  const deepKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:v4`).digest('hex');
+  const deepKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:${CACHE_SCHEMA}`).digest('hex');
   const cachedDeep = await cacheGetLayered(deepKey);
   if (cachedDeep) {
     console.log(`[DeepAnalysis] Cache hit for "${topic}"`);
     // For non-DE: check if we have a translated version stored
     if (lang !== 'de') {
-      const translatedKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:${lang}:v4`).digest('hex');
+      const translatedKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:${lang}:${CACHE_SCHEMA}`).digest('hex');
       const translatedDeep = await cacheGetLayered(translatedKey);
       if (translatedDeep) return res.json({ deep_analysis: translatedDeep });
     } else {
@@ -1269,7 +1356,7 @@ app.post('/api/deep-analysis', async (req, res) => {
   }
 
   // Fetch the German base analysis from cache (must run /api/analyze first)
-  const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:v4`).digest('hex');
+  const deKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:de-base:${CACHE_SCHEMA}`).digest('hex');
   const cachedBase = await cacheGetLayered(deKey);
   if (!cachedBase?.germanAnalysis) {
     return res.status(404).json({ error: 'Base analysis not cached yet — run /api/analyze first' });
@@ -1280,10 +1367,16 @@ app.post('/api/deep-analysis', async (req, res) => {
   try {
     // Run deep analysis — throttled by semaphore (45s budget, own Railway window)
     console.log(`[DeepAnalysis] Waiting for slot (active=${geminiSemaphore.active}, queue=${geminiSemaphore.waiting})`);
-    await geminiSemaphore.acquire();
+    await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
     let deep;
     try {
+      metrics.recordGeminiCall('deep');
       deep = await callDeepAnalysis(germanAnalysis, 45000);
+      metrics.recordDeepAnalysis(true);
+    } catch (e) {
+      metrics.recordDeepAnalysis(false);
+      reportError(e, { endpoint: '/api/deep-analysis', topic });
+      throw e;
     } finally {
       geminiSemaphore.release();
     }
@@ -1295,6 +1388,21 @@ app.post('/api/deep-analysis', async (req, res) => {
       console.log('[DeepAnalysis] coverage_volume overridden with real RSS data');
     }
 
+    // Wave 1 reliability: verify shared_facts against the corpus, cite each
+    // conclusion, and drop unverifiable experts. Only when corpus articles exist.
+    if (germanAnalysis._rss?.spectra) {
+      try {
+        const flat = flattenSpectra(germanAnalysis._rss.spectra);
+        if (flat.length) {
+          const { deep: enriched, report } = await enrichDeepAnalysis(deep, flat);
+          deep = enriched;
+          console.log(`[DeepAnalysis] verified facts=${report.verifiedFacts}/${report.facts} contradicted=${report.contradicted} experts kept=${report.expertsKept} dropped=${report.expertsDropped}`);
+        }
+      } catch (e) {
+        console.warn('[DeepAnalysis] enrichment skipped:', e.message);
+      }
+    }
+
     // Cache German deep analysis
     await cacheSetLayered(deepKey, deep, 86400);
 
@@ -1302,7 +1410,7 @@ app.post('/api/deep-analysis', async (req, res) => {
     // Pass only deep_analysis in a minimal wrapper — translating full spectrum JSON is too slow
     let finalDeep = deep;
     if (lang !== 'de') {
-      await geminiSemaphore.acquire();
+      await geminiSemaphore.acquire(SEMAPHORE_WAIT_TIMEOUT_MS);
       try {
         // Use a ':deep' suffix so translate.js cache doesn't collide with main analysis cache
         const minimalForTranslation = {
@@ -1315,7 +1423,7 @@ app.post('/api/deep-analysis', async (req, res) => {
           new Promise((_, reject) => setTimeout(() => reject(new Error('Deep translation timeout')), 20000)),
         ]);
         finalDeep = translated.deep_analysis ?? deep;
-        const translatedKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:${lang}:v4`).digest('hex');
+        const translatedKey = crypto.createHash('md5').update(`${topic.toLowerCase()}:deep:${lang}:${CACHE_SCHEMA}`).digest('hex');
         await cacheSetLayered(translatedKey, finalDeep, 86400);
       } catch (err) {
         console.warn('[DeepAnalysis] Translation failed, using German:', err.message);
@@ -1327,7 +1435,7 @@ app.post('/api/deep-analysis', async (req, res) => {
     res.json({ deep_analysis: finalDeep });
   } catch (err) {
     console.error('[DeepAnalysis] Failed:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1423,7 +1531,10 @@ app.post('/api/analyses/:topicNorm/view', async (req, res) => {
 app.get('/api/profile/media-spectrum', requireAuth, async (req, res) => {
   try {
     const spectrum = await getUserMediaSpectrum(req.user.id);
-    res.json(spectrum ?? null);
+    // C7: attach the actionable bias profile (lean, balance, blind spots,
+    // counter-source recommendations). Backward-compatible — spectrum fields stay.
+    const profile = analyzeBiasProfile(spectrum);
+    res.json(spectrum ? { ...spectrum, _profile: profile } : null);
   } catch {
     res.json(null);
   }
@@ -1469,7 +1580,7 @@ app.get('/api/trending', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error('[Trending] Failed:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1569,7 +1680,7 @@ app.get('/api/daily-news', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error('[DailyNews] Failed:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1662,34 +1773,45 @@ app.get('/api/category-news', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error(`[CategoryNews] Failed for ${category}:`, err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.post('/api/suggest-source', (req, res) => {
+app.post('/api/suggest-source', async (req, res) => {
   const { name, email, url, spectrum, why } = req.body;
   if (!url || !why) return res.status(400).json({ error: 'url and why are required' });
 
   const entry = {
-    timestamp: new Date().toISOString(),
-    name: (name || '').trim().substring(0, 100),
-    email: (email || '').trim().substring(0, 200),
-    url: (url || '').trim().substring(0, 500),
+    name:     (name     || '').trim().substring(0, 100),
+    email:    (email    || '').trim().substring(0, 200),
+    url:      (url      || '').trim().substring(0, 500),
     spectrum: ['left', 'center', 'right', 'unsure'].includes(spectrum) ? spectrum : 'unsure',
-    why: (why || '').trim().substring(0, 1000),
+    why:      (why      || '').trim().substring(0, 1000),
   };
 
+  // ── Primary: PostgreSQL (persistent across deploys) ───────────────────────
+  if (isDBAvailable()) {
+    try {
+      await saveSuggestion(entry);
+      console.log(`[Suggest] DB: ${entry.url} (${entry.spectrum})`);
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error('[Suggest] DB write failed, falling back to file:', err.message);
+    }
+  }
+
+  // ── Fallback: local JSON file (dev without DB) ────────────────────────────
   const suggestionsFile = path.join(__dirname, 'suggestions.json');
   try {
     const existing = fs.existsSync(suggestionsFile)
       ? JSON.parse(fs.readFileSync(suggestionsFile, 'utf8'))
       : [];
-    existing.push(entry);
+    existing.push({ ...entry, timestamp: new Date().toISOString() });
     fs.writeFileSync(suggestionsFile, JSON.stringify(existing, null, 2));
-    console.log(`[Suggest] New submission: ${entry.url} (${entry.spectrum})`);
+    console.log(`[Suggest] File fallback: ${entry.url} (${entry.spectrum})`);
     res.json({ ok: true });
-  } catch (err) {
-    console.error('[Suggest] Write error:', err.message);
+  } catch (fileErr) {
+    console.error('[Suggest] File fallback error:', fileErr.message);
     res.status(500).json({ error: 'storage error' });
   }
 });
@@ -1722,6 +1844,33 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
   } catch (err) {
     console.error('[Auth/register]', err.message);
     res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// ── Dev test account (staging only) ──────────────────────────────────────────
+// POST /api/dev/ensure-test-user
+// Protected by ADMIN_KEY. Creates or resets admin@test.local / admin with
+// email_verified=true and daily_limit=-1 so it can log in without email flow.
+app.post('/api/dev/ensure-test-user', async (req, res) => {
+  // This endpoint MUST NOT be available in production — test account would be a security risk
+  if (IS_PRODUCTION) return res.status(403).json({ error: 'Not available in production' });
+  const key = req.headers['x-admin-key'];
+  if (!ADMIN_KEY || key !== ADMIN_KEY) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  if (!isDBAvailable()) return res.status(503).json({ error: 'DB not available' });
+  try {
+    const passwordHash = await bcrypt.hash('admin', 12);
+    const user = await upsertDevUser('admin@test.local', passwordHash);
+    const token = jwt.sign(
+      { id: user.id, email: user.email, tier: user.tier, daily_limit: user.daily_limit, email_verified: true },
+      JWT_SECRET, { expiresIn: JWT_EXPIRES }
+    );
+    console.log(`[Dev] Test account ensured: ${user.email} (id=${user.id})`);
+    res.json({ ok: true, email: user.email, token });
+  } catch (err) {
+    console.error('[Dev/ensure-test-user]', err.message);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1836,7 +1985,7 @@ app.delete('/api/history/:id', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[history] DELETE error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2084,7 +2233,7 @@ app.put('/api/auth/digest', requireAuth, async (req, res) => {
 // ── Admin: Send Weekly Digest ─────────────────────────────────────────────────
 
 app.post('/api/admin/send-digest', async (req, res) => {
-  const key = req.headers['x-admin-key'] || req.query.key;
+  const key = req.headers['x-admin-key'];
   if (!ADMIN_KEY || key !== ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
   if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
 
@@ -2122,14 +2271,14 @@ app.post('/api/admin/send-digest', async (req, res) => {
     res.json({ ok: true, sent, errors, topics: topicsForEmail });
   } catch (err) {
     console.error('[Digest/send]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // ── Admin Dashboard API ───────────────────────────────────────────────────────
 // Protected by ADMIN_KEY env var. Returns full platform analytics.
 app.get('/api/admin/stats', async (req, res) => {
-  const key = req.headers['x-admin-key'] || req.query.key;
+  const key = req.headers['x-admin-key'];
   if (!ADMIN_KEY || key !== ADMIN_KEY) {
     return res.status(403).json({ error: 'Forbidden' });
   }
@@ -2190,7 +2339,7 @@ app.get('/api/admin/stats', async (req, res) => {
       estimatedCostToday: `$${estimatedCostToday.toFixed(3)}`,
       estimatedCostMonth: `$${estimatedCostMonth.toFixed(2)}`,
       costPerAnalysis: `$${COST_PER_ANALYSIS}`,
-      note: 'Estimates only. Includes Gemini tokens + Search Grounding.',
+      note: 'Estimates only. RSS-Direct architecture — no Search Grounding cost.',
     },
     topTopics: dbTopTopics ?? redisTopics ?? topTopics,
     topIPs: activeIPsToday.slice(0, 10).map(([ip, u]) => ({
@@ -2204,10 +2353,69 @@ app.get('/api/admin/stats', async (req, res) => {
   });
 });
 
+// ── Feedback: perceived balance (audit D5) ──────────────────────────────────────
+// One vote per IP per topic (re-vote flips). The aggregate feeds the admin
+// dashboard — the only signal for how balanced REAL readers find the analyses.
+app.post('/api/feedback', feedbackLimiter, async (req, res) => {
+  const { topic, lang, verdict } = req.body || {};
+  if (!topic || !['up', 'down'].includes(verdict)) {
+    return res.status(400).json({ error: 'topic and verdict (up|down) required' });
+  }
+  const ipHash = crypto.createHash('sha256').update(getClientIP(req)).digest('hex').slice(0, 16);
+  const result = await saveAnalysisFeedback({
+    topicNorm: String(topic).toLowerCase().trim().slice(0, 200),
+    lang: ['de', 'en', 'ru'].includes(lang) ? lang : 'de',
+    verdict,
+    ipHash,
+  });
+  res.json(result);
+});
+
+// ── Admin: reliability & ops metrics (audit fix A4) ─────────────────────────────
+// Everything the audit found us blind on: confidence distribution, grounding
+// ratio, corpus vs live split, degraded rate, Gemini call counts, per-stage
+// latency, corpus size + feed health. Header-auth like all admin endpoints.
+app.get('/api/admin/metrics', async (req, res) => {
+  const key = req.headers['x-admin-key'];
+  if (!ADMIN_KEY || key !== ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
+
+  const [corpus, feedback, nliStats] = await Promise.all([
+    getCorpusStats().catch(() => null),
+    getFeedbackStats().catch(() => null),
+    getSourceNliStats().catch(() => []),
+  ]);
+  // B5: annotate each measured source with its derived rating + divergence vs the
+  // declared (MBFC/editorial) rating, so reviewers see where reality disagrees.
+  const ratingsMap = buildRatingsMap();
+  const measuredFactuality = (nliStats || []).map(s => {
+    const measured = deriveMeasuredFactual(s);
+    const declared = ratingsMap[s.source_domain]?.factual_rating ?? null;
+    const { diverges } = reconcileFactual(declared, measured);
+    return { ...s, measured, declared, diverges };
+  });
+  res.json({
+    process: metrics.snapshot(),
+    corpus,
+    feedback,
+    measuredFactuality,
+    flags: {
+      corpusAnalysisEnabled: CORPUS_ANALYSIS_ENABLED,
+      sentry: !!process.env.SENTRY_DSN,
+      geminiMaxPerSpectrum: GEMINI_MAX_PER_SPECTRUM,
+    },
+    budget: {
+      day: geminiBudget.day,
+      callsToday: geminiBudget.calls,
+      dailyLimit: GEMINI_DAILY_BUDGET,
+      remaining: Math.max(0, GEMINI_DAILY_BUDGET - geminiBudget.calls),
+    },
+  });
+});
+
 // ── Admin User Management ─────────────────────────────────────────────────────
 
 app.post('/api/admin/users/:id', async (req, res) => {
-  const key = req.headers['x-admin-key'] || req.query.key;
+  const key = req.headers['x-admin-key'];
   if (!ADMIN_KEY || key !== ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
   if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
 
@@ -2233,7 +2441,7 @@ app.post('/api/admin/users/:id', async (req, res) => {
     res.json({ ok: true, user: updated });
   } catch (err) {
     console.error('[Admin/updateUser]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -2277,8 +2485,14 @@ app.get('/api/auth/google/callback', async (req, res) => {
     const tokens = await tokenRes.json();
     if (!tokens.id_token) throw new Error('No id_token from Google');
 
-    // Decode id_token (JWT payload — no signature verify needed, came directly from Google)
+    // Decode and validate id_token claims.
+    // The token arrived directly from Google's OAuth endpoint (not from the user),
+    // so we verify: issuer, audience, and expiry at minimum.
     const payload = JSON.parse(Buffer.from(tokens.id_token.split('.')[1], 'base64url').toString());
+    const validIssuers = ['https://accounts.google.com', 'accounts.google.com'];
+    if (!validIssuers.includes(payload.iss)) throw new Error('Google token: invalid issuer');
+    if (GOOGLE_CLIENT_ID && payload.aud !== GOOGLE_CLIENT_ID) throw new Error('Google token: audience mismatch');
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) throw new Error('Google token: expired');
     const { email, name } = payload;
     if (!email) throw new Error('No email in Google token');
 
@@ -2434,15 +2648,12 @@ app.get('/api/public/analysis/:slug', async (req, res) => {
   const slug = req.params.slug;
   if (!slug || slug.length > 200) return res.status(400).json({ error: 'Invalid slug' });
 
-  // Try to find in cache by topic_norm
+  // Try to find the German base analysis by computing the actual MD5 cache key
   const topicNorm = slug.replace(/-/g, ' ').toLowerCase();
-  // Try multiple key variants
-  const keys = [`analysis:de:${topicNorm}`, `analysis:en:${topicNorm}`];
-  for (const key of keys) {
-    const data = await cacheGetLayered(key);
-    if (data?.germanAnalysis) {
-      return res.json({ analysis: data.germanAnalysis, topic: topicNorm });
-    }
+  const deKey = crypto.createHash('md5').update(`${topicNorm}:de-base:${CACHE_SCHEMA}`).digest('hex');
+  const cachedBase = await cacheGetLayered(deKey);
+  if (cachedBase?.germanAnalysis) {
+    return res.json({ analysis: cachedBase.germanAnalysis, topic: topicNorm });
   }
 
   // Fallback: check public analyses list
@@ -2458,190 +2669,81 @@ app.get('/api/public/analysis/:slug', async (req, res) => {
   res.status(404).json({ error: 'Analysis not found' });
 });
 
-// ── A/B Experiment: RSS-direct vs Grounding ───────────────────────────────────
-// GET /api/experiment/rss-vs-grounding?topic=X&lang=de
+// ── A/B Experiment: RSS-direct quality check ──────────────────────────────────
+// GET /api/experiment/rss-check?topic=X&lang=de
 //
-// Runs BOTH analysis paths in parallel on the SAME RSS data:
-//   - "grounding" path: callGeminiWithRetry (Google Search grounding)
-//   - "rss_direct" path: callGeminiWithRSSContext (RSS articles as context, no grounding)
-//
-// Returns a side-by-side comparison with latency, token estimates, cost projections,
-// summary quality heuristics, and URL accuracy metrics.
-//
-// Protected by ADMIN_SECRET to prevent abuse (each call costs 2× Gemini requests).
-// Usage: curl "https://.../api/experiment/rss-vs-grounding?topic=Klimawandel&secret=ADMIN_SECRET"
+// Runs RSS-Direct analysis and returns full quality metrics for manual inspection.
+// Protected by ADMIN_SECRET — sent via HEADER (never query string: query params
+// leak into HTTP/proxy logs and browser history).
+// Usage: curl -H "x-admin-secret: $ADMIN_SECRET" "https://.../api/experiment/rss-check?topic=Klimawandel"
 
-app.get('/api/experiment/rss-vs-grounding', async (req, res) => {
-  const { topic, lang = 'de', secret, max_per_spectrum } = req.query;
+app.get('/api/experiment/rss-check', async (req, res) => {
+  const { topic, lang = 'de' } = req.query;
 
-  // Admin-only: prevent accidental public exposure
-  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
-    return res.status(403).json({ error: 'Forbidden — ADMIN_SECRET required' });
+  const providedSecret = req.headers['x-admin-secret'];
+  if (!process.env.ADMIN_SECRET || providedSecret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Forbidden — x-admin-secret header required' });
   }
   if (!topic || topic.trim().length < 2) {
     return res.status(400).json({ error: 'topic query param required (min 2 chars)' });
   }
 
-  const maxPerSpectrum = parseInt(max_per_spectrum, 10) || 3;
-  const experimentStart = Date.now();
-
-  // ── Step 1: Fetch RSS articles (shared input for both paths) ──────────────
+  const start = Date.now();
   const rssKeywords = extractSearchKeywords(topic.trim());
-  console.log(`[Experiment] topic="${topic}" keywords=${JSON.stringify(rssKeywords)}`);
 
   let rssData = null;
-  const rssStart = Date.now();
   try {
     rssData = await searchAllFeeds(rssKeywords, { inputWordCount: getInputWordCount(topic.trim()) });
-    console.log(`[Experiment] RSS done in ${Date.now() - rssStart}ms — ${rssData.total_articles} articles`);
   } catch (err) {
-    console.warn('[Experiment] RSS fetch failed:', err.message);
+    console.warn('[RssCheck] RSS fetch failed:', err.message);
   }
 
   const rssSpectra = rssData?.spectra ?? {};
-  const rssElapsedMs = Date.now() - rssStart;
 
-  // ── Step 2: Run both paths in parallel ────────────────────────────────────
-  const [groundingResult, rssDirectResult] = await Promise.allSettled([
-    callGeminiWithRetry(topic.trim(), lang, 1), // 1 attempt only — this is a test
-    callGeminiWithRSSContext(topic.trim(), lang, rssSpectra, { maxPerSpectrum }),
-  ]);
-
-  const totalElapsedMs = Date.now() - experimentStart;
-
-  // ── Step 3: Extract results ───────────────────────────────────────────────
-  function extractResult(settled, label) {
-    if (settled.status === 'rejected') {
-      return { ok: false, error: settled.reason?.message || 'unknown', label };
-    }
-    const { analysis, degraded, meta } = settled.value;
-    return { ok: true, degraded, label, analysis, meta };
+  let analysisResult = null;
+  try {
+    analysisResult = await callGeminiWithRSSContext(topic.trim(), lang, rssSpectra, {
+      timeoutMs: 45000,
+      maxPerSpectrum: Infinity,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error' });
   }
 
-  const grounding  = extractResult(groundingResult,  'grounding');
-  const rssDirect  = extractResult(rssDirectResult,  'rss_direct');
+  const { analysis, degraded, meta } = analysisResult;
+  const spectra = analysis.news_spectrum || {};
 
-  // ── Step 4: Quality metrics ───────────────────────────────────────────────
-  function qualityMetrics(result) {
-    if (!result.ok || result.degraded) return null;
-    const { analysis } = result;
-    const spectra = analysis.news_spectrum || {};
-
-    let totalArticles = 0, articlesWithUrl = 0, articlesWithSummary = 0, summaryCharTotal = 0;
-    for (const sp of ['left', 'center_left', 'center', 'center_right', 'right']) {
-      for (const art of (spectra[sp] || [])) {
-        totalArticles++;
-        if (art.article_url && !art.url_is_search_fallback) articlesWithUrl++;
-        if (art.summary_of_perspective && art.summary_of_perspective.length > 20) {
-          articlesWithSummary++;
-          summaryCharTotal += art.summary_of_perspective.length;
-        }
-      }
+  let totalArticles = 0, articlesWithUrl = 0, summaryCharTotal = 0;
+  for (const sp of SPECTRUMS) {
+    for (const art of (spectra[sp] || [])) {
+      totalArticles++;
+      if (art.article_url && !art.url_is_search_fallback) articlesWithUrl++;
+      summaryCharTotal += (art.summary_of_perspective || '').length;
     }
-
-    const overallLen = (analysis.overall_non_partisan_analysis || '').length;
-    const avgSummaryLen = articlesWithSummary > 0 ? Math.round(summaryCharTotal / articlesWithSummary) : 0;
-
-    return {
-      totalArticlesInOutput: totalArticles,
-      urlAccuracyPct: totalArticles > 0 ? Math.round((articlesWithUrl / totalArticles) * 100) : 0,
-      summaryCompletePct: totalArticles > 0 ? Math.round((articlesWithSummary / totalArticles) * 100) : 0,
-      avgSummaryLengthChars: avgSummaryLen,
-      overallAnalysisLengthChars: overallLen,
-      overallAnalysisQuality: overallLen > 200 ? 'good' : overallLen > 80 ? 'ok' : 'short',
-    };
   }
+  const overallLen = (analysis.overall_non_partisan_analysis || '').length;
 
-  // ── Step 5: Cost projections ──────────────────────────────────────────────
-  const GROUNDING_COST_PER_REQUEST = 0.035; // USD — Google Search grounding fee
-  const INPUT_TOKEN_COST  = 0.075 / 1_000_000;
-  const OUTPUT_TOKEN_COST = 0.30  / 1_000_000;
-
-  const rssInputTokens = rssDirect.meta?.inputTokensEstimate ?? 0;
-  const rssOutputEst   = 1200; // typical analysis JSON tokens
-  const rssPerRequest  = (rssInputTokens * INPUT_TOKEN_COST) + (rssOutputEst * OUTPUT_TOKEN_COST);
-
-  const costComparison = {
-    groundingCostPerRequest_usd: GROUNDING_COST_PER_REQUEST,
-    rssDirectCostPerRequest_usd: parseFloat(rssPerRequest.toFixed(6)),
-    savingsPerRequest_usd:       parseFloat((GROUNDING_COST_PER_REQUEST - rssPerRequest).toFixed(6)),
-    savingsMultiplier:           Math.round(GROUNDING_COST_PER_REQUEST / rssPerRequest),
-    projections: {
-      daily_1k_requests: {
-        grounding_usd:  parseFloat((1000 * GROUNDING_COST_PER_REQUEST).toFixed(2)),
-        rss_direct_usd: parseFloat((1000 * rssPerRequest).toFixed(2)),
-        savings_usd:    parseFloat((1000 * (GROUNDING_COST_PER_REQUEST - rssPerRequest)).toFixed(2)),
-      },
-      monthly_10k_requests: {
-        grounding_usd:  parseFloat((10000 * GROUNDING_COST_PER_REQUEST).toFixed(2)),
-        rss_direct_usd: parseFloat((10000 * rssPerRequest).toFixed(2)),
-        savings_usd:    parseFloat((10000 * (GROUNDING_COST_PER_REQUEST - rssPerRequest)).toFixed(2)),
-      },
-    },
-  };
-
-  // ── Step 6: Speed comparison ──────────────────────────────────────────────
-  const speedComparison = {
-    rss_fetch_ms:      rssElapsedMs,
-    grounding_ms:      grounding.meta?.elapsedMs ?? null,
-    rss_direct_ms:     rssDirect.meta?.elapsedMs ?? null,
-    total_experiment_ms: totalElapsedMs,
-    // RSS-direct includes rss_fetch in its wall time (both run in parallel in prod)
-    // so compare grounding_ms vs rss_direct_ms for a fair Gemini-only comparison
-    note: 'In production both paths fetch RSS in parallel — rss_direct latency ≈ max(rss_fetch, gemini_call)',
-  };
-
-  // ── Step 7: RSS coverage report ───────────────────────────────────────────
-  const rssReport = {
-    total_articles: rssData?.total_articles ?? 0,
-    per_spectrum: Object.fromEntries(
-      ['left', 'center_left', 'center', 'center_right', 'right'].map(s => [
-        s, rssSpectra[s]?.articles?.length ?? 0
-      ])
-    ),
-    covered_spectra: ['left', 'center_left', 'center', 'center_right', 'right']
-      .filter(s => (rssSpectra[s]?.articles?.length ?? 0) > 0).length,
-    fetch_ms: rssElapsedMs,
-  };
-
-  // ── Response ──────────────────────────────────────────────────────────────
-  console.log(`[Experiment] ✅ Complete in ${totalElapsedMs}ms — grounding: ${grounding.degraded ? 'degraded' : 'ok'}, rss_direct: ${rssDirect.degraded ? 'degraded' : 'ok'}`);
+  console.log(`[RssCheck] ✅ ${Date.now() - start}ms — ${totalArticles} articles, degraded=${degraded}`);
 
   res.json({
-    experiment: {
-      topic: topic.trim(),
-      lang,
-      timestamp: new Date().toISOString(),
-      total_elapsed_ms: totalElapsedMs,
+    topic: topic.trim(),
+    lang,
+    timestamp: new Date().toISOString(),
+    elapsed_ms: Date.now() - start,
+    degraded,
+    meta,
+    quality: {
+      totalArticlesInOutput:    totalArticles,
+      urlAccuracyPct:           totalArticles > 0 ? Math.round((articlesWithUrl / totalArticles) * 100) : 0,
+      avgSummaryLengthChars:    totalArticles > 0 ? Math.round(summaryCharTotal / totalArticles) : 0,
+      overallAnalysisLengthChars: overallLen,
+      overallAnalysisQuality:   overallLen > 200 ? 'good' : overallLen > 80 ? 'ok' : 'short',
     },
-    rss_input: rssReport,
-    cost_comparison: costComparison,
-    speed_comparison: speedComparison,
-    grounding: {
-      ok:       grounding.ok,
-      degraded: grounding.degraded ?? null,
-      error:    grounding.error ?? null,
-      latency_ms: grounding.meta?.elapsedMs ?? null,
-      quality:    qualityMetrics(grounding),
-      meta:       grounding.meta ?? null,
+    rss_input: {
+      total_articles: rssData?.total_articles ?? 0,
+      per_spectrum: Object.fromEntries(SPECTRUMS.map(s => [s, rssSpectra[s]?.articles?.length ?? 0])),
     },
-    rss_direct: {
-      ok:       rssDirect.ok,
-      degraded: rssDirect.degraded ?? null,
-      error:    rssDirect.error ?? null,
-      latency_ms: rssDirect.meta?.elapsedMs ?? null,
-      quality:    qualityMetrics(rssDirect),
-      meta:       rssDirect.meta ?? null,
-    },
-    // Full analysis objects for manual side-by-side review
-    grounding_analysis:  grounding.analysis  ?? null,
-    rss_direct_analysis: rssDirect.analysis ?? null,
-    verdict: {
-      cost_winner:   'rss_direct',
-      speed_winner:  (rssDirect.meta?.elapsedMs ?? Infinity) <= (grounding.meta?.elapsedMs ?? Infinity)
-                     ? 'rss_direct' : 'grounding',
-      quality_note:  'Compare grounding_analysis vs rss_direct_analysis manually for summary depth',
-    },
+    analysis,
   });
 });
 
@@ -2703,7 +2805,7 @@ app.use(async (req, res, next) => {
 
   // Determine page-specific meta
   let title = 'NeutralNachrichten – KI-Analyse der deutschen Medien';
-  let description = 'Analysiere wie deutsche Medien über jedes Thema berichten. Echtzeit-Vergleich von 18 Quellen quer durch das politische Spektrum.';
+  let description = 'Analysiere wie deutsche Medien über jedes Thema berichten. Echtzeit-Vergleich von 33 Quellen quer durch das politische Spektrum.';
   const canonical = `https://www.neutralenachrichten.com${req.path}`;
 
   // Analysis page
@@ -2717,7 +2819,7 @@ app.use(async (req, res, next) => {
     description = 'NeutralNachrichten analysiert das deutsche Medienspektrum. Erfahre mehr über unser Team, unsere Prinzipien und unsere Vision.';
   } else if (req.path === '/methodology') {
     title = 'Methodik – NeutralNachrichten';
-    description = 'Erfahre, wie NeutralNachrichten 18 deutsche Medien aus 5 politischen Lagern in Echtzeit analysiert.';
+    description = 'Erfahre, wie NeutralNachrichten 33 deutsche Medien aus 5 politischen Lagern in Echtzeit analysiert.';
   }
 
   // Inject meta tags after <title>
@@ -2830,17 +2932,23 @@ async function runWarmup() {
   await warmCategories();
 }
 
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Server] Listening on port ${PORT} (env=${IS_PRODUCTION ? 'production' : 'dev'})`);
+// Under tests (NODE_ENV=test) the app is imported by supertest — no listener,
+// no warmup timers, no Gemini warm calls. Export the app for those tests.
+let server = null;
+if (process.env.NODE_ENV !== 'test') {
+  server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Server] Listening on port ${PORT} (env=${IS_PRODUCTION ? 'production' : 'dev'})`);
 
-  // Initial warmup — delayed 8 s to let DB/Redis finish connecting
-  setTimeout(runWarmup, 8000);
+    // Initial warmup — delayed 8 s to let DB/Redis finish connecting
+    setTimeout(runWarmup, 8000);
 
-  // Rolling refresh: daily-news every 2 h, trending + categories every 4 h
-  setInterval(warmDailyNews,   2 * 60 * 60 * 1000);
-  setInterval(warmTrending,    4 * 60 * 60 * 1000);
-  setInterval(warmCategories,  4 * 60 * 60 * 1000);
-});
+    // Rolling refresh: daily-news every 2 h, trending + categories every 4 h
+    setInterval(warmDailyNews,   2 * 60 * 60 * 1000);
+    setInterval(warmTrending,    4 * 60 * 60 * 1000);
+    setInterval(warmCategories,  4 * 60 * 60 * 1000);
+  });
+}
+export { app };
 
 // ── Graceful Shutdown ─────────────────────────────────────────────────────────
 // Railway sends SIGTERM before killing the container. We stop accepting new
@@ -2848,7 +2956,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 async function shutdown(signal) {
   console.log(`[Server] ${signal} — starting graceful shutdown`);
 
-  // Stop new connections immediately
+  // Stop new connections immediately (no server under NODE_ENV=test)
+  if (!server) { process.exit(0); return; }
   server.close(async () => {
     console.log('[Server] HTTP server closed — draining connections');
     try {

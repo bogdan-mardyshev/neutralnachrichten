@@ -265,7 +265,7 @@ export const SuggestPage: React.FC<Props> = ({ lang }) => {
         </div>
         <div className="grid grid-cols-3 divide-x-2 divide-[#1a1a1a] dark:divide-gray-700 border-t-2 border-[#1a1a1a] dark:border-gray-700">
           {[
-            { value: '18', label: lang === 'de' ? 'Aktuelle Quellen' : lang === 'ru' ? 'Текущих источников' : 'Current sources', accent: 'text-emerald-600' },
+            { value: '33', label: lang === 'de' ? 'Aktuelle Quellen' : lang === 'ru' ? 'Текущих источников' : 'Current sources', accent: 'text-emerald-600' },
             { value: '5',  label: lang === 'de' ? 'Politische Lager' : lang === 'ru' ? 'Политических лагерей' : 'Political camps', accent: 'text-orange-500' },
             { value: 'RSS',label: lang === 'de' ? 'Abrufmethode' : lang === 'ru' ? 'Метод получения' : 'Fetch method', accent: 'text-sky-600' },
           ].map(({ value, label, accent }) => (

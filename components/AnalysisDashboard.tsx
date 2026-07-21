@@ -6,6 +6,41 @@ import { BlindspotBanner } from './BlindspotBanner';
 import { ShareButtons } from './ShareButtons';
 import { DeepAnalysisBlock } from './DeepAnalysisBlock';
 import { HypeCounter } from './HypeCounter';
+import { ReliabilityPanel } from './ReliabilityPanel';
+import { DeepInsights } from './DeepInsights';
+
+// ── Balance feedback (audit D5): the perceived-balance loop ─────────────────────
+const FEEDBACK_T = {
+  de: { q: 'War diese Analyse ausgewogen?', yes: 'Ja', no: 'Nein', thanks: 'Danke für dein Feedback!' },
+  en: { q: 'Was this analysis balanced?', yes: 'Yes', no: 'No', thanks: 'Thanks for your feedback!' },
+  ru: { q: 'Этот разбор был сбалансированным?', yes: 'Да', no: 'Нет', thanks: 'Спасибо за отзыв!' },
+} as const;
+
+const BalanceFeedback: React.FC<{ topic: string; lang: Language }> = ({ topic, lang }) => {
+  const [voted, setVoted] = useState<null | 'up' | 'down'>(null);
+  const ft = FEEDBACK_T[lang as keyof typeof FEEDBACK_T] ?? FEEDBACK_T.de;
+  const vote = (verdict: 'up' | 'down') => {
+    setVoted(verdict);
+    fetch(`${import.meta.env.VITE_API_BASE || ''}/api/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, lang, verdict }),
+    }).catch(() => {});
+  };
+  return (
+    <div className="flex items-center justify-center gap-3 py-3 border border-[#e0d8cf] dark:border-[#252525] bg-white dark:bg-[#1c1c1c]">
+      {voted ? (
+        <p className="font-sans text-xs text-emerald-600 dark:text-emerald-400">✓ {ft.thanks}</p>
+      ) : (
+        <>
+          <span className="font-sans text-xs text-gray-500 dark:text-gray-400">{ft.q}</span>
+          <button onClick={() => vote('up')} className="font-sans text-xs px-3 py-1 border border-emerald-500 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded">👍 {ft.yes}</button>
+          <button onClick={() => vote('down')} className="font-sans text-xs px-3 py-1 border border-rose-400 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded">👎 {ft.no}</button>
+        </>
+      )}
+    </div>
+  );
+};
 import { translations, Language } from '../translations';
 
 // ── Sources known to be analysed (fixed list, matches rssSearch.js feeds) ─────
@@ -77,9 +112,9 @@ function getInsights(
 
   const insights: string[] = [];
 
-  if (lang === 'de') insights.push(`${total} Artikel aus 18 deutschen Medien analysiert`);
-  else if (lang === 'en') insights.push(`${total} articles found across 18 German outlets`);
-  else insights.push(`Найдено ${total} статей в 18 немецких изданиях`);
+  if (lang === 'de') insights.push(`${total} Artikel aus 33 deutschen Medien analysiert`);
+  else if (lang === 'en') insights.push(`${total} articles found across 33 German outlets`);
+  else insights.push(`Найдено ${total} статей в 33 немецких изданиях`);
 
   const withArticles = counts.filter(x => x.count > 0);
   if (withArticles.length >= 2) {
@@ -283,6 +318,11 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
         </div>
       </div>
 
+      {/* ── Reliability panel (confidence + grounding + verified silences) ── */}
+      {data._reliability && (
+        <ReliabilityPanel reliability={data._reliability} lang={lang} />
+      )}
+
       {/* ── Spectrum Grid ── */}
       <SpectrumGrid spectrum={news_spectrum} rssSpectra={data._rss?.spectra} lang={lang} analysisLoading={analysisLoading} />
 
@@ -306,6 +346,9 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
         />
       )}
 
+      {/* ── Deep Insights (reach balance, timeline, source map, headlines) ── */}
+      <DeepInsights data={data} lang={lang} />
+
       {/* ── Deep Analysis Skeleton ── */}
       {deepLoading && <DeepAnalysisSkeleton lang={lang} t={t} />}
 
@@ -317,6 +360,9 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, lang
       ) && (
         <DeepAnalysisBlock data={data.deep_analysis} lang={lang} />
       )}
+
+      {/* ── Balance feedback (D5) ── */}
+      <BalanceFeedback topic={analysis_topic} lang={lang} />
 
       {/* ── Share ── */}
       <div className="border-t-2 border-[#1a1a1a] dark:border-[#2d2d2d] pt-6">

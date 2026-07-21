@@ -234,6 +234,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [opsMetrics, setOpsMetrics] = useState<any | null>(null);
 
   const fetchStats = useCallback(async (key: string) => {
     if (!key) return;
@@ -252,6 +253,11 @@ export default function AdminPage() {
       const data = await res.json();
       setStats(data);
       setLastRefresh(new Date());
+      // Reliability/ops metrics (best-effort — older servers may not have it)
+      fetch(`${API_BASE}/api/admin/metrics`, { headers: { 'x-admin-key': key } })
+        .then(r => (r.ok ? r.json() : null))
+        .then(m => setOpsMetrics(m))
+        .catch(() => {});
     } catch {
       setError('Verbindungsfehler');
     } finally {
@@ -423,6 +429,84 @@ export default function AdminPage() {
           <StatCard label="Hochrechnung Monat" value={costs.estimatedCostMonth} sub="Basierend auf heutigem Volumen" />
           <StatCard label="Kosten pro Analyse" value={costs.costPerAnalysis} sub={`${costs.estimatedTokensToday.toLocaleString()} Tokens heute`} />
         </div>
+
+        {/* ── Reliability & Ops (audit fix A4) ── */}
+        {opsMetrics?.process && (
+          <Section title="Verlässlichkeit & Betrieb (seit letztem Deploy)">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <StatCard label="Analysen (Korpus / Live)" value={`${opsMetrics.process.analyses.corpus} / ${opsMetrics.process.analyses.liveRss}`} sub={`${opsMetrics.process.analyses.degraded} degraded · ${opsMetrics.process.analyses.errors} Fehler`} />
+              <StatCard label="Ø Confidence" value={opsMetrics.process.confidence.avg ?? '—'} sub={`${opsMetrics.process.confidence.count} Messungen`} />
+              <StatCard label="Ø Beleg-Quote" value={opsMetrics.process.grounding.avgRatio != null ? `${Math.round(opsMetrics.process.grounding.avgRatio * 100)}%` : '—'} sub="Artikel mit Quell-Match" />
+              <StatCard label="Gemini-Calls" value={opsMetrics.process.gemini.totalCalls} sub={`A:${opsMetrics.process.gemini.analysis} D:${opsMetrics.process.gemini.deep} T:${opsMetrics.process.gemini.translate}`} />
+            </div>
+            {/* Confidence histogram */}
+            <div className="mb-4">
+              <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Confidence-Verteilung</p>
+              <div className="flex gap-2 text-xs">
+                {Object.entries(opsMetrics.process.confidence.buckets as Record<string, number>).map(([b, n]) => (
+                  <span key={b} className={`px-2 py-1 rounded ${b === '100' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 dark:bg-[#252525] text-gray-600 dark:text-gray-400'}`}>{b}: <b>{n}</b></span>
+                ))}
+              </div>
+            </div>
+            {/* Translations / deep / latency */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <StatCard label="Übersetzungen ok/fail" value={`${opsMetrics.process.translations.ok} / ${opsMetrics.process.translations.failed}`} />
+              <StatCard label="Deep-Analysen ok/fail" value={`${opsMetrics.process.deepAnalysis.ok} / ${opsMetrics.process.deepAnalysis.failed}`} />
+              <StatCard label="Ø Latenz Stream" value={opsMetrics.process.latency?.stream_total ? `${(opsMetrics.process.latency.stream_total.avgMs / 1000).toFixed(1)}s` : '—'} sub={opsMetrics.process.latency?.stream_total ? `max ${(opsMetrics.process.latency.stream_total.maxMs / 1000).toFixed(1)}s` : undefined} />
+              <StatCard label="Flags" value={opsMetrics.flags?.corpusAnalysisEnabled ? 'Corpus ON' : 'Corpus OFF'} sub={`Sentry: ${opsMetrics.flags?.sentry ? 'an' : 'AUS'} · ${opsMetrics.flags?.geminiMaxPerSpectrum}/Lager`} />
+              {opsMetrics.feedback && (
+                <StatCard
+                  label="Ausgewogen? (Leser-Votum)"
+                  value={`👍 ${opsMetrics.feedback.up} / 👎 ${opsMetrics.feedback.down}`}
+                  sub={`7 Tage: ${opsMetrics.feedback.up7d}/${opsMetrics.feedback.down7d}${(opsMetrics.feedback.up + opsMetrics.feedback.down) > 0 ? ` · ${Math.round((opsMetrics.feedback.up / (opsMetrics.feedback.up + opsMetrics.feedback.down)) * 100)}% positiv` : ''}`}
+                />
+              )}
+            </div>
+            {/* Measured factuality per source (B5 — accrues from NLI results) */}
+            {opsMetrics.measuredFactuality?.length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Gemessene Faktentreue (eigene NLI-Daten, min. 5 Messungen)</p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {opsMetrics.measuredFactuality.slice(0, 12).map((s: any) => (
+                    <span key={s.source_domain} className={`px-2 py-1 rounded ${s.supportRate >= 80 ? 'bg-emerald-100 text-emerald-700' : s.supportRate >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}
+                          title={s.measured ? `deklariert: ${s.declared ?? '—'} · gemessen: ${s.measured}${s.diverges ? ' (Abweichung!)' : ''}` : `${s.n} Messungen`}>
+                      {s.source_domain}: <b>{s.supportRate}%</b> <span className="opacity-60">({s.n})</span>{s.diverges && <span className="ml-0.5">⚑</span>}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Corpus + feed health */}
+            {opsMetrics.corpus && (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                  <StatCard label="Korpus-Artikel" value={opsMetrics.corpus.articles.total} sub={opsMetrics.corpus.articles.lastFetched ? `zuletzt: ${new Date(opsMetrics.corpus.articles.lastFetched).toLocaleString('de-DE')}` : undefined} />
+                  <StatCard label="Embeddings" value={opsMetrics.corpus.embeddings} sub={opsMetrics.corpus.pgvector ? 'pgvector aktiv' : 'FTS-only'} />
+                  <StatCard label="Feeds down/degraded" value={opsMetrics.corpus.feedsDown} sub={`von ${opsMetrics.corpus.feeds.length}`} />
+                  <StatCard label="Artikel/Lager" value={Object.entries(opsMetrics.corpus.articles.bySpectrum || {}).map(([s, n]) => `${s.slice(0, 2)}:${n}`).join(' ')} />
+                </div>
+                {opsMetrics.corpus.feedsDown > 0 && (
+                  <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 rounded p-3">
+                    <p className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider mb-2">⚠ Problematische Feeds</p>
+                    <table className="w-full text-xs">
+                      <tbody>
+                        {opsMetrics.corpus.feeds.filter((f: any) => f.status !== 'ok').map((f: any) => (
+                          <tr key={f.feed_url} className="border-t border-rose-100 dark:border-rose-900/50">
+                            <td className="py-1 font-medium">{f.source_name}</td>
+                            <td className="py-1">{f.spectrum}</td>
+                            <td className="py-1 text-rose-600">{f.status} ({f.consecutive_failures}×)</td>
+                            <td className="py-1 text-gray-400">{f.last_failure ? new Date(f.last_failure).toLocaleString('de-DE') : ''}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+          </Section>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Hourly chart */}
