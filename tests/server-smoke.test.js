@@ -53,6 +53,23 @@ describe('admin auth gates (header-only, audit A5)', () => {
     expect(res.body.budget).toHaveProperty('dailyLimit');
   });
 
+  it('/api/admin/traction rejects without key', async () => {
+    const res = await request(app).get('/api/admin/traction');
+    expect(res.status).toBe(403);
+  });
+
+  it('/api/admin/traction rejects a query-string key (must be header)', async () => {
+    const res = await request(app).get('/api/admin/traction?key=test-admin-key&adminKey=test-admin-key');
+    expect(res.status).toBe(403);
+  });
+
+  it('/api/admin/traction degrades to 503 (not 500) when the DB is unavailable', async () => {
+    // Traction is DB-only by design; without Postgres it must say so rather than crash.
+    const res = await request(app).get('/api/admin/traction').set('x-admin-key', 'test-admin-key');
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBeTruthy();
+  });
+
   it('/api/experiment/rss-check rejects ?secret= (query) and demands the header', async () => {
     const res = await request(app).get('/api/experiment/rss-check?topic=Klima&secret=test-admin-secret');
     expect(res.status).toBe(403);
