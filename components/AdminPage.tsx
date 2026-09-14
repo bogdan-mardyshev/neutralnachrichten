@@ -1,6 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { createT, type AdminLang, type TFn } from './adminTranslations';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
+
+/* Language for the admin panel only — it is mounted standalone and never gets
+   the app's `lang` prop. Choice persists next to adminKey/adminTab. */
+const I18nCtx = createContext<TFn>(createT('de'));
+const useT = (): TFn => useContext(I18nCtx);
 
 /* ────────────────────────────────────────────────────────────────────────────
    Admin dashboard.
@@ -14,13 +20,13 @@ const API_BASE = import.meta.env.VITE_API_URL || '';
 
 type Tab = 'traction' | 'asset' | 'content' | 'quality' | 'ops' | 'users';
 
-const TABS: Array<{ id: Tab; label: string }> = [
-  { id: 'traction', label: 'Traction' },
-  { id: 'asset',    label: 'Daten-Asset' },
-  { id: 'content',  label: 'Inhalte' },
-  { id: 'quality',  label: 'Qualität' },
-  { id: 'ops',      label: 'Betrieb' },
-  { id: 'users',    label: 'Nutzer' },
+const TABS: Array<{ id: Tab; key: 'tab.traction' | 'tab.asset' | 'tab.content' | 'tab.quality' | 'tab.ops' | 'tab.users' }> = [
+  { id: 'traction', key: 'tab.traction' },
+  { id: 'asset',    key: 'tab.asset' },
+  { id: 'content',  key: 'tab.content' },
+  { id: 'quality',  key: 'tab.quality' },
+  { id: 'ops',      key: 'tab.ops' },
+  { id: 'users',    key: 'tab.users' },
 ];
 
 interface AdminStats {
@@ -114,8 +120,9 @@ function Section({ title, children, note }: { title: string; children: React.Rea
 const nn = (v: number | null | undefined, suffix = '') => (v === null || v === undefined ? '—' : `${v}${suffix}`);
 
 function GrowthBadge({ pct }: { pct: number | null }) {
+  const t = useT();
   if (pct === null) {
-    return <span className="font-sans text-[10px] text-[#1a1a1a]/40 dark:text-gray-600">keine Basis</span>;
+    return <span className="font-sans text-[10px] text-[#1a1a1a]/40 dark:text-gray-600">{t('growth.noBase')}</span>;
   }
   const up = pct >= 0;
   return (
@@ -132,9 +139,10 @@ function BarSeries({ data, valueKey = 'count', labelFmt, height = 128 }: {
   labelFmt?: (bucket: string) => string;
   height?: number;
 }) {
+  const t = useT();
   const rows = data ?? [];
   if (rows.length === 0) {
-    return <p className="font-serif text-sm text-[#1a1a1a]/40 dark:text-gray-600">Noch keine Daten im Zeitraum.</p>;
+    return <p className="font-serif text-sm text-[#1a1a1a]/40 dark:text-gray-600">{t('empty.series')}</p>;
   }
   const max = Math.max(...rows.map(r => Number(r[valueKey]) || 0), 1);
   const step = Math.ceil(rows.length / 8);
@@ -159,13 +167,14 @@ function BarSeries({ data, valueKey = 'count', labelFmt, height = 128 }: {
 
 /* ── Traction tab ─────────────────────────────────────────────────────────── */
 
-function InternalTrafficWarning({ t }: { t: Traction }) {
+function InternalTrafficWarning({ data }: { data: Traction }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
-  if (t.window.excludedInternalHashes > 0 && !t.window.includeInternal) {
+  if (data.window.excludedInternalHashes > 0 && !data.window.includeInternal) {
     return (
       <div className="border-2 border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 p-3">
         <p className="font-sans text-[11px] text-emerald-800 dark:text-emerald-300">
-          ✓ Interner Traffic gefiltert — {t.window.excludedInternalHashes} eigene{t.window.excludedInternalHashes === 1 ? 'r' : ''} Hash ausgeschlossen. Die Zahlen sind belastbar.
+          {t('internal.ok', { n: data.window.excludedInternalHashes })}
         </p>
       </div>
     );
@@ -173,25 +182,24 @@ function InternalTrafficWarning({ t }: { t: Traction }) {
   return (
     <div className="border-2 border-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-2">
       <p className="font-sans text-[11px] font-bold text-amber-900 dark:text-amber-300 uppercase tracking-widest">
-        ⚠ Interner Traffic NICHT gefiltert
+        {t('internal.warnTitle')}
       </p>
       <p className="font-serif text-sm text-amber-900 dark:text-amber-200">
-        Diese Zahlen enthalten die eigenen Besuche des Teams. Bei kleiner Nutzerbasis dominiert das jede Metrik —
-        so dürfen die Werte niemandem gezeigt werden.
+        {t('internal.warnBody')}
       </p>
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="font-sans text-[10px] uppercase tracking-widest text-amber-800 dark:text-amber-400">Dein Hash:</span>
+        <span className="font-sans text-[10px] uppercase tracking-widest text-amber-800 dark:text-amber-400">{t('internal.yourHash')}</span>
         <code className="font-mono text-xs bg-white dark:bg-[#1e1a14] border border-amber-400 px-2 py-1 text-amber-900 dark:text-amber-200">
-          {t.yourIpHash}
+          {data.yourIpHash}
         </code>
         <button
-          onClick={() => { navigator.clipboard?.writeText(t.yourIpHash); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+          onClick={() => { navigator.clipboard?.writeText(data.yourIpHash); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
           className="font-sans text-[9px] uppercase tracking-widest border border-amber-600 text-amber-800 dark:text-amber-300 px-2 py-1 hover:bg-amber-100 dark:hover:bg-amber-900/40"
         >
-          {copied ? '✓ kopiert' : 'kopieren'}
+          {copied ? t('action.copied') : t('action.copy')}
         </button>
         <span className="font-sans text-[10px] text-amber-700 dark:text-amber-400">
-          → als <code className="font-mono">INTERNAL_IP_HASHES</code> setzen (kommagetrennt, alle Geräte des Teams)
+          {t('internal.hint')}
         </span>
       </div>
     </div>
@@ -199,8 +207,9 @@ function InternalTrafficWarning({ t }: { t: Traction }) {
 }
 
 function CohortTable({ cohorts }: { cohorts: Traction['cohorts'] }) {
+  const t = useT();
   if (!cohorts?.length) {
-    return <p className="font-serif text-sm text-[#1a1a1a]/40 dark:text-gray-600">Noch keine Kohorten.</p>;
+    return <p className="font-serif text-sm text-[#1a1a1a]/40 dark:text-gray-600">{t('empty.cohorts')}</p>;
   }
   const cellCls = (p: number | null) => {
     if (p === null) return 'bg-transparent text-[#1a1a1a]/20 dark:text-gray-700';
@@ -215,8 +224,8 @@ function CohortTable({ cohorts }: { cohorts: Traction['cohorts'] }) {
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b-2 border-[#1a1a1a] dark:border-gray-700">
-            <th className="text-left py-2 pr-3 font-sans text-[9px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-gray-500">Kohorte (Woche)</th>
-            <th className="text-left py-2 pr-3 font-sans text-[9px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-gray-500">Größe</th>
+            <th className="text-left py-2 pr-3 font-sans text-[9px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-gray-500">{t('cohort.header')}</th>
+            <th className="text-left py-2 pr-3 font-sans text-[9px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-gray-500">{t('cohort.size')}</th>
             {[0, 1, 2, 3, 4].map(o => (
               <th key={o} className="text-center py-2 px-1 font-sans text-[9px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-gray-500">
                 {o === 0 ? 'W0' : `+${o}`}
@@ -243,75 +252,83 @@ function CohortTable({ cohorts }: { cohorts: Traction['cohorts'] }) {
         </tbody>
       </table>
       <p className="font-sans text-[9px] text-[#1a1a1a]/40 dark:text-gray-600 mt-2">
-        Anteil der Besucher einer Startwoche, die in Folgewochen erneut analysiert haben. „·" = Woche noch nicht vergangen.
+        {t('cohort.legend')}
       </p>
     </div>
   );
 }
 
-function TractionTab({ t }: { t: Traction }) {
-  const tot = t.totals;
+const FUNNEL_KEY: Record<string, 'funnel.analysed' | 'funnel.repeat' | 'funnel.returning' | 'funnel.registered'> = {
+  analysed: 'funnel.analysed', repeat: 'funnel.repeat',
+  returning: 'funnel.returning', registered: 'funnel.registered',
+};
+
+function TractionTab({ data }: { data: Traction }) {
+  const t = useT();
+  const tot = data.totals;
   return (
     <div className="space-y-6">
-      <InternalTrafficWarning t={t} />
+      <InternalTrafficWarning data={data} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
-          label="Besucher (Zeitraum)"
+          label={t('traction.visitors')}
           value={tot?.visitors ?? 0}
-          sub={`${t.window.days} Tage · eindeutige ip_hash`}
+          sub={t('traction.visitorsSub', { days: data.window.days })}
         />
         <StatCard
-          label="Wiederkehrende"
-          value={nn(t.retention.returningRate, '%')}
-          sub={`${t.retention.returningVisitors} an ≥2 Tagen aktiv`}
-          accent={t.retention.returningRate !== null && t.retention.returningRate >= 25 ? 'good' : 'neutral'}
+          label={t('traction.returning')}
+          value={nn(data.retention.returningRate, '%')}
+          sub={t('traction.returningSub', { n: data.retention.returningVisitors })}
+          accent={data.retention.returningRate !== null && data.retention.returningRate >= 25 ? 'good' : 'neutral'}
         />
         <StatCard
-          label="Analysen (Zeitraum)"
+          label={t('traction.analyses')}
           value={tot?.analyses ?? 0}
-          sub={`${tot?.topics ?? 0} verschiedene Themen`}
+          sub={t('traction.analysesSub', { n: tot?.topics ?? 0 })}
         />
         <StatCard
-          label="Registrierte Nutzer"
-          value={t.usersTotal}
-          sub="gesamt"
+          label={t('traction.users')}
+          value={data.usersTotal}
+          sub={t('traction.usersSub')}
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Section
-          title="Analysen pro Woche"
-          note={`aktuell ${t.growth.analyses.current} · Vorwoche ${t.growth.analyses.previous}`}
+          title={t('traction.analysesPerWeek')}
+          note={t('traction.weekNote', { current: data.growth.analyses.current, previous: data.growth.analyses.previous })}
         >
-          <div className="mb-2"><GrowthBadge pct={t.growth.analyses.growthPct} /></div>
-          <BarSeries data={t.series.weekly} valueKey="count" />
+          <div className="mb-2"><GrowthBadge pct={data.growth.analyses.growthPct} /></div>
+          <BarSeries data={data.series.weekly} valueKey="count" />
         </Section>
 
         <Section
-          title="Besucher pro Woche"
-          note={`aktuell ${t.growth.visitors.current} · Vorwoche ${t.growth.visitors.previous}`}
+          title={t('traction.visitorsPerWeek')}
+          note={t('traction.weekNote', { current: data.growth.visitors.current, previous: data.growth.visitors.previous })}
         >
-          <div className="mb-2"><GrowthBadge pct={t.growth.visitors.growthPct} /></div>
-          <BarSeries data={t.series.weekly} valueKey="visitors" />
+          <div className="mb-2"><GrowthBadge pct={data.growth.visitors.growthPct} /></div>
+          <BarSeries data={data.series.weekly} valueKey="visitors" />
         </Section>
       </div>
 
-      <Section title="Analysen pro Tag (30 Tage)">
-        <BarSeries data={t.series.daily} valueKey="count" />
+      <Section title={t('traction.analysesPerDay')}>
+        <BarSeries data={data.series.daily} valueKey="count" />
       </Section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Section title="Kohorten-Retention" note="wöchentlich">
-          <CohortTable cohorts={t.cohorts} />
+        <Section title={t('traction.cohorts')} note={t('traction.cohortsNote')}>
+          <CohortTable cohorts={data.cohorts} />
         </Section>
 
-        <Section title="Funnel" note="Basis: Besucher mit ≥1 Analyse">
+        <Section title={t('traction.funnel')} note={t('traction.funnelNote')}>
           <div className="space-y-3">
-            {t.funnel.map(step => (
+            {data.funnel.map(step => (
               <div key={step.key}>
                 <div className="flex items-baseline justify-between mb-1">
-                  <span className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4]">{step.label}</span>
+                  <span className="font-serif text-sm text-[#1a1a1a] dark:text-[#f0ece4]">
+                    {FUNNEL_KEY[step.key] ? t(FUNNEL_KEY[step.key]) : step.label}
+                  </span>
                   <span className="font-sans text-xs text-[#1a1a1a]/60 dark:text-gray-500">
                     <b className="font-serif text-base text-[#1a1a1a] dark:text-[#f0ece4]">{step.value}</b>
                     {step.pct !== null && <span className="ml-2">{step.pct}%</span>}
@@ -325,13 +342,13 @@ function TractionTab({ t }: { t: Traction }) {
           </div>
           <div className="mt-4 pt-3 border-t border-[#e0d8cf] dark:border-gray-700 grid grid-cols-2 gap-3">
             <div>
-              <p className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/40 dark:text-gray-600">Ø aktive Tage</p>
-              <p className="font-serif text-lg text-[#1a1a1a] dark:text-[#f0ece4]">{nn(t.retention.avgActiveDays)}</p>
+              <p className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/40 dark:text-gray-600">{t('traction.avgDays')}</p>
+              <p className="font-serif text-lg text-[#1a1a1a] dark:text-[#f0ece4]">{nn(data.retention.avgActiveDays)}</p>
             </div>
             <div>
-              <p className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/40 dark:text-gray-600">Sprachen</p>
+              <p className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/40 dark:text-gray-600">{t('traction.languages')}</p>
               <p className="font-serif text-lg text-[#1a1a1a] dark:text-[#f0ece4]">
-                {t.languages.map(l => `${l.label} ${l.pct ?? 0}%`).join(' · ') || '—'}
+                {data.languages.map(l => `${l.label} ${l.pct ?? 0}%`).join(' · ') || '—'}
               </p>
             </div>
           </div>
@@ -343,12 +360,15 @@ function TractionTab({ t }: { t: Traction }) {
 
 /* ── Data-asset tab ───────────────────────────────────────────────────────── */
 
-function AssetTab({ t }: { t: Traction }) {
-  const a = t.asset;
-  if (!a) return <p className="font-serif text-[#1a1a1a]/50 dark:text-gray-500">Keine Asset-Daten verfügbar.</p>;
-  const spectrumLabels: Record<string, string> = {
-    left: 'Links', center_left: 'Mitte-links', center: 'Mitte', center_right: 'Mitte-rechts', right: 'Rechts',
-  };
+const SPECTRUM_KEY: Record<string, 'spectrum.left' | 'spectrum.center_left' | 'spectrum.center' | 'spectrum.center_right' | 'spectrum.right'> = {
+  left: 'spectrum.left', center_left: 'spectrum.center_left', center: 'spectrum.center',
+  center_right: 'spectrum.center_right', right: 'spectrum.right',
+};
+
+function AssetTab({ data }: { data: Traction }) {
+  const t = useT();
+  const a = data.asset;
+  if (!a) return <p className="font-serif text-[#1a1a1a]/50 dark:text-gray-500">{t('empty.asset')}</p>;
   const spectrumColor: Record<string, string> = {
     left: 'bg-rose-600', center_left: 'bg-orange-400', center: 'bg-slate-400',
     center_right: 'bg-sky-500', right: 'bg-blue-700',
@@ -358,36 +378,33 @@ function AssetTab({ t }: { t: Traction }) {
   return (
     <div className="space-y-6">
       <div className="border-2 border-[#1a1a1a] dark:border-gray-700 bg-[#1a1a1a] dark:bg-gray-900 p-4">
-        <p className="font-serif text-[#FFF8F0] text-sm">
-          Dieser Bestand wächst mit jedem Worker-Lauf — <b>unabhängig von Traffic und ohne Marketing-Ausgaben</b>.
-          Das ist der Teil, der sich nicht kurzfristig kopieren lässt.
-        </p>
+        <p className="font-serif text-[#FFF8F0] text-sm">{t('asset.banner')}</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Korpus-Artikel" value={a.articles.toLocaleString('de-DE')} sub={`aus ${a.outlets} klassifizierten Medien`} />
-        <StatCard label="Embeddings" value={a.embeddings.toLocaleString('de-DE')} sub={`${nn(a.embeddingCoverage, '%')} Abdeckung`} />
-        <StatCard label="NLI-Urteile" value={a.nliVerdicts.toLocaleString('de-DE')} sub="eigener Verifikations-Datensatz" accent="good" />
-        <StatCard label="Artikel / Tag" value={nn(a.articlesPerDay)} sub={`beobachtet über ${a.observedDays} Tage`} />
+        <StatCard label={t('asset.articles')} value={a.articles.toLocaleString()} sub={t('asset.articlesSub', { n: a.outlets })} />
+        <StatCard label={t('asset.embeddings')} value={a.embeddings.toLocaleString()} sub={t('asset.embeddingsSub', { pct: nn(a.embeddingCoverage, '%') })} />
+        <StatCard label={t('asset.nli')} value={a.nliVerdicts.toLocaleString()} sub={t('asset.nliSub')} accent="good" />
+        <StatCard label={t('asset.perDay')} value={nn(a.articlesPerDay)} sub={t('asset.perDaySub', { n: a.observedDays })} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Section title="Korpus-Zuwachs (30 Tage)">
+        <Section title={t('asset.growth')}>
           <BarSeries data={a.dailyIngest} valueKey="count" />
         </Section>
 
-        <Section title="Artikel je politischem Lager">
+        <Section title={t('asset.bySpectrum')}>
           <div className="space-y-2">
             {Object.entries(a.bySpectrum || {}).map(([sp, n]) => (
               <div key={sp} className="flex items-center gap-3">
                 <span className="font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-gray-500 w-24 shrink-0">
-                  {spectrumLabels[sp] ?? sp}
+                  {SPECTRUM_KEY[sp] ? t(SPECTRUM_KEY[sp]) : sp}
                 </span>
                 <div className="flex-1 h-3 bg-[#e0d8cf] dark:bg-gray-700">
                   <div className={`h-full ${spectrumColor[sp] ?? 'bg-[#1a1a1a]'}`} style={{ width: `${(Number(n) / maxSpec) * 100}%` }} />
                 </div>
                 <span className="font-serif text-sm font-bold text-[#1a1a1a] dark:text-[#f0ece4] w-14 text-right">
-                  {Number(n).toLocaleString('de-DE')}
+                  {Number(n).toLocaleString()}
                 </span>
               </div>
             ))}
@@ -396,10 +413,10 @@ function AssetTab({ t }: { t: Traction }) {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="NLI: bestätigt" value={a.nliByLabel?.entailment ?? 0} accent="good" />
-        <StatCard label="NLI: widersprochen" value={a.nliByLabel?.contradiction ?? 0} accent="bad" sub="gefundene Halluzinationen" />
-        <StatCard label="Leser-Feedback" value={a.feedbackTotal} sub="Stimmen zur Ausgewogenheit" />
-        <StatCard label="Kosten / Analyse" value={`$${a.costPerAnalysis}`} sub="Grenzkosten" accent="good" />
+        <StatCard label={t('asset.nliEntail')} value={a.nliByLabel?.entailment ?? 0} accent="good" />
+        <StatCard label={t('asset.nliContra')} value={a.nliByLabel?.contradiction ?? 0} accent="bad" sub={t('asset.nliContraSub')} />
+        <StatCard label={t('asset.feedback')} value={a.feedbackTotal} sub={t('asset.feedbackSub')} />
+        <StatCard label={t('asset.cost')} value={`$${a.costPerAnalysis}`} sub={t('asset.costSub')} accent="good" />
       </div>
     </div>
   );
@@ -407,25 +424,26 @@ function AssetTab({ t }: { t: Traction }) {
 
 /* ── Content tab ──────────────────────────────────────────────────────────── */
 
-function ContentTab({ stats, t, feedback }: { stats: AdminStats; t: Traction | null; feedback: any }) {
+function ContentTab({ stats, data, feedback }: { stats: AdminStats; data: Traction | null; feedback: any }) {
+  const t = useT();
   const topTopics = stats.topTopics ?? [];
   const maxCount = topTopics[0]?.count || 1;
   return (
     <div className="space-y-6">
       {feedback && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="👍 Ausgewogen" value={feedback.up} sub={`7 Tage: ${feedback.up7d}`} accent="good" />
-          <StatCard label="👎 Nicht ausgewogen" value={feedback.down} sub={`7 Tage: ${feedback.down7d}`} accent={feedback.down > feedback.up ? 'bad' : 'neutral'} />
+          <StatCard label={t('content.balanced')} value={feedback.up} sub={t('content.last7', { n: feedback.up7d })} accent="good" />
+          <StatCard label={t('content.notBalanced')} value={feedback.down} sub={t('content.last7', { n: feedback.down7d })} accent={feedback.down > feedback.up ? 'bad' : 'neutral'} />
           <StatCard
-            label="Positiv-Quote"
+            label={t('content.positiveRate')}
             value={(feedback.up + feedback.down) > 0 ? `${Math.round((feedback.up / (feedback.up + feedback.down)) * 100)}%` : '—'}
-            sub="einziges Signal für wahrgenommene Neutralität"
+            sub={t('content.positiveRateSub')}
           />
-          <StatCard label="Themen gesamt" value={t?.asset?.topicsTotal ?? stats.usage.uniqueTopicsAllTime} />
+          <StatCard label={t('content.topicsTotal')} value={data?.asset?.topicsTotal ?? stats.usage.uniqueTopicsAllTime} />
         </div>
       )}
 
-      <Section title={`Top ${topTopics.length} Themen`}>
+      <Section title={t('content.topTopics', { n: topTopics.length })}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
           {topTopics.map((t2, i) => (
             <div key={t2.topic} className="flex items-center gap-3 py-2.5 border-b border-[#e0d8cf] dark:border-gray-700">
@@ -444,25 +462,25 @@ function ContentTab({ stats, t, feedback }: { stats: AdminStats; t: Traction | n
         </div>
       </Section>
 
-      {t?.topViewed && t.topViewed.length > 0 && (
-        <Section title="Meistgelesene Analysen" note="Wiederaufrufe aus dem Cache">
+      {data?.topViewed && data.topViewed.length > 0 && (
+        <Section title={t('content.mostRead')} note={t('content.mostReadNote')}>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b-2 border-[#1a1a1a] dark:border-gray-700">
-                {['Thema', 'Sprache', 'Suchen', 'Aufrufe', 'Zuletzt'].map(h => (
-                  <th key={h} className="text-left py-2 pr-3 font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-gray-500">{h}</th>
+                {(['content.colTopic', 'content.colLang', 'content.colSearches', 'content.colViews', 'content.colLast'] as const).map(h => (
+                  <th key={h} className="text-left py-2 pr-3 font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-gray-500">{t(h)}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e0d8cf] dark:divide-gray-700">
-              {t.topViewed.map((v, i) => (
+              {data.topViewed.map((v, i) => (
                 <tr key={i}>
                   <td className="py-2 pr-3 font-serif text-[#1a1a1a] dark:text-[#f0ece4] capitalize">{v.topic}</td>
                   <td className="py-2 pr-3 font-sans text-xs uppercase text-[#1a1a1a]/50 dark:text-gray-500">{v.lang}</td>
                   <td className="py-2 pr-3 font-serif text-[#1a1a1a] dark:text-[#f0ece4]">{v.search_count}</td>
                   <td className="py-2 pr-3 font-serif font-bold text-[#1a1a1a] dark:text-[#f0ece4]">{v.view_count}</td>
                   <td className="py-2 font-sans text-xs text-[#1a1a1a]/40 dark:text-gray-600">
-                    {v.last_searched ? new Date(v.last_searched).toLocaleDateString('de-DE') : '—'}
+                    {v.last_searched ? new Date(v.last_searched).toLocaleDateString() : '—'}
                   </td>
                 </tr>
               ))}
@@ -476,27 +494,28 @@ function ContentTab({ stats, t, feedback }: { stats: AdminStats; t: Traction | n
 
 /* ── Quality tab ──────────────────────────────────────────────────────────── */
 
-function QualityTab({ ops, t }: { ops: any; t: Traction | null }) {
-  if (!ops?.process) return <p className="font-serif text-[#1a1a1a]/50 dark:text-gray-500">Keine Qualitätsdaten (Server neu gestartet?).</p>;
+function QualityTab({ ops, data }: { ops: any; data: Traction | null }) {
+  const t = useT();
+  if (!ops?.process) return <p className="font-serif text-[#1a1a1a]/50 dark:text-gray-500">{t('empty.quality')}</p>;
   const p = ops.process;
-  const degradedRate = t?.totals && t.totals.analyses > 0
-    ? Math.round((t.totals.degraded / t.totals.analyses) * 100) : null;
+  const degradedRate = data?.totals && data.totals.analyses > 0
+    ? Math.round((data.totals.degraded / data.totals.analyses) * 100) : null;
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Ø Confidence" value={p.confidence.avg ?? '—'} sub={`${p.confidence.count} Messungen`} />
-        <StatCard label="Ø Beleg-Quote" value={p.grounding.avgRatio != null ? `${Math.round(p.grounding.avgRatio * 100)}%` : '—'} sub="Artikel mit Quell-Match" />
-        <StatCard label="Analysen Korpus/Live" value={`${p.analyses.corpus} / ${p.analyses.liveRss}`} sub={`${p.analyses.errors} Fehler`} />
+        <StatCard label={t('quality.confidence')} value={p.confidence.avg ?? '—'} sub={t('quality.confidenceSub', { n: p.confidence.count })} />
+        <StatCard label={t('quality.grounding')} value={p.grounding.avgRatio != null ? `${Math.round(p.grounding.avgRatio * 100)}%` : '—'} sub={t('quality.groundingSub')} />
+        <StatCard label={t('quality.split')} value={`${p.analyses.corpus} / ${p.analyses.liveRss}`} sub={t('quality.splitSub', { n: p.analyses.errors })} />
         <StatCard
-          label="Degraded-Quote"
+          label={t('quality.degraded')}
           value={nn(degradedRate, '%')}
-          sub={`${t?.totals?.degraded ?? 0} im Zeitraum`}
+          sub={t('quality.degradedSub', { n: data?.totals?.degraded ?? 0 })}
           accent={degradedRate !== null && degradedRate > 10 ? 'warn' : 'good'}
         />
       </div>
 
-      <Section title="Confidence-Verteilung" note="seit letztem Deploy">
+      <Section title={t('quality.distribution')} note={t('quality.sinceDeploy')}>
         <div className="flex gap-2 flex-wrap text-xs">
           {Object.entries(p.confidence.buckets as Record<string, number>).map(([b, n]) => (
             <span key={b} className={`px-3 py-1.5 font-sans ${b === '100' ? 'bg-emerald-100 text-emerald-700' : 'bg-[#e8e0d5] dark:bg-[#252525] text-[#1a1a1a]/70 dark:text-gray-400'}`}>
@@ -507,7 +526,7 @@ function QualityTab({ ops, t }: { ops: any; t: Traction | null }) {
       </Section>
 
       {ops.measuredFactuality?.length > 0 && (
-        <Section title="Gemessene Faktentreue" note="eigene NLI-Daten · min. 5 Messungen">
+        <Section title={t('quality.factuality')} note={t('quality.factualityNote')}>
           <div className="flex flex-wrap gap-2 text-xs">
             {ops.measuredFactuality.slice(0, 20).map((s: any) => (
               <span
@@ -520,16 +539,16 @@ function QualityTab({ ops, t }: { ops: any; t: Traction | null }) {
             ))}
           </div>
           <p className="font-sans text-[9px] text-[#1a1a1a]/40 dark:text-gray-600 mt-3">
-            ⚑ = gemessene Faktentreue weicht von der deklarierten Einstufung ab — Forschungsdaten für AP1/AP4.
+            {t('quality.factualityLegend')}
           </p>
         </Section>
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Übersetzungen ok/fail" value={`${p.translations.ok} / ${p.translations.failed}`} />
-        <StatCard label="Deep-Analysen ok/fail" value={`${p.deepAnalysis.ok} / ${p.deepAnalysis.failed}`} />
-        <StatCard label="Ø Latenz Stream" value={p.latency?.stream_total ? `${(p.latency.stream_total.avgMs / 1000).toFixed(1)}s` : '—'} sub={p.latency?.stream_total ? `max ${(p.latency.stream_total.maxMs / 1000).toFixed(1)}s` : undefined} />
-        <StatCard label="Gemini-Calls" value={p.gemini.totalCalls} sub={`A:${p.gemini.analysis} D:${p.gemini.deep} T:${p.gemini.translate}`} />
+        <StatCard label={t('quality.translations')} value={`${p.translations.ok} / ${p.translations.failed}`} />
+        <StatCard label={t('quality.deep')} value={`${p.deepAnalysis.ok} / ${p.deepAnalysis.failed}`} />
+        <StatCard label={t('quality.latency')} value={p.latency?.stream_total ? `${(p.latency.stream_total.avgMs / 1000).toFixed(1)}s` : '—'} sub={p.latency?.stream_total ? t('quality.latencySub', { n: (p.latency.stream_total.maxMs / 1000).toFixed(1) }) : undefined} />
+        <StatCard label={t('quality.geminiCalls')} value={p.gemini.totalCalls} sub={`A:${p.gemini.analysis} D:${p.gemini.deep} T:${p.gemini.translate}`} />
       </div>
     </div>
   );
@@ -538,41 +557,42 @@ function QualityTab({ ops, t }: { ops: any; t: Traction | null }) {
 /* ── Ops tab ──────────────────────────────────────────────────────────────── */
 
 function OpsTab({ stats, ops }: { stats: AdminStats; ops: any }) {
+  const t = useT();
   const { server, usage, costs, hourlyLast24h, topIPs } = stats;
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2">
         <span className={`inline-flex items-center gap-1.5 font-sans text-[10px] uppercase tracking-widest px-3 py-1 border ${server.dbAvailable ? 'border-emerald-500 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30' : 'border-amber-500 text-amber-700 bg-amber-50'}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${server.dbAvailable ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-          {server.dbAvailable ? 'PostgreSQL verbunden' : 'Kein DB (nur RAM)'}
+          {server.dbAvailable ? t('ops.dbOn') : t('ops.dbOff')}
         </span>
         <span className="inline-flex items-center gap-1.5 font-sans text-[10px] uppercase tracking-widest px-3 py-1 border border-sky-500 text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/30">
           <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-          Uptime {server.uptime_hours}h
+          {t('ops.uptime', { n: server.uptime_hours })}
         </span>
         {ops?.flags && (
           <span className="inline-flex items-center gap-1.5 font-sans text-[10px] uppercase tracking-widest px-3 py-1 border border-[#1a1a1a]/30 text-[#1a1a1a]/60 dark:text-gray-400 dark:border-gray-700">
-            {ops.flags.corpusAnalysisEnabled ? 'Corpus ON' : 'Corpus OFF'} · Sentry {ops.flags.sentry ? 'an' : 'AUS'}
+            {ops.flags.corpusAnalysisEnabled ? 'Corpus ON' : 'Corpus OFF'} · Sentry {ops.flags.sentry ? 'ON' : 'OFF'}
           </span>
         )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Analysen heute" value={usage.totalAnalysesToday} sub={usage.today} />
-        <StatCard label="Cache-Trefferquote" value={server.cacheHitRate} sub={`${server.cacheHits} Hits / ${server.cacheMisses} Misses`} />
-        <StatCard label="Fehler" value={server.errors} accent={server.errors > 0 ? 'warn' : 'good'} sub={`${server.cachedItems} Cache-Einträge`} />
-        <StatCard label="Requests gesamt" value={server.totalRequests.toLocaleString('de-DE')} />
+        <StatCard label={t('ops.analysesToday')} value={usage.totalAnalysesToday} sub={usage.today} />
+        <StatCard label={t('ops.cacheRate')} value={server.cacheHitRate} sub={t('ops.cacheRateSub', { hits: server.cacheHits, misses: server.cacheMisses })} />
+        <StatCard label={t('ops.errors')} value={server.errors} accent={server.errors > 0 ? 'warn' : 'good'} sub={t('ops.errorsSub', { n: server.cachedItems })} />
+        <StatCard label={t('ops.requests')} value={server.totalRequests.toLocaleString()} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <StatCard label="Kosten heute" value={costs.estimatedCostToday} sub={costs.note} />
-        <StatCard label="Hochrechnung Monat" value={costs.estimatedCostMonth} sub="bei heutigem Volumen" />
-        <StatCard label="Gemini-Budget" value={ops?.budget ? `${ops.budget.callsToday}/${ops.budget.dailyLimit}` : '—'} sub={ops?.budget ? `${ops.budget.remaining} übrig heute` : undefined} />
+        <StatCard label={t('ops.costToday')} value={costs.estimatedCostToday} sub={costs.note} />
+        <StatCard label={t('ops.costMonth')} value={costs.estimatedCostMonth} sub={t('ops.costMonthSub')} />
+        <StatCard label={t('ops.budget')} value={ops?.budget ? `${ops.budget.callsToday}/${ops.budget.dailyLimit}` : '—'} sub={ops?.budget ? t('ops.budgetSub', { n: ops.budget.remaining }) : undefined} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {hourlyLast24h?.length > 0 && (
-          <Section title="Analysen — letzte 24 Stunden">
+          <Section title={t('ops.last24h')}>
             <BarSeries
               data={hourlyLast24h.map(h => ({ bucket: h.hour, count: parseInt(h.count) || 0 }))}
               labelFmt={b => `${new Date(b).getUTCHours()}h`}
@@ -580,7 +600,7 @@ function OpsTab({ stats, ops }: { stats: AdminStats; ops: any }) {
           </Section>
         )}
         {topIPs?.length > 0 && (
-          <Section title={`Aktivste IPs heute`} note={`Limit ${usage.freeDailyLimit}/Tag`}>
+          <Section title={t('ops.topIPs')} note={t('ops.topIPsNote', { n: usage.freeDailyLimit })}>
             <div className="divide-y divide-[#e0d8cf] dark:divide-gray-700">
               {topIPs.map((ip, i) => (
                 <div key={i} className="flex items-center justify-between py-2">
@@ -594,7 +614,7 @@ function OpsTab({ stats, ops }: { stats: AdminStats; ops: any }) {
       </div>
 
       {ops?.corpus && (
-        <Section title="Feed-Gesundheit" note={`${ops.corpus.feedsDown} von ${ops.corpus.feeds.length} problematisch`}>
+        <Section title={t('ops.feedHealth')} note={t('ops.feedHealthNote', { down: ops.corpus.feedsDown, total: ops.corpus.feeds.length })}>
           {ops.corpus.feedsDown > 0 ? (
             <table className="w-full text-xs">
               <tbody>
@@ -604,34 +624,34 @@ function OpsTab({ stats, ops }: { stats: AdminStats; ops: any }) {
                     <td className="py-1.5 font-sans text-[#1a1a1a]/50 dark:text-gray-500">{f.spectrum}</td>
                     <td className="py-1.5 text-rose-600 font-sans">{f.status} ({f.consecutive_failures}×)</td>
                     <td className="py-1.5 font-sans text-[#1a1a1a]/40 dark:text-gray-600">
-                      {f.last_failure ? new Date(f.last_failure).toLocaleString('de-DE') : ''}
+                      {f.last_failure ? new Date(f.last_failure).toLocaleString() : ''}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
-            <p className="font-serif text-sm text-emerald-700 dark:text-emerald-400">✓ Alle Feeds gesund.</p>
+            <p className="font-serif text-sm text-emerald-700 dark:text-emerald-400">{t('ops.feedsOk')}</p>
           )}
         </Section>
       )}
 
-      <Section title="Server-Details">
+      <Section title={t('ops.serverDetails')}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-sans text-xs">
           <div>
-            <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40 dark:text-gray-600">Gestartet</p>
-            <p className="font-serif text-[#1a1a1a] dark:text-[#f0ece4]">{new Date(server.startedAt).toLocaleString('de-DE')}</p>
+            <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40 dark:text-gray-600">{t('ops.started')}</p>
+            <p className="font-serif text-[#1a1a1a] dark:text-[#f0ece4]">{new Date(server.startedAt).toLocaleString()}</p>
           </div>
           <div>
-            <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40 dark:text-gray-600">Analysen gesamt</p>
-            <p className="font-serif text-[#1a1a1a] dark:text-[#f0ece4]">{usage.totalAnalysesAllTime.toLocaleString('de-DE')}</p>
+            <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40 dark:text-gray-600">{t('ops.analysesTotal')}</p>
+            <p className="font-serif text-[#1a1a1a] dark:text-[#f0ece4]">{usage.totalAnalysesAllTime.toLocaleString()}</p>
           </div>
           <div>
-            <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40 dark:text-gray-600">Cache-Einträge</p>
+            <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40 dark:text-gray-600">{t('ops.cacheItems')}</p>
             <p className="font-serif text-[#1a1a1a] dark:text-[#f0ece4]">{server.cachedItems}</p>
           </div>
           <div>
-            <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40 dark:text-gray-600">Aktive IPs heute</p>
+            <p className="uppercase tracking-widest mb-1 text-[#1a1a1a]/40 dark:text-gray-600">{t('ops.activeIPs')}</p>
             <p className="font-serif text-[#1a1a1a] dark:text-[#f0ece4]">{usage.activeIPsToday}</p>
           </div>
         </div>
@@ -645,6 +665,7 @@ function OpsTab({ stats, ops }: { stats: AdminStats; ops: any }) {
 interface UserRowProps { u: AdminStats['users'][0]; adminKey: string; onSaved: () => void; }
 
 const UserRow: React.FC<UserRowProps> = ({ u, adminKey, onSaved }) => {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [tier, setTier] = useState(u.tier);
   const [limit, setLimit] = useState(String(u.daily_limit));
@@ -660,10 +681,10 @@ const UserRow: React.FC<UserRowProps> = ({ u, adminKey, onSaved }) => {
         body: JSON.stringify({ tier, daily_limit: parseInt(limit) }),
       });
       const data = await res.json();
-      if (!res.ok) { setErr(data.error || 'Fehler'); return; }
+      if (!res.ok) { setErr(data.error || t('users.error')); return; }
       setEditing(false);
       onSaved();
-    } catch { setErr('Netzwerkfehler'); }
+    } catch { setErr(t('users.netError')); }
     finally { setSaving(false); }
   }
 
@@ -696,7 +717,7 @@ const UserRow: React.FC<UserRowProps> = ({ u, adminKey, onSaved }) => {
               className="font-sans text-xs border border-[#1a1a1a] dark:border-gray-600 px-1.5 py-0.5 w-20 bg-white dark:bg-[#1e1a14] dark:text-[#f0ece4]" placeholder="10" />
             <label className="flex items-center gap-1 cursor-pointer">
               <input type="checkbox" checked={isUnlimited} onChange={e => setLimit(e.target.checked ? '-1' : '10')} className="w-3 h-3" />
-              <span className="font-sans text-[9px] text-sky-600 uppercase tracking-widest">∞ Unbegrenzt</span>
+              <span className="font-sans text-[9px] text-sky-600 uppercase tracking-widest">{t('users.unlimited')}</span>
             </label>
           </div>
         ) : (
@@ -706,17 +727,17 @@ const UserRow: React.FC<UserRowProps> = ({ u, adminKey, onSaved }) => {
         )}
       </td>
       <td className="py-2.5 pr-3 font-sans text-xs text-[#1a1a1a]/50 dark:text-gray-600 whitespace-nowrap">
-        {new Date(u.created_at).toLocaleDateString('de-DE')}
+        {new Date(u.created_at).toLocaleDateString()}
       </td>
       <td className="py-2.5 pr-3 font-sans text-xs text-[#1a1a1a]/50 dark:text-gray-600 whitespace-nowrap">
-        {u.last_login ? new Date(u.last_login).toLocaleDateString('de-DE') : '—'}
+        {u.last_login ? new Date(u.last_login).toLocaleDateString() : '—'}
       </td>
       <td className="py-2.5">
         {editing ? (
           <div className="flex gap-2 items-center">
             <button onClick={save} disabled={saving}
               className="font-sans text-[9px] uppercase tracking-widest border border-emerald-500 text-emerald-700 px-2 py-0.5 hover:bg-emerald-50 disabled:opacity-40">
-              {saving ? '…' : '✓ Speichern'}
+              {saving ? '…' : t('users.save')}
             </button>
             <button onClick={() => { setEditing(false); setTier(u.tier); setLimit(String(u.daily_limit)); setErr(''); }}
               className="font-sans text-[9px] uppercase tracking-widest text-[#1a1a1a]/40 hover:text-rose-600">×</button>
@@ -725,7 +746,7 @@ const UserRow: React.FC<UserRowProps> = ({ u, adminKey, onSaved }) => {
         ) : (
           <button onClick={() => setEditing(true)}
             className="font-sans text-[9px] uppercase tracking-widest border border-[#1a1a1a]/20 text-[#1a1a1a]/50 dark:text-gray-500 px-2 py-0.5 hover:border-[#1a1a1a] hover:text-[#1a1a1a] transition-colors">
-            Bearbeiten
+            {t('users.edit')}
           </button>
         )}
       </td>
@@ -734,15 +755,16 @@ const UserRow: React.FC<UserRowProps> = ({ u, adminKey, onSaved }) => {
 };
 
 function UsersTab({ users, adminKey, onRefresh }: { users: AdminStats['users']; adminKey: string; onRefresh: () => void }) {
-  if (!users?.length) return <p className="font-serif text-[#1a1a1a]/50 dark:text-gray-500">Noch keine registrierten Nutzer.</p>;
+  const t = useT();
+  if (!users?.length) return <p className="font-serif text-[#1a1a1a]/50 dark:text-gray-500">{t('empty.users')}</p>;
   return (
-    <Section title={`Registrierte Nutzer (${users.length}) — Tier & Limit verwalten`}>
+    <Section title={t('users.title', { n: users.length })}>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b-2 border-[#1a1a1a] dark:border-gray-700">
-              {['ID', 'E-Mail', 'Tier', 'Suchen', 'Limit/Tag', 'Registriert', 'Login', ''].map(h => (
-                <th key={h} className="text-left py-2 pr-3 font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-gray-500">{h}</th>
+              {['ID', 'E-Mail', 'Tier', t('users.colSearches'), t('users.colLimit'), t('users.colRegistered'), t('users.colLogin'), ''].map((h, i) => (
+                <th key={i} className="text-left py-2 pr-3 font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/50 dark:text-gray-500">{h}</th>
               ))}
             </tr>
           </thead>
@@ -751,7 +773,7 @@ function UsersTab({ users, adminKey, onRefresh }: { users: AdminStats['users']; 
           </tbody>
         </table>
         <p className="font-sans text-[9px] uppercase tracking-widest text-[#1a1a1a]/30 dark:text-gray-700 mt-3">
-          Limit -1 = unbegrenzte Analysen · Tier-Änderungen werden nach erneutem Login aktiv
+          {t('users.hint')}
         </p>
       </div>
     </Section>
@@ -763,6 +785,7 @@ function UsersTab({ users, adminKey, onRefresh }: { users: AdminStats['users']; 
 export default function AdminPage() {
   const [adminKey, setAdminKey] = useState(() => localStorage.getItem('adminKey') || '');
   const [keyInput, setKeyInput] = useState('');
+  const [lang, setLang] = useState<AdminLang>(() => (localStorage.getItem('adminLang') === 'en' ? 'en' : 'de'));
   const [tab, setTab] = useState<Tab>(() => (localStorage.getItem('adminTab') as Tab) || 'traction');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [ops, setOps] = useState<any | null>(null);
@@ -779,7 +802,7 @@ export default function AdminPage() {
     try {
       const res = await fetch(`${API_BASE}/api/admin/stats`, { headers: { 'x-admin-key': key } });
       if (res.status === 403) {
-        setError('Ungültiger Admin-Schlüssel');
+        setError('__BADKEY__');
         setAdminKey('');
         localStorage.removeItem('adminKey');
         return;
@@ -793,7 +816,7 @@ export default function AdminPage() {
       fetch(`${API_BASE}/api/admin/traction?days=${days}`, { headers: { 'x-admin-key': key } })
         .then(r => (r.ok ? r.json() : null)).then(setTraction).catch(() => {});
     } catch {
-      setError('Verbindungsfehler');
+      setError('__NETWORK__');
     } finally {
       setLoading(false);
     }
@@ -807,6 +830,25 @@ export default function AdminPage() {
   }, [adminKey, windowDays, fetchAll]);
 
   useEffect(() => { localStorage.setItem('adminTab', tab); }, [tab]);
+  useEffect(() => { localStorage.setItem('adminLang', lang); }, [lang]);
+
+  const t = createT(lang);
+  const LangToggle = () => (
+    <div className="flex border border-[#FFF8F0]/20">
+      {(['de', 'en'] as const).map(l => (
+        <button
+          key={l}
+          onClick={() => setLang(l)}
+          aria-pressed={lang === l}
+          className={`px-2.5 py-1.5 font-sans text-[10px] uppercase tracking-widest transition-colors ${
+            lang === l ? 'bg-[#FFF8F0] text-[#1a1a1a]' : 'text-[#FFF8F0]/50 hover:text-[#FFF8F0]'
+          }`}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  );
 
   function handleKeySubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -818,9 +860,12 @@ export default function AdminPage() {
     return (
       <div className="min-h-screen bg-[#FFF8F0] dark:bg-[#0f0f0f] flex items-center justify-center p-4">
         <div className="w-full max-w-sm">
-          <div className="bg-[#1a1a1a] dark:bg-gray-900 px-6 py-4">
-            <p className="font-sans text-[10px] uppercase tracking-widest text-[#FFF8F0]/50 mb-0.5">NeutraleNachrichten</p>
-            <h1 className="font-serif font-black text-2xl text-[#FFF8F0]">Admin-Zugang</h1>
+          <div className="bg-[#1a1a1a] dark:bg-gray-900 px-6 py-4 flex items-start justify-between gap-3">
+            <div>
+              <p className="font-sans text-[10px] uppercase tracking-widest text-[#FFF8F0]/50 mb-0.5">{t('app.brand')}</p>
+              <h1 className="font-serif font-black text-2xl text-[#FFF8F0]">{t('login.title')}</h1>
+            </div>
+            <LangToggle />
           </div>
           <div className="h-1 flex">
             <div className="flex-1 bg-rose-600" /><div className="flex-1 bg-orange-400" />
@@ -828,13 +873,13 @@ export default function AdminPage() {
           </div>
           <form onSubmit={handleKeySubmit} className="border-2 border-t-0 border-[#1a1a1a] dark:border-gray-700 p-6 space-y-4 bg-[#FFF8F0] dark:bg-[#141414]">
             <div>
-              <label className="block font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/60 dark:text-gray-500 mb-1">Admin-Schlüssel</label>
+              <label className="block font-sans text-[10px] uppercase tracking-widest text-[#1a1a1a]/60 dark:text-gray-500 mb-1">{t('login.key')}</label>
               <input type="password" value={keyInput} onChange={e => setKeyInput(e.target.value)} placeholder="ADMIN_KEY"
                 className="w-full border-2 border-[#1a1a1a] dark:border-gray-600 bg-white dark:bg-[#1e1a14] px-3 py-2.5 font-mono text-sm text-[#1a1a1a] dark:text-[#f0ece4] focus:outline-none focus:ring-2 focus:ring-[#1a1a1a]" />
             </div>
-            {error && <p className="font-serif text-sm text-rose-600">{error}</p>}
+            {error && <p className="font-serif text-sm text-rose-600">{error === '__BADKEY__' ? t('error.badKey') : error === '__NETWORK__' ? t('error.network') : error}</p>}
             <button type="submit" className="w-full bg-[#1a1a1a] dark:bg-gray-700 text-[#FFF8F0] py-3 font-sans text-xs uppercase tracking-widest hover:bg-[#333] transition-colors">
-              Zugang
+              {t('login.submit')}
             </button>
           </form>
         </div>
@@ -845,7 +890,7 @@ export default function AdminPage() {
   if (loading && !stats) {
     return (
       <div className="min-h-screen bg-[#FFF8F0] dark:bg-[#0f0f0f] flex items-center justify-center">
-        <p className="font-serif text-[#1a1a1a]/50 dark:text-gray-500 animate-pulse">Lade Statistiken…</p>
+        <p className="font-serif text-[#1a1a1a]/50 dark:text-gray-500 animate-pulse">{t('state.loading')}</p>
       </div>
     );
   }
@@ -854,10 +899,10 @@ export default function AdminPage() {
     return (
       <div className="min-h-screen bg-[#FFF8F0] dark:bg-[#0f0f0f] flex items-center justify-center p-4">
         <div className="text-center">
-          <p className="font-serif text-rose-600 mb-4">{error}</p>
+          <p className="font-serif text-rose-600 mb-4">{error === '__BADKEY__' ? t('error.badKey') : error === '__NETWORK__' ? t('error.network') : error}</p>
           <button onClick={() => { setAdminKey(''); setKeyInput(''); }}
             className="border-2 border-[#1a1a1a] dark:border-gray-600 dark:text-[#f0ece4] px-4 py-2 font-sans text-xs uppercase tracking-widest hover:bg-[#1a1a1a] hover:text-[#FFF8F0] transition-colors">
-            Erneut anmelden
+            {t('login.retry')}
           </button>
         </div>
       </div>
@@ -867,12 +912,13 @@ export default function AdminPage() {
   if (!stats) return null;
 
   return (
+    <I18nCtx.Provider value={t}>
     <div className="min-h-screen bg-[#e8e0d5] dark:bg-[#0a0a0a]">
       <div className="bg-[#1a1a1a] dark:bg-[#0a0a0a] text-[#FFF8F0]">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <p className="font-sans text-[10px] uppercase tracking-widest text-[#FFF8F0]/50">NeutraleNachrichten</p>
-            <h1 className="font-serif font-black text-2xl">Admin Dashboard</h1>
+            <p className="font-sans text-[10px] uppercase tracking-widest text-[#FFF8F0]/50">{t('app.brand')}</p>
+            <h1 className="font-serif font-black text-2xl">{t('app.title')}</h1>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             {(tab === 'traction' || tab === 'asset') && (
@@ -881,21 +927,22 @@ export default function AdminPage() {
                 onChange={e => setWindowDays(parseInt(e.target.value))}
                 className="bg-transparent border border-[#FFF8F0]/20 text-[#FFF8F0] px-2 py-1.5 font-sans text-[10px] uppercase tracking-widest"
               >
-                <option className="text-[#1a1a1a]" value={30}>30 Tage</option>
-                <option className="text-[#1a1a1a]" value={90}>90 Tage</option>
-                <option className="text-[#1a1a1a]" value={180}>180 Tage</option>
-                <option className="text-[#1a1a1a]" value={365}>1 Jahr</option>
+                <option className="text-[#1a1a1a]" value={30}>{t('range.30')}</option>
+                <option className="text-[#1a1a1a]" value={90}>{t('range.90')}</option>
+                <option className="text-[#1a1a1a]" value={180}>{t('range.180')}</option>
+                <option className="text-[#1a1a1a]" value={365}>{t('range.365')}</option>
               </select>
             )}
-            {loading && <span className="font-sans text-[10px] uppercase tracking-widest text-[#FFF8F0]/50 animate-pulse">Aktualisiere…</span>}
-            {lastRefresh && <span className="font-sans text-[10px] text-[#FFF8F0]/40">{lastRefresh.toLocaleTimeString('de-DE')}</span>}
+            {loading && <span className="font-sans text-[10px] uppercase tracking-widest text-[#FFF8F0]/50 animate-pulse">{t('state.refreshing')}</span>}
+            {lastRefresh && <span className="font-sans text-[10px] text-[#FFF8F0]/40">{lastRefresh.toLocaleTimeString()}</span>}
+            <LangToggle />
             <button onClick={() => fetchAll(adminKey, windowDays)}
               className="border border-[#FFF8F0]/20 px-3 py-1.5 font-sans text-[10px] uppercase tracking-widest hover:bg-[#FFF8F0]/10 transition-colors">
-              Refresh
+              {t('action.refresh')}
             </button>
             <button onClick={() => { setAdminKey(''); localStorage.removeItem('adminKey'); }}
               className="border border-rose-500/40 text-rose-400 px-3 py-1.5 font-sans text-[10px] uppercase tracking-widest hover:bg-rose-500/10 transition-colors">
-              Abmelden
+              {t('action.logout')}
             </button>
           </div>
         </div>
@@ -912,7 +959,7 @@ export default function AdminPage() {
                   : 'border-transparent text-[#FFF8F0]/40 hover:text-[#FFF8F0]/70'
               }`}
             >
-              {tb.label}
+              {t(tb.key)}
             </button>
           ))}
         </div>
@@ -925,18 +972,19 @@ export default function AdminPage() {
 
       <div className="max-w-7xl mx-auto px-4 py-6">
         {tab === 'traction' && (traction
-          ? <TractionTab t={traction} />
-          : <p className="font-serif text-[#1a1a1a]/50 dark:text-gray-500">Lade Traction-Daten… (benötigt DB)</p>)}
+          ? <TractionTab data={traction} />
+          : <p className="font-serif text-[#1a1a1a]/50 dark:text-gray-500">{t('loading.traction')}</p>)}
 
         {tab === 'asset' && (traction
-          ? <AssetTab t={traction} />
-          : <p className="font-serif text-[#1a1a1a]/50 dark:text-gray-500">Lade Asset-Daten…</p>)}
+          ? <AssetTab data={traction} />
+          : <p className="font-serif text-[#1a1a1a]/50 dark:text-gray-500">{t('loading.asset')}</p>)}
 
-        {tab === 'content' && <ContentTab stats={stats} t={traction} feedback={ops?.feedback} />}
-        {tab === 'quality' && <QualityTab ops={ops} t={traction} />}
+        {tab === 'content' && <ContentTab stats={stats} data={traction} feedback={ops?.feedback} />}
+        {tab === 'quality' && <QualityTab ops={ops} data={traction} />}
         {tab === 'ops' && <OpsTab stats={stats} ops={ops} />}
         {tab === 'users' && <UsersTab users={stats.users} adminKey={adminKey} onRefresh={() => fetchAll(adminKey, windowDays)} />}
       </div>
     </div>
+    </I18nCtx.Provider>
   );
 }

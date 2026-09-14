@@ -1,0 +1,381 @@
+/**
+ * Admin dashboard i18n.
+ *
+ * The admin panel is mounted standalone (own route, own key login) and never
+ * received the app's `lang` prop, so it carries its own two-language dictionary
+ * and its own toggle, persisted in localStorage next to adminKey/adminTab.
+ *
+ * German and English only — this is an internal tool, and the public site's
+ * third language (ru) would be dead weight here.
+ *
+ * Placeholders are `{name}` and substituted by `createT`.
+ */
+
+export type AdminLang = 'de' | 'en';
+
+const de = {
+  // ── chrome ────────────────────────────────────────────────────────────────
+  'app.brand': 'NeutraleNachrichten',
+  'app.title': 'Admin Dashboard',
+  'login.title': 'Admin-Zugang',
+  'login.key': 'Admin-Schlüssel',
+  'login.submit': 'Zugang',
+  'login.retry': 'Erneut anmelden',
+  'error.badKey': 'Ungültiger Admin-Schlüssel',
+  'error.network': 'Verbindungsfehler',
+  'state.loading': 'Lade Statistiken…',
+  'state.refreshing': 'Aktualisiere…',
+  'action.refresh': 'Aktualisieren',
+  'action.logout': 'Abmelden',
+  'action.copy': 'kopieren',
+  'action.copied': '✓ kopiert',
+  'range.30': '30 Tage',
+  'range.90': '90 Tage',
+  'range.180': '180 Tage',
+  'range.365': '1 Jahr',
+
+  // ── tabs ──────────────────────────────────────────────────────────────────
+  'tab.traction': 'Traction',
+  'tab.asset': 'Daten-Asset',
+  'tab.content': 'Inhalte',
+  'tab.quality': 'Qualität',
+  'tab.ops': 'Betrieb',
+  'tab.users': 'Nutzer',
+
+  // ── generic ───────────────────────────────────────────────────────────────
+  'empty.series': 'Noch keine Daten im Zeitraum.',
+  'empty.cohorts': 'Noch keine Kohorten.',
+  'empty.asset': 'Keine Asset-Daten verfügbar.',
+  'empty.quality': 'Keine Qualitätsdaten (Server neu gestartet?).',
+  'empty.users': 'Noch keine registrierten Nutzer.',
+  'loading.traction': 'Lade Traction-Daten… (benötigt DB)',
+  'loading.asset': 'Lade Asset-Daten…',
+  'growth.noBase': 'keine Basis',
+
+  // ── internal-traffic banner ───────────────────────────────────────────────
+  'internal.ok': '✓ Interner Traffic gefiltert — {n} eigene Hashes ausgeschlossen. Die Zahlen sind belastbar.',
+  'internal.warnTitle': '⚠ Interner Traffic NICHT gefiltert',
+  'internal.warnBody':
+    'Diese Zahlen enthalten die eigenen Besuche des Teams. Bei kleiner Nutzerbasis dominiert das jede Metrik — so dürfen die Werte niemandem gezeigt werden.',
+  'internal.yourHash': 'Dein Hash:',
+  'internal.hint': '→ als INTERNAL_IP_HASHES setzen (kommagetrennt, alle Geräte des Teams)',
+
+  // ── traction ──────────────────────────────────────────────────────────────
+  'traction.visitors': 'Besucher (Zeitraum)',
+  'traction.visitorsSub': '{days} Tage · eindeutige ip_hash',
+  'traction.returning': 'Wiederkehrende',
+  'traction.returningSub': '{n} an ≥2 Tagen aktiv',
+  'traction.analyses': 'Analysen (Zeitraum)',
+  'traction.analysesSub': '{n} verschiedene Themen',
+  'traction.users': 'Registrierte Nutzer',
+  'traction.usersSub': 'gesamt',
+  'traction.analysesPerWeek': 'Analysen pro Woche',
+  'traction.visitorsPerWeek': 'Besucher pro Woche',
+  'traction.analysesPerDay': 'Analysen pro Tag (30 Tage)',
+  'traction.weekNote': 'aktuell {current} · Vorwoche {previous}',
+  'traction.cohorts': 'Kohorten-Retention',
+  'traction.cohortsNote': 'wöchentlich',
+  'traction.funnel': 'Funnel',
+  'traction.funnelNote': 'Basis: Besucher mit ≥1 Analyse',
+  'traction.avgDays': 'Ø aktive Tage',
+  'traction.languages': 'Sprachen',
+  'cohort.header': 'Kohorte (Woche)',
+  'cohort.size': 'Größe',
+  'cohort.legend':
+    'Anteil der Besucher einer Startwoche, die in Folgewochen erneut analysiert haben. „·" = Woche noch nicht vergangen.',
+  'funnel.analysed': 'Analyse gestartet',
+  'funnel.repeat': '≥ 2 Analysen',
+  'funnel.returning': 'An ≥ 2 Tagen aktiv',
+  'funnel.registered': 'Registriert',
+
+  // ── asset ─────────────────────────────────────────────────────────────────
+  'asset.banner':
+    'Dieser Bestand wächst mit jedem Worker-Lauf — unabhängig von Traffic und ohne Marketing-Ausgaben. Das ist der Teil, der sich nicht kurzfristig kopieren lässt.',
+  'asset.articles': 'Korpus-Artikel',
+  'asset.articlesSub': 'aus {n} klassifizierten Medien',
+  'asset.embeddings': 'Embeddings',
+  'asset.embeddingsSub': '{pct} Abdeckung',
+  'asset.nli': 'NLI-Urteile',
+  'asset.nliSub': 'eigener Verifikations-Datensatz',
+  'asset.perDay': 'Artikel / Tag',
+  'asset.perDaySub': 'beobachtet über {n} Tage',
+  'asset.growth': 'Korpus-Zuwachs (30 Tage)',
+  'asset.bySpectrum': 'Artikel je politischem Lager',
+  'asset.nliEntail': 'NLI: bestätigt',
+  'asset.nliContra': 'NLI: widersprochen',
+  'asset.nliContraSub': 'gefundene Halluzinationen',
+  'asset.feedback': 'Leser-Feedback',
+  'asset.feedbackSub': 'Stimmen zur Ausgewogenheit',
+  'asset.cost': 'Kosten / Analyse',
+  'asset.costSub': 'Grenzkosten',
+  'spectrum.left': 'Links',
+  'spectrum.center_left': 'Mitte-links',
+  'spectrum.center': 'Mitte',
+  'spectrum.center_right': 'Mitte-rechts',
+  'spectrum.right': 'Rechts',
+
+  // ── content ───────────────────────────────────────────────────────────────
+  'content.balanced': '👍 Ausgewogen',
+  'content.notBalanced': '👎 Nicht ausgewogen',
+  'content.last7': '7 Tage: {n}',
+  'content.positiveRate': 'Positiv-Quote',
+  'content.positiveRateSub': 'einziges Signal für wahrgenommene Neutralität',
+  'content.topicsTotal': 'Themen gesamt',
+  'content.topTopics': 'Top {n} Themen',
+  'content.mostRead': 'Meistgelesene Analysen',
+  'content.mostReadNote': 'Wiederaufrufe aus dem Cache',
+  'content.colTopic': 'Thema',
+  'content.colLang': 'Sprache',
+  'content.colSearches': 'Suchen',
+  'content.colViews': 'Aufrufe',
+  'content.colLast': 'Zuletzt',
+
+  // ── quality ───────────────────────────────────────────────────────────────
+  'quality.confidence': 'Ø Confidence',
+  'quality.confidenceSub': '{n} Messungen',
+  'quality.grounding': 'Ø Beleg-Quote',
+  'quality.groundingSub': 'Artikel mit Quell-Match',
+  'quality.split': 'Analysen Korpus/Live',
+  'quality.splitSub': '{n} Fehler',
+  'quality.degraded': 'Degraded-Quote',
+  'quality.degradedSub': '{n} im Zeitraum',
+  'quality.distribution': 'Confidence-Verteilung',
+  'quality.sinceDeploy': 'seit letztem Deploy',
+  'quality.factuality': 'Gemessene Faktentreue',
+  'quality.factualityNote': 'eigene NLI-Daten · min. 5 Messungen',
+  'quality.factualityLegend':
+    '⚑ = gemessene Faktentreue weicht von der deklarierten Einstufung ab — Forschungsdaten für AP1/AP4.',
+  'quality.translations': 'Übersetzungen ok/fail',
+  'quality.deep': 'Deep-Analysen ok/fail',
+  'quality.latency': 'Ø Latenz Stream',
+  'quality.latencySub': 'max {n}s',
+  'quality.geminiCalls': 'Gemini-Calls',
+
+  // ── ops ───────────────────────────────────────────────────────────────────
+  'ops.dbOn': 'PostgreSQL verbunden',
+  'ops.dbOff': 'Kein DB (nur RAM)',
+  'ops.uptime': 'Uptime {n}h',
+  'ops.analysesToday': 'Analysen heute',
+  'ops.cacheRate': 'Cache-Trefferquote',
+  'ops.cacheRateSub': '{hits} Hits / {misses} Misses',
+  'ops.errors': 'Fehler',
+  'ops.errorsSub': '{n} Cache-Einträge',
+  'ops.requests': 'Requests gesamt',
+  'ops.costToday': 'Kosten heute',
+  'ops.costMonth': 'Hochrechnung Monat',
+  'ops.costMonthSub': 'bei heutigem Volumen',
+  'ops.budget': 'Gemini-Budget',
+  'ops.budgetSub': '{n} übrig heute',
+  'ops.last24h': 'Analysen — letzte 24 Stunden',
+  'ops.topIPs': 'Aktivste IPs heute',
+  'ops.topIPsNote': 'Limit {n}/Tag',
+  'ops.feedHealth': 'Feed-Gesundheit',
+  'ops.feedHealthNote': '{down} von {total} problematisch',
+  'ops.feedsOk': '✓ Alle Feeds gesund.',
+  'ops.serverDetails': 'Server-Details',
+  'ops.started': 'Gestartet',
+  'ops.analysesTotal': 'Analysen gesamt',
+  'ops.cacheItems': 'Cache-Einträge',
+  'ops.activeIPs': 'Aktive IPs heute',
+
+  // ── users ─────────────────────────────────────────────────────────────────
+  'users.title': 'Registrierte Nutzer ({n}) — Tier & Limit verwalten',
+  'users.colSearches': 'Suchen',
+  'users.colLimit': 'Limit/Tag',
+  'users.colRegistered': 'Registriert',
+  'users.colLogin': 'Login',
+  'users.edit': 'Bearbeiten',
+  'users.save': '✓ Speichern',
+  'users.unlimited': '∞ Unbegrenzt',
+  'users.error': 'Fehler',
+  'users.netError': 'Netzwerkfehler',
+  'users.hint': 'Limit -1 = unbegrenzte Analysen · Tier-Änderungen werden nach erneutem Login aktiv',
+};
+
+const en: Record<keyof typeof de, string> = {
+  'app.brand': 'NeutraleNachrichten',
+  'app.title': 'Admin Dashboard',
+  'login.title': 'Admin access',
+  'login.key': 'Admin key',
+  'login.submit': 'Enter',
+  'login.retry': 'Sign in again',
+  'error.badKey': 'Invalid admin key',
+  'error.network': 'Connection error',
+  'state.loading': 'Loading statistics…',
+  'state.refreshing': 'Refreshing…',
+  'action.refresh': 'Refresh',
+  'action.logout': 'Sign out',
+  'action.copy': 'copy',
+  'action.copied': '✓ copied',
+  'range.30': '30 days',
+  'range.90': '90 days',
+  'range.180': '180 days',
+  'range.365': '1 year',
+
+  'tab.traction': 'Traction',
+  'tab.asset': 'Data asset',
+  'tab.content': 'Content',
+  'tab.quality': 'Quality',
+  'tab.ops': 'Operations',
+  'tab.users': 'Users',
+
+  'empty.series': 'No data in this period yet.',
+  'empty.cohorts': 'No cohorts yet.',
+  'empty.asset': 'No asset data available.',
+  'empty.quality': 'No quality data (server restarted?).',
+  'empty.users': 'No registered users yet.',
+  'loading.traction': 'Loading traction data… (requires DB)',
+  'loading.asset': 'Loading asset data…',
+  'growth.noBase': 'no baseline',
+
+  'internal.ok': '✓ Internal traffic filtered — {n} own hashes excluded. These numbers are trustworthy.',
+  'internal.warnTitle': '⚠ Internal traffic NOT filtered',
+  'internal.warnBody':
+    "These numbers include the team's own visits. With a small user base that dominates every metric — do not show these figures to anyone.",
+  'internal.yourHash': 'Your hash:',
+  'internal.hint': '→ set as INTERNAL_IP_HASHES (comma-separated, every team device)',
+
+  'traction.visitors': 'Visitors (period)',
+  'traction.visitorsSub': '{days} days · distinct ip_hash',
+  'traction.returning': 'Returning',
+  'traction.returningSub': '{n} active on ≥2 days',
+  'traction.analyses': 'Analyses (period)',
+  'traction.analysesSub': '{n} distinct topics',
+  'traction.users': 'Registered users',
+  'traction.usersSub': 'total',
+  'traction.analysesPerWeek': 'Analyses per week',
+  'traction.visitorsPerWeek': 'Visitors per week',
+  'traction.analysesPerDay': 'Analyses per day (30 days)',
+  'traction.weekNote': 'current {current} · previous {previous}',
+  'traction.cohorts': 'Cohort retention',
+  'traction.cohortsNote': 'weekly',
+  'traction.funnel': 'Funnel',
+  'traction.funnelNote': 'Base: visitors with ≥1 analysis',
+  'traction.avgDays': 'Avg. active days',
+  'traction.languages': 'Languages',
+  'cohort.header': 'Cohort (week)',
+  'cohort.size': 'Size',
+  'cohort.legend':
+    'Share of a starting week\'s visitors who ran another analysis in later weeks. "·" = week has not elapsed yet.',
+  'funnel.analysed': 'Started an analysis',
+  'funnel.repeat': '≥ 2 analyses',
+  'funnel.returning': 'Active on ≥ 2 days',
+  'funnel.registered': 'Registered',
+
+  'asset.banner':
+    'This stock grows with every worker run — independent of traffic and with no marketing spend. It is the part that cannot be copied quickly.',
+  'asset.articles': 'Corpus articles',
+  'asset.articlesSub': 'from {n} classified outlets',
+  'asset.embeddings': 'Embeddings',
+  'asset.embeddingsSub': '{pct} coverage',
+  'asset.nli': 'NLI verdicts',
+  'asset.nliSub': 'our own verification dataset',
+  'asset.perDay': 'Articles / day',
+  'asset.perDaySub': 'observed over {n} days',
+  'asset.growth': 'Corpus growth (30 days)',
+  'asset.bySpectrum': 'Articles per political camp',
+  'asset.nliEntail': 'NLI: supported',
+  'asset.nliContra': 'NLI: contradicted',
+  'asset.nliContraSub': 'hallucinations caught',
+  'asset.feedback': 'Reader feedback',
+  'asset.feedbackSub': 'votes on balance',
+  'asset.cost': 'Cost / analysis',
+  'asset.costSub': 'marginal cost',
+  'spectrum.left': 'Left',
+  'spectrum.center_left': 'Centre-left',
+  'spectrum.center': 'Centre',
+  'spectrum.center_right': 'Centre-right',
+  'spectrum.right': 'Right',
+
+  'content.balanced': '👍 Balanced',
+  'content.notBalanced': '👎 Not balanced',
+  'content.last7': '7 days: {n}',
+  'content.positiveRate': 'Positive rate',
+  'content.positiveRateSub': 'the only signal for perceived neutrality',
+  'content.topicsTotal': 'Topics total',
+  'content.topTopics': 'Top {n} topics',
+  'content.mostRead': 'Most-read analyses',
+  'content.mostReadNote': 'repeat views from cache',
+  'content.colTopic': 'Topic',
+  'content.colLang': 'Language',
+  'content.colSearches': 'Searches',
+  'content.colViews': 'Views',
+  'content.colLast': 'Last',
+
+  'quality.confidence': 'Avg. confidence',
+  'quality.confidenceSub': '{n} measurements',
+  'quality.grounding': 'Avg. grounding rate',
+  'quality.groundingSub': 'articles matched to a source',
+  'quality.split': 'Analyses corpus/live',
+  'quality.splitSub': '{n} errors',
+  'quality.degraded': 'Degraded rate',
+  'quality.degradedSub': '{n} in period',
+  'quality.distribution': 'Confidence distribution',
+  'quality.sinceDeploy': 'since last deploy',
+  'quality.factuality': 'Measured factuality',
+  'quality.factualityNote': 'our own NLI data · min. 5 measurements',
+  'quality.factualityLegend':
+    '⚑ = measured factuality diverges from the declared rating — research data for WP1/WP4.',
+  'quality.translations': 'Translations ok/fail',
+  'quality.deep': 'Deep analyses ok/fail',
+  'quality.latency': 'Avg. stream latency',
+  'quality.latencySub': 'max {n}s',
+  'quality.geminiCalls': 'Gemini calls',
+
+  'ops.dbOn': 'PostgreSQL connected',
+  'ops.dbOff': 'No DB (memory only)',
+  'ops.uptime': 'Uptime {n}h',
+  'ops.analysesToday': 'Analyses today',
+  'ops.cacheRate': 'Cache hit rate',
+  'ops.cacheRateSub': '{hits} hits / {misses} misses',
+  'ops.errors': 'Errors',
+  'ops.errorsSub': '{n} cache entries',
+  'ops.requests': 'Requests total',
+  'ops.costToday': 'Cost today',
+  'ops.costMonth': 'Monthly projection',
+  'ops.costMonthSub': "at today's volume",
+  'ops.budget': 'Gemini budget',
+  'ops.budgetSub': '{n} left today',
+  'ops.last24h': 'Analyses — last 24 hours',
+  'ops.topIPs': 'Most active IPs today',
+  'ops.topIPsNote': 'limit {n}/day',
+  'ops.feedHealth': 'Feed health',
+  'ops.feedHealthNote': '{down} of {total} problematic',
+  'ops.feedsOk': '✓ All feeds healthy.',
+  'ops.serverDetails': 'Server details',
+  'ops.started': 'Started',
+  'ops.analysesTotal': 'Analyses total',
+  'ops.cacheItems': 'Cache entries',
+  'ops.activeIPs': 'Active IPs today',
+
+  'users.title': 'Registered users ({n}) — manage tier & limit',
+  'users.colSearches': 'Searches',
+  'users.colLimit': 'Limit/day',
+  'users.colRegistered': 'Registered',
+  'users.colLogin': 'Login',
+  'users.edit': 'Edit',
+  'users.save': '✓ Save',
+  'users.unlimited': '∞ Unlimited',
+  'users.error': 'Error',
+  'users.netError': 'Network error',
+  'users.hint': 'Limit -1 = unlimited analyses · tier changes take effect after the next login',
+};
+
+export type AdminKey = keyof typeof de;
+export const adminDict: Record<AdminLang, Record<AdminKey, string>> = { de, en };
+
+export type TFn = (key: AdminKey, vars?: Record<string, string | number>) => string;
+
+/** Build a translator for one language. Missing keys fall back to German. */
+export function createT(lang: AdminLang): TFn {
+  const dict = adminDict[lang] ?? adminDict.de;
+  return (key, vars) => {
+    let s = dict[key] ?? adminDict.de[key] ?? String(key);
+    if (vars) {
+      for (const [k, v] of Object.entries(vars)) {
+        s = s.split(`{${k}}`).join(String(v));
+      }
+    }
+    return s;
+  };
+}
