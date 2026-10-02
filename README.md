@@ -215,7 +215,13 @@ npx vitest run -t "confidence"                        # by test name
 
 ---
 
-## Running locally
+## Running it
+
+The fastest way to see the system working is **[the live site](https://www.neutralenachrichten.com)** —
+running it yourself needs PostgreSQL with `pgvector` and a Gemini API key.
+
+<details>
+<summary><b>Local setup</b></summary><br>
 
 **Prerequisites:** Node.js 20+, PostgreSQL 14+ (with the `vector` extension for semantic search), a
 Google Gemini API key. Redis optional.
@@ -245,6 +251,10 @@ npm run worker                 # or run it continuously
 | `npm run eval:rag` | offline RAG-evaluation harness |
 
 Configuration is documented in [.env.example](.env.example).
+
+Without a Gemini key the app still boots and degrades gracefully: retrieval falls back to full-text
+search and analyses are skipped rather than crashing.
+</details>
 
 ---
 
