@@ -33,7 +33,8 @@ import { analyzeBiasProfile } from './lib/biasProfile.js';
 import { buildRatingsMap, deriveMeasuredFactual, reconcileFactual, SOURCE_RATINGS } from './lib/sourceRatingsSeed.js';
 import { clusterArticles } from './lib/storyClustering.js';
 import { metrics } from './lib/metrics.js';
-import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds, getCorpusStats, saveAnalysisFeedback, getFeedbackStats, saveNliResults, getSourceNliStats } from './db.js';
+import { initDB, isDBAvailable, closeDB, cacheGet, cacheSet, cacheHit, getPublicAnalyses, incrementViewCount, toggleAnalysisLike, getLikedAnalyses, getUserMediaSpectrum, logSearch, getUsageDB, incrementUsageDB, createUser, upsertDevUser, findUserByEmail, findUserById, updateLastLogin, getAdminStats as getAdminStatsDB, getTopTopicsDB, getUsersAdmin, updateUserTier, saveUserSearch, getUserSearchHistory, deleteUserSearch, setEmailVerifyToken, verifyEmailToken, setResetToken, useResetToken, updateUserPassword, updateUserEmail, softDeleteUser, exportUserData, recordFailedLogin, checkAccountLock, clearLoginAttempts, getSavedTopics, saveTopic, unsaveTopic, isTopicSaved, getDigestSubscribers, setDigestPreference, saveSuggestion, searchCorpusHybrid, getDownFeeds, getCorpusStats, saveAnalysisFeedback, getFeedbackStats, saveNliResults, getSourceNliStats, getTractionStats, getAssetStats, getTopViewedAnalyses } from './db.js';
+import { computeRetention, computeGrowth, buildFunnel, buildCohortGrid, shareTable, summarizeAsset } from './lib/tractionMetrics.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWeeklyDigest } from './lib/email.js';
 import { initRedis, isRedisAvailable, closeRedis, getRedisClient, rGet, rSet, rGetUsage, rIncrUsage, rTrackSearch, rGetTopTopics, rGetTotalAnalyses, rGetUniqueTopics, rIncrStat, rGetStats } from './redis.js';
 
@@ -2409,6 +2410,82 @@ app.get('/api/admin/metrics', async (req, res) => {
       dailyLimit: GEMINI_DAILY_BUDGET,
       remaining: Math.max(0, GEMINI_DAILY_BUDGET - geminiBudget.calls),
     },
+  });
+});
+
+// ── Admin: traction & data-asset analytics ────────────────────────────────────
+//
+// Growth questions the ops dashboard could not answer: are people coming back, is
+// usage growing, is the corpus compounding. Everything is derived from rows we
+// already store — no new tracking and nothing leaves the server.
+//
+// INTERNAL_IP_HASHES lets us exclude our own testing traffic; at this scale the
+// founders' own sessions otherwise dominate every number. The response echoes the
+// caller's own ip_hash so it can be copied into that env var, and always reports
+// how many hashes were excluded so a polluted number can never look clean.
+const INTERNAL_IP_HASHES = (process.env.INTERNAL_IP_HASHES || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
+
+app.get('/api/admin/traction', async (req, res) => {
+  const key = req.headers['x-admin-key'];
+  if (!ADMIN_KEY || key !== ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
+  if (!isDBAvailable()) return res.status(503).json({ error: 'Database not available' });
+
+  const days = Math.max(1, Math.min(730, parseInt(req.query.days, 10) || 90));
+  // Allow inspecting the unfiltered picture explicitly — but never by default.
+  const includeInternal = req.query.includeInternal === 'true';
+  const excludeHashes = includeInternal ? [] : INTERNAL_IP_HASHES;
+
+  const [traction, asset, topViewed, corpus] = await Promise.all([
+    getTractionStats({ days, excludeHashes }).catch(() => null),
+    getAssetStats({ days: 30 }).catch(() => null),
+    getTopViewedAnalyses(10).catch(() => []),
+    getCorpusStats().catch(() => null),
+  ]);
+
+  if (!traction) return res.status(503).json({ error: 'Traction data unavailable' });
+
+  const retention = computeRetention(traction.visitorActivity);
+  const analysesGrowth = computeGrowth(traction.weekly);
+  const visitorsGrowth = computeGrowth(
+    (traction.weekly || []).map(w => ({ count: w.visitors }))
+  );
+
+  res.json({
+    window: { days: traction.windowDays, excludedInternalHashes: traction.excludedInternal, includeInternal },
+    // So the operator can identify (and then exclude) their own traffic.
+    yourIpHash: crypto.createHash('sha256').update(getClientIP(req)).digest('hex').slice(0, 16),
+    totals: traction.totals,
+    usersTotal: traction.usersTotal,
+    growth: { analyses: analysesGrowth, visitors: visitorsGrowth },
+    retention,
+    funnel: buildFunnel({
+      analysed: traction.totals?.visitors ?? 0,
+      repeat: traction.repeatVisitors,
+      returning: retention.returningVisitors,
+      registered: traction.usersTotal,
+    }),
+    cohorts: buildCohortGrid(traction.cohorts, { maxOffset: 4 }),
+    series: { weekly: traction.weekly, daily: traction.daily, newUsersWeekly: traction.newUsersWeekly },
+    languages: shareTable(traction.langs, 'lang'),
+    asset: asset
+      ? {
+          ...summarizeAsset({
+            articles: corpus?.articles?.total ?? 0,
+            embeddings: corpus?.embeddings ?? 0,
+            nliTotal: asset.nliTotal,
+            dailyIngest: asset.dailyIngest,
+            outlets: asset.outlets,
+          }),
+          bySpectrum: corpus?.articles?.bySpectrum ?? {},
+          nliByLabel: asset.nliByLabel,
+          dailyIngest: asset.dailyIngest,
+          feedbackTotal: asset.feedbackTotal,
+          topicsTotal: asset.topicsTotal,
+          costPerAnalysis: COST_PER_ANALYSIS,
+        }
+      : null,
+    topViewed,
   });
 });
 

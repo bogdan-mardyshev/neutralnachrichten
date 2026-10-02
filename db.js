@@ -1385,6 +1385,214 @@ export async function getSourceRating(domain) {
   }
 }
 
+// ── Traction / growth analytics ────────────────────────────────────────────────
+//
+// The admin dashboard historically answered only ops questions ("is it up, what
+// does it cost"). These queries answer the growth questions from data we ALREADY
+// store in `searches` (topic, lang, user_id, ip_hash, created_at) — no new
+// tracking, nothing extra sent anywhere.
+//
+// INTERNAL TRAFFIC: with a small user base the founders' own testing dominates
+// every metric, so `excludeHashes` (from INTERNAL_IP_HASHES) is applied to every
+// query here. `ip_hash IS NULL OR NOT (...)` is deliberate — `NULL = ANY(...)`
+// yields NULL and would silently drop rows with no hash.
+
+/**
+ * Growth, retention and engagement over a rolling window.
+ * @param {object} opts — { days = 90, excludeHashes = [] }
+ */
+export async function getTractionStats({ days = 90, excludeHashes = [] } = {}) {
+  if (!pool) return null;
+  const win = Math.max(1, Math.min(730, parseInt(days, 10) || 90));
+  const ex = Array.isArray(excludeHashes) ? excludeHashes.filter(Boolean) : [];
+  const notInternal = `(s.ip_hash IS NULL OR NOT (s.ip_hash = ANY($2::text[])))`;
+
+  try {
+    const [weekly, daily, visitors, cohorts, langs, totals, newUsers, repeatUsers] = await Promise.all([
+      // Weekly series — analyses, distinct visitors, logged-in visitors
+      pool.query(
+        `SELECT date_trunc('week', s.created_at) AS bucket,
+                COUNT(*)::int                          AS count,
+                COUNT(DISTINCT s.ip_hash)::int         AS visitors,
+                COUNT(DISTINCT s.user_id)::int         AS users
+         FROM searches s
+         WHERE s.created_at >= now() - make_interval(days => $1) AND ${notInternal}
+         GROUP BY bucket ORDER BY bucket`,
+        [win, ex]
+      ),
+      // Daily series for the sparkline (last 30 days of the window)
+      pool.query(
+        `SELECT date_trunc('day', s.created_at) AS bucket,
+                COUNT(*)::int                  AS count,
+                COUNT(DISTINCT s.ip_hash)::int AS visitors
+         FROM searches s
+         WHERE s.created_at >= now() - make_interval(days => LEAST($1, 30)) AND ${notInternal}
+         GROUP BY bucket ORDER BY bucket`,
+        [win, ex]
+      ),
+      // Per-visitor activity → retention (active on N distinct days)
+      pool.query(
+        `SELECT s.ip_hash,
+                COUNT(DISTINCT date_trunc('day', s.created_at))::int AS active_days,
+                COUNT(*)::int                                        AS analyses
+         FROM searches s
+         WHERE s.ip_hash IS NOT NULL
+           AND s.created_at >= now() - make_interval(days => $1)
+           AND NOT (s.ip_hash = ANY($2::text[]))
+         GROUP BY s.ip_hash`,
+        [win, ex]
+      ),
+      // Weekly cohort retention (first-seen week → activity in later weeks)
+      pool.query(
+        `WITH first_seen AS (
+           SELECT s.ip_hash, date_trunc('week', MIN(s.created_at)) AS cohort_week
+           FROM searches s
+           WHERE s.ip_hash IS NOT NULL
+             AND s.created_at >= now() - make_interval(days => $1)
+             AND NOT (s.ip_hash = ANY($2::text[]))
+           GROUP BY s.ip_hash
+         )
+         SELECT f.cohort_week,
+                (EXTRACT(EPOCH FROM (date_trunc('week', s.created_at) - f.cohort_week)) / 604800)::int AS week_offset,
+                COUNT(DISTINCT s.ip_hash)::int AS visitors
+         FROM searches s
+         JOIN first_seen f ON f.ip_hash = s.ip_hash
+         WHERE s.created_at >= now() - make_interval(days => $1)
+         GROUP BY f.cohort_week, week_offset
+         ORDER BY f.cohort_week DESC, week_offset`,
+        [win, ex]
+      ),
+      // Language split
+      pool.query(
+        `SELECT s.lang, COUNT(*)::int AS count
+         FROM searches s
+         WHERE s.created_at >= now() - make_interval(days => $1) AND ${notInternal}
+         GROUP BY s.lang`,
+        [win, ex]
+      ),
+      // Window totals + quality of service within the same window
+      pool.query(
+        `SELECT COUNT(*)::int                                  AS analyses,
+                COUNT(DISTINCT s.ip_hash)::int                 AS visitors,
+                COUNT(DISTINCT s.topic_norm)::int              AS topics,
+                COUNT(*) FILTER (WHERE s.degraded)::int        AS degraded,
+                COUNT(*) FILTER (WHERE s.cache_hit)::int       AS cache_hits,
+                MIN(s.created_at)                              AS first_seen
+         FROM searches s
+         WHERE s.created_at >= now() - make_interval(days => $1) AND ${notInternal}`,
+        [win, ex]
+      ),
+      // Registrations per week + total
+      pool.query(
+        `SELECT date_trunc('week', created_at) AS bucket, COUNT(*)::int AS count
+         FROM users
+         WHERE created_at >= now() - make_interval(days => $1)
+         GROUP BY bucket ORDER BY bucket`,
+        [win]
+      ),
+      // Visitors who ran more than one analysis
+      pool.query(
+        `SELECT COUNT(*)::int AS n FROM (
+           SELECT s.ip_hash
+           FROM searches s
+           WHERE s.ip_hash IS NOT NULL
+             AND s.created_at >= now() - make_interval(days => $1)
+             AND NOT (s.ip_hash = ANY($2::text[]))
+           GROUP BY s.ip_hash HAVING COUNT(*) > 1
+         ) t`,
+        [win, ex]
+      ),
+    ]);
+
+    const usersTotal = await pool
+      .query(`SELECT COUNT(*)::int AS n FROM users`)
+      .then(r => r.rows[0]?.n ?? 0)
+      .catch(() => 0);
+
+    return {
+      windowDays: win,
+      excludedInternal: ex.length,
+      weekly: weekly.rows,
+      daily: daily.rows,
+      visitorActivity: visitors.rows,
+      cohorts: cohorts.rows,
+      langs: langs.rows,
+      totals: totals.rows[0] || null,
+      newUsersWeekly: newUsers.rows,
+      repeatVisitors: repeatUsers.rows[0]?.n ?? 0,
+      usersTotal,
+    };
+  } catch (err) {
+    console.error('[DB:getTractionStats]', err.message);
+    return null;
+  }
+}
+
+/**
+ * The compounding data asset — grows on the ingestion schedule regardless of
+ * traffic. This is the moat number, and it is real: no marketing spend touches it.
+ */
+export async function getAssetStats({ days = 30 } = {}) {
+  if (!pool) return null;
+  const win = Math.max(1, Math.min(365, parseInt(days, 10) || 30));
+  try {
+    const [dailyIngest, nli, outlets, feedbackTotal, topicsTotal] = await Promise.all([
+      pool.query(
+        `SELECT date_trunc('day', fetched_at) AS bucket, COUNT(*)::int AS count
+         FROM corpus_articles
+         WHERE fetched_at >= now() - make_interval(days => $1)
+         GROUP BY bucket ORDER BY bucket`,
+        [win]
+      ),
+      pool.query(
+        `SELECT label, COUNT(*)::int AS count FROM nli_results GROUP BY label`
+      ).catch(() => ({ rows: [] })),
+      pool.query(`SELECT COUNT(*)::int AS n FROM source_ratings`).catch(() => ({ rows: [{ n: 0 }] })),
+      pool.query(`SELECT COUNT(*)::int AS n FROM analysis_feedback`).catch(() => ({ rows: [{ n: 0 }] })),
+      pool.query(`SELECT COUNT(DISTINCT topic_norm)::int AS n FROM searches`).catch(() => ({ rows: [{ n: 0 }] })),
+    ]);
+
+    const nliByLabel = {};
+    let nliTotal = 0;
+    for (const r of nli.rows) {
+      nliByLabel[r.label] = r.count;
+      nliTotal += r.count;
+    }
+
+    return {
+      dailyIngest: dailyIngest.rows,
+      nliTotal,
+      nliByLabel,
+      outlets: outlets.rows[0]?.n ?? 0,
+      feedbackTotal: feedbackTotal.rows[0]?.n ?? 0,
+      topicsTotal: topicsTotal.rows[0]?.n ?? 0,
+    };
+  } catch (err) {
+    console.error('[DB:getAssetStats]', err.message);
+    return null;
+  }
+}
+
+/** Most-viewed cached analyses — which topics people actually come back to read. */
+export async function getTopViewedAnalyses(limit = 10) {
+  if (!pool) return [];
+  const lim = Math.max(1, Math.min(50, parseInt(limit, 10) || 10));
+  try {
+    const { rows } = await pool.query(
+      `SELECT topic, lang, search_count, view_count, last_searched
+       FROM content_cache
+       WHERE topic IS NOT NULL
+       ORDER BY view_count DESC NULLS LAST, search_count DESC
+       LIMIT $1`,
+      [lim]
+    );
+    return rows;
+  } catch (err) {
+    console.error('[DB:getTopViewedAnalyses]', err.message);
+    return [];
+  }
+}
+
 export async function closeDB() {
   if (pool) {
     await pool.end().catch(e => console.error('[DB] pool.end error:', e.message));
